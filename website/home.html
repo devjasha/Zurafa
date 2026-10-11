@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zurafa — Terminal work, in context</title>
+  <meta name="description" content="A calm macOS terminal workspace for local sessions, split panes, remote SSH, and structured program status.">
+  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa.rare-haven-5290.chatgpt.site/">
+  <meta property="og:title" content="Zurafa — Terminal work, in context"><meta property="og:description" content="A calm macOS terminal workspace for the shells, sessions, and machines you move between."><meta property="og:type" content="website"><meta property="og:image" content="https://zurafa.rare-haven-5290.chatgpt.site/assets/zurafa-icon.png">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="#features">Features</a><a href="/docs/">Docs</a><a href="https://github.com/devjasha/Zurafa/releases/tag/v0.1.0-beta.1" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for Mac ↗</a>
+  </div></header>
+  <main id="main">
+    <section class="hero shell"><div class="hero-copy">
+      <p class="eyebrow"><span class="live-dot"></span> FIRST MACOS BETA · APPLE SILICON</p>
+      <h1>Terminal work,<br><em>in context.</em></h1>
+      <p class="lead">A calm macOS workspace for the shells, sessions, and remote machines you move between. Zurafa keeps the structure in Rust and the interface close to your work.</p>
+      <div class="hero-actions"><a class="button primary" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download Zurafa <span aria-hidden="true">↗</span></a><a class="button secondary" href="/docs/">Explore the docs <span aria-hidden="true">→</span></a></div>
+      <p class="support-line">Apple Silicon · macOS 14+ · 0.1.0 beta 1</p>
+    </div><div class="hero-stage" aria-label="Illustration of a Zurafa terminal workspace">
+      <div class="stage-glow"></div><div class="app-window"><div class="app-top"><span class="traffic"><i></i><i></i><i></i></span><div class="app-workspace">◉ <strong>Workspace</strong><small>This Mac</small></div><div class="app-tab active">⌘ <span>project</span></div><div class="app-tab">⌘ <span>shell</span></div><span class="app-plus">＋</span></div>
+      <div class="app-body"><div class="mock-pane"><div class="pane-head"><span>⌘ &nbsp; project <small>~/Projects/zurafa</small></span><span>◫ &nbsp; ⤢</span></div><div class="terminal-lines"><div><span class="prompt">❯</span> cargo test</div><div class="muted">running 37 tests</div><div class="success">test result: ok. 37 passed; 0 failed</div><div class="spacer"></div><div><span class="prompt">❯</span> <span class="caret"></span></div></div></div><div class="mock-pane smaller"><div class="pane-head"><span>⌘ &nbsp; build <small>~/Projects/zurafa</small></span><span class="status-pill">working</span></div><div class="terminal-lines"><div><span class="prompt">❯</span> swift build</div><div class="muted">Building for production…</div><div class="success">Build complete.</div></div></div></div></div><span class="stage-caption">Illustrative workspace preview</span>
+    </div></section>
+
+    <section class="section shell" id="features"><div class="section-intro"><p class="kicker">THE WORKSPACE</p><h2>Stay oriented, even when<br>the work branches out.</h2><p>Zurafa brings the moving parts of terminal work into one coherent place.</p></div>
+      <div class="feature-grid">
+        <article class="feature feature-wide"><span class="feature-index">01 / STRUCTURE</span><h3>Sessions with room to think.</h3><p>Organize work into sessions. Open tabs, split panes, focus what matters, and zoom a pane when you need every pixel.</p><div class="feature-diagram" aria-hidden="true"><span>Workspace</span><span>Tab 01 <b>╱</b> Tab 02</span><span>Pane A <b>│</b> Pane B</span></div></article>
+        <article class="feature"><span class="feature-index">02 / REMOTE</span><div class="feature-symbol">⌁</div><h3>Go remote with SSH.</h3><p>Save hosts and open remote sessions through the system SSH client. Your existing keys, aliases, and host verification stay in play.</p></article>
+        <article class="feature"><span class="feature-index">03 / SIGNAL</span><div class="status-demo"><span class="dot amber"></span> working <span class="dot green"></span> done <span class="dot pink"></span> blocked</div><h3>See structured status.</h3><p>OSC 7501 reports let compatible programs share progress and state without Zurafa guessing from terminal text.</p></article>
+        <article class="feature"><span class="feature-index">04 / YOUR SETUP</span><div class="feature-symbol">◐</div><h3>Bring your terminal taste.</h3><p>Import Ghostty colors and fonts, follow your system appearance, and add an optional dithered background image.</p></article>
+        <article class="feature"><span class="feature-index">05 / UNDER THE HOOD</span><div class="feature-symbol">↺</div><h3>Built around real state.</h3><p>A Rust daemon owns sessions, layout, PTYs, events, and snapshots. The macOS app follows that state and can recover after reconnecting.</p></article>
+      </div>
+    </section>
+    <section class="section rhythm"><div class="shell rhythm-grid"><div><p class="kicker">A PRACTICAL FLOW</p><h2>From local prompt<br>to remote work.</h2></div><div class="steps"><div><b>01</b><span><strong>Open a session.</strong><small>Give each line of work its own place.</small></span></div><div><b>02</b><span><strong>Split for context.</strong><small>Keep a build, editor, and shell in view.</small></span></div><div><b>03</b><span><strong>Switch machines.</strong><small>Use a saved SSH host or a local workspace.</small></span></div></div></div></section>
+    <section class="section shell open-design"><div class="open-copy"><p class="kicker">OPEN BY DESIGN</p><h2>Understand the machinery.</h2><p>The event schema and IPC protocol are documented. Explore how snapshots, revisions, terminal reports, and reconnection fit together.</p><a class="text-link" href="/docs/architecture/">Read the architecture <span aria-hidden="true">→</span></a></div><div class="code-card" aria-label="Example structured event"><div class="code-top"><span class="dot green"></span> event stream <span>protocol 2</span></div><pre><code>{
+  "category": "terminal",
+  "name": "program_status_changed",
+  "payload": {
+    "id": "build",
+    "reason": "report"
+  }
+}</code></pre></div></section>
+    <section class="download-section"><div class="shell download-inner"><div><p class="kicker">READY TO TRY IT?</p><h2>A quieter place<br>for busy terminals.</h2><p>Zurafa 0.1.0 beta 1 is available for Apple Silicon Macs running macOS 14 or newer.</p><div class="hero-actions"><a class="button primary" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for macOS ↗</a><a class="button secondary" href="/docs/install/">Installation guide</a></div><small>This beta is not yet notarized by Apple. The guide explains the first-launch step.</small></div><img src="/assets/zurafa-icon.png" alt="Zurafa app icon"></div></section>
+  </main>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

@@ -1,3 +1,3 @@
 rust/target/
 apps/macos/.build/
-build/
+/build/

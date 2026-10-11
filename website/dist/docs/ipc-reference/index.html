@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IPC protocol · Zurafa Docs</title><meta name="description" content="The Rust daemon owns workspace state. A **workspace is a session**, a **tab is a">
+  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa.rare-haven-5290.chatgpt.site/docs/ipc-reference/">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="docs-page" data-page="ipc-reference">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases/tag/v0.1.0-beta.1" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for Mac ↗</a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Reference</div><h1>IPC protocol</h1><div class="prose"><p>The Rust daemon owns workspace state. A <strong>workspace is a session</strong>, a <strong>tab is a window</strong>, and a <strong>pane is a block</strong>. Block IDs are also the PTY <code>terminal</code> IDs. Clients render snapshots and issue commands; they must not maintain a competing layout or revision authority. The initial session is <code>default</code>, labeled <code>Workspace</code>. State is in memory and starts fresh on daemon restart.</p>
+<p>The payload catalog follows the official <a href="https://www.superlogical.com/rex/docs/reference/events">Rex event reference</a>. Status parsing follows <a href="https://www.superlogical.com/rex/docs/build/program-status">OSC 7501 revision 0.3</a>, as checked on 2026-10-09. <code>zurafa-events</code> contains the serde payload enums, layout model, snapshot dispatcher, and status record store. Zurafa&#x27;s version 2 transport envelope below is its own API; it is not Rex&#x27;s nested CLI envelope. There is no CLI or Lua implementation.</p>
+<h2 id="transport-and-negotiation">Transport and negotiation</h2>
+<ul>
+<li>Unix socket: <code>$HOME/Library/Application Support/Zurafa/daemon.sock</code>;</li>
+<p><code>ZURAFA_SOCKET</code> overrides this, then <code>--socket &lt;path&gt;</code> overrides both.</p>
+<li>New parent directories use mode 0700; the socket uses mode 0600.</li>
+<li>Each frame is a four-byte big-endian length followed by UTF-8 JSON, at most</li>
+<p>16 MiB. Invalid JSON, non-object messages, oversized frames, or EOF close the connection. A malformed typed request with an ID receives <code>error</code>.</p>
+<li>First request: <code>{ &quot;id&quot;: 1, &quot;type&quot;: &quot;hello&quot;, &quot;protocol&quot;: 2 }</code>.</li>
+<p>Protocol 1 also remains supported. Other first messages receive an error and close. Reply: <code>{ &quot;id&quot;: 1, &quot;type&quot;: &quot;hello_ok&quot;, &quot;protocol&quot;: 2, &quot;version&quot;: &quot;0.1.0&quot; }</code>. No event precedes this reply.</p>
+<li>Request IDs are unsigned integers. Each valid request gets one reply with its</li>
+<p>ID. Failures use <code>{ &quot;id&quot;: 1, &quot;type&quot;: &quot;error&quot;, &quot;message&quot;: &quot;...&quot; }</code>.</p>
+<li>A second daemon exits successfully if the socket already accepts connections.</li>
+<p>Disconnecting clients does not stop their PTYs.</p>
+</ul>
+<h2 id="pty-operations-both-versions">PTY operations (both versions)</h2>
+<div class="table-scroll"><table>
+<tr><th>Request</th><th>Reply</th></tr>
+<tr><td><code>{id,type:&quot;ping&quot;}</code></td><td><code>{id,type:&quot;pong&quot;}</code></td></tr>
+<tr><td><code>{id,type:&quot;spawn&quot;,cols,rows,cwd?,command?}</code></td><td><code>{id,type:&quot;spawned&quot;,terminal}</code></td></tr>
+<tr><td><code>{id,type:&quot;kill&quot;,terminal}</code></td><td><code>{id,type:&quot;ok&quot;}</code></td></tr>
+</table></div>
+<p><code>spawn</code> creates a new window and block in <code>default</code>. Positive <code>cols</code>/<code>rows</code> are u16 values. <code>command</code> is a nonempty string array; omission runs <code>$SHELL</code> (fallback <code>/bin/zsh</code>) with <code>-l</code>. <code>cwd</code> defaults to <code>$HOME</code>. Child environment includes <code>TERM=xterm-256color</code>, <code>COLORTERM=truecolor</code>, and <code>TERM_PROGRAM=Zurafa</code>. A failed spawn makes no layout change. <code>kill</code> terminates the attached child; the retained block is marked stopped when the child is reaped.</p>
+<p>Fire-and-forget messages have no reply; malformed ones are ignored:</p>
+<ul>
+<li><code>{type:&quot;input&quot;,terminal,data:&lt;base64 bytes&gt;}</code></li>
+<li><code>{type:&quot;resize&quot;,terminal,cols,rows}</code> — PTY cell dimensions, not split ratios.</li>
+</ul>
+<p>Input uses a separate writer thread and a bounded queue of 64 chunks per PTY. Chunks over 1 MiB, or chunks arriving when that queue is full, are dropped. PTY output is broadcast independently of the structured event dispatcher: <code>{type:&quot;output&quot;,terminal,data:&lt;base64 bytes&gt;}</code>. OSC 7501 is removed; other terminal bytes pass through. There is no scrollback replay. Slow clients receive <code>{type:&quot;output.gap&quot;,missed}</code> when this independent 4096-frame ring overflows; <code>missed</code> counts legacy transport frames, not bytes. Snapshots cannot repair missing screen output.</p>
+<p>Protocol 1 additionally receives the legacy <code>{type:&quot;status&quot;,terminal,state,message}</code> and <code>{type:&quot;exited&quot;,terminal,code}</code> broadcasts without subscribing. <code>done</code> maps to legacy <code>completed</code>; <code>message</code> is decoded text or null. Legacy status messages are a compatibility projection, not the multi-record authority. Protocol 2 uses subscriptions for status and exit events, and receives only PTY byte output on the legacy broadcast path.</p>
+<h2 id="rust-owned-layout-commands-protocol-2">Rust-owned layout commands (protocol 2)</h2>
+<p>Create a tab or split by spawning its PTY:</p>
+<pre><code>{&quot;id&quot;:10,&quot;type&quot;:&quot;layout.tab&quot;,&quot;session&quot;:&quot;default&quot;,&quot;label&quot;:&quot;Shell&quot;,&quot;cols&quot;:80,&quot;rows&quot;:24}
+{&quot;id&quot;:11,&quot;type&quot;:&quot;layout.split&quot;,&quot;session&quot;:&quot;default&quot;,&quot;block&quot;:&quot;t1&quot;,&quot;axis&quot;:&quot;horizontal&quot;,&quot;cols&quot;:40,&quot;rows&quot;:24}</code></pre>
+<p>Both accept optional <code>cwd</code> and <code>command</code>, and reply with <code>spawned</code>. Tab label defaults to <code>Terminal</code>. Axes are <code>horizontal</code> or <code>vertical</code>; the old block is first and the new block second, initially at ratio 0.5. The new block becomes selected, its window becomes active, and splitting clears that window&#x27;s zoom.</p>
+<p>Other changes use <code>{id,type:&quot;layout.command&quot;,command:&lt;one of the following&gt;}</code> and reply with <code>ok</code>:</p>
+<pre><code>{&quot;op&quot;:&quot;focus&quot;,&quot;session&quot;:&quot;default&quot;,&quot;block&quot;:&quot;t1&quot;}
+{&quot;op&quot;:&quot;zoom&quot;,&quot;session&quot;:&quot;default&quot;,&quot;block&quot;:&quot;t1&quot;,&quot;enabled&quot;:true}
+{&quot;op&quot;:&quot;resize&quot;,&quot;session&quot;:&quot;default&quot;,&quot;window&quot;:&quot;w1&quot;,&quot;path&quot;:[],&quot;ratio&quot;:0.6}
+{&quot;op&quot;:&quot;close&quot;,&quot;session&quot;:&quot;default&quot;,&quot;block&quot;:&quot;t1&quot;}
+{&quot;op&quot;:&quot;label&quot;,&quot;session&quot;:&quot;default&quot;,&quot;window&quot;:&quot;w1&quot;,&quot;label&quot;:&quot;Build&quot;}
+{&quot;op&quot;:&quot;label&quot;,&quot;session&quot;:&quot;default&quot;,&quot;label&quot;:&quot;Work&quot;}
+{&quot;op&quot;:&quot;create_session&quot;,&quot;session&quot;:&quot;project&quot;,&quot;label&quot;:&quot;Project&quot;}
+{&quot;op&quot;:&quot;destroy_session&quot;,&quot;session&quot;:&quot;project&quot;}</code></pre>
+<p>Remote sessions use the same commands. Add a host with <code>hosts.add</code>, then create a session with that saved host copied into <code>remote</code>:</p>
+<pre><code>{&quot;id&quot;:30,&quot;type&quot;:&quot;hosts.add&quot;,&quot;host&quot;:{&quot;id&quot;:&quot;host-1&quot;,&quot;label&quot;:&quot;Build server&quot;,&quot;hostname&quot;:&quot;build.example.net&quot;,&quot;user&quot;:&quot;alice&quot;,&quot;port&quot;:22}}
+{&quot;id&quot;:31,&quot;type&quot;:&quot;hosts.list&quot;}
+{&quot;id&quot;:32,&quot;type&quot;:&quot;layout.command&quot;,&quot;command&quot;:{&quot;op&quot;:&quot;create_session&quot;,&quot;session&quot;:&quot;build&quot;,&quot;label&quot;:&quot;Build server&quot;,&quot;remote&quot;:{&quot;id&quot;:&quot;host-1&quot;,&quot;label&quot;:&quot;Build server&quot;,&quot;hostname&quot;:&quot;build.example.net&quot;,&quot;user&quot;:&quot;alice&quot;,&quot;port&quot;:22}}}
+{&quot;id&quot;:33,&quot;type&quot;:&quot;hosts.remove&quot;,&quot;host_id&quot;:&quot;host-1&quot;}</code></pre>
+<p><code>hosts.list</code> replies with <code>{id,type:&quot;hosts.list&quot;,hosts:[...]}</code>; add/remove reply with <code>ok</code> or <code>error</code>. Saved hosts live in <code>~/Library/Application Support/Zurafa/hosts.json</code>, written with owner-only permissions. Set <code>ZURAFA_HOSTS_FILE</code> to override the path. A remote session keeps a copy of its host, so removing a saved host does not break an open session. Host changes emit server <code>hosts_changed</code> with an opaque hash. The daemon validates host fields and only accepts a saved host when creating a remote session. Each tab or split in that session runs <code>/usr/bin/ssh -tt -p &lt;port&gt; -- &lt;user@hostname&gt;</code> in a PTY, using the system SSH configuration, keys, known hosts, and authentication prompts. Tailscale DNS names work when the machine can resolve and reach them. There is no separate Tailscale or mosh transport. Sessions are kept in daemon memory; saved host definitions persist across daemon restarts.</p>
+<p>A resize path walks a binary split tree (<code>0</code> = first, <code>1</code> = second); <code>[]</code> means the root split. Ratios must be finite and within 0.05–0.95. Focusing a block activates its window, updates selection, and moves existing zoom to that block. Enabling zoom also focuses. Closing a block collapses its split, chooses the first remaining block if necessary, and removes an empty window. If the active window closes, the first remaining window becomes active, or selection is null. Close and session destruction request termination of the removed blocks&#x27; PTYs. A removed block no longer emits structured terminal events; <code>kill</code> instead retains it so clients can observe <code>child_exited</code> and its final statuses.</p>
+<p>Validation and mutation are serialized. Rejected commands publish nothing and leave state and revisions unchanged. No-op commands also publish nothing. Changes publish their specific events followed by <code>session_view_changed</code> with the new per-session revision. Each successful tab/split/layout change increments that revision once. Terminal reports and exit updates do not change layout revisions. Session creation/destruction publishes server events; a newly created empty session starts at revision 0.</p>
+<h2 id="subscriptions-and-recovery-protocol-2">Subscriptions and recovery (protocol 2)</h2>
+<pre><code>{&quot;id&quot;:20,&quot;type&quot;:&quot;events.subscribe&quot;,&quot;subscription&quot;:&quot;builds&quot;,&quot;filter&quot;:{&quot;session&quot;:&quot;default&quot;,&quot;category&quot;:&quot;terminal&quot;,&quot;types&quot;:[&quot;terminal.program_status_changed&quot;,&quot;terminal.program_status_removed&quot;]}}
+{&quot;id&quot;:21,&quot;type&quot;:&quot;events.subscribe_all&quot;,&quot;subscription&quot;:&quot;everything&quot;}
+{&quot;id&quot;:22,&quot;type&quot;:&quot;events.snapshot&quot;}
+{&quot;id&quot;:23,&quot;type&quot;:&quot;events.resync&quot;,&quot;subscription&quot;:&quot;builds&quot;}
+{&quot;id&quot;:24,&quot;type&quot;:&quot;events.unsubscribe&quot;,&quot;subscription&quot;:&quot;builds&quot;}</code></pre>
+<p>Each connection owns up to 64 subscriptions with unique, nonempty IDs of at most 128 bytes. <code>filter</code> defaults to <code>{}</code> (all). Its optional <code>session</code>, <code>block</code>, <code>category</code> (<code>session</code>, <code>terminal</code>, <code>server</code>), and event-name constraints are ANDed. Use <code>types:[&quot;terminal.bell&quot;,&quot;terminal.title_changed&quot;]</code> to select either event: names within <code>types</code> have <strong>OR</strong> semantics. The existing <code>name</code> string remains supported; if both fields are supplied, <code>name</code> is an additional OR alternative. Omitting both fields (or setting both to null) imposes no name constraint. An explicit <code>types:[]</code> matches no names unless <code>name</code> supplies an alternative. Terminal name filters use <code>terminal.child_exited</code>, etc.; other names are bare. An unknown event name is allowed and currently matches nothing. A server session creation/destruction event can match a session filter; other server events cannot. Block filters select terminal events for that block. Two matching subscriptions intentionally receive separate copies.</p>
+<p>Subscribe, subscribe-all, and resync return:</p>
+<pre><code>{&quot;id&quot;:20,&quot;type&quot;:&quot;events.subscribed&quot;,&quot;subscription&quot;:&quot;builds&quot;,&quot;snapshot&quot;:{&quot;protocol&quot;:2,&quot;instance&quot;:&quot;...&quot;,&quot;sequence&quot;:42,&quot;sessions&quot;:{},&quot;clients&quot;:{}}}</code></pre>
+<p>The snapshot contains <strong>all</strong> current sessions and clients, independent of the filter. Installing its receiver and copying the snapshot happen under the same lock used for mutations and publication. Events delivered by that subscription have sequence numbers greater than its snapshot watermark. The subscription reply is written before its events. <code>events.snapshot</code> returns the same state shape with reply type <code>events.snapshot</code>; it does not install a subscription. Use subscribe/resync, not separate snapshot + subscribe requests, to establish an atomic boundary.</p>
+<p>The snapshot stores session IDs, labels, optional <code>remote</code> host records, revisions, active windows, ordered windows with their binary layouts, selected/zoomed block IDs, and a block map. Each block contains <code>running</code>, nullable <code>exit_code</code>, latest nullable <code>title</code> and <code>pwd</code>, and <code>statuses:{records:{&lt;record id&gt;:&lt;record&gt;}}</code>. Root status ID is <code>&quot;&quot;</code>. The <code>clients</code> map contains negotiated live IPC connections. Since this protocol has no client identity negotiation, these use <code>kind:&quot;ipc&quot;</code>, <code>name:&quot;IPC client&quot;</code>, <code>platform:&quot;unknown&quot;</code>, <code>version:&quot;unknown&quot;</code>, and <code>principal:null</code>; <code>connected_at</code> is Unix milliseconds. No authenticated identity is inferred.</p>
+<p>Structured deliveries look like:</p>
+<pre><code>{&quot;type&quot;:&quot;events.event&quot;,&quot;subscription&quot;:&quot;builds&quot;,&quot;event&quot;:{&quot;protocol&quot;:2,&quot;instance&quot;:&quot;...&quot;,&quot;sequence&quot;:43,&quot;timestamp&quot;:1790000000000,&quot;category&quot;:&quot;terminal&quot;,&quot;session_id&quot;:&quot;default&quot;,&quot;block_id&quot;:&quot;t1&quot;,&quot;creator_name&quot;:&quot;com.superlogical.terminal&quot;,&quot;type&quot;:&quot;block_event&quot;,&quot;name&quot;:&quot;child_exited&quot;,&quot;payload&quot;:{&quot;exit_code&quot;:2,&quot;error&quot;:&quot;exit status 2&quot;}}}</code></pre>
+<p><code>timestamp</code> is Unix milliseconds; ordering uses the monotonically increasing <strong>global</strong> <code>sequence</code>, not wall-clock time. Session events carry <code>category</code>, <code>session_id</code>, <code>type</code>, and <code>payload</code>; server events carry <code>category</code>, <code>type</code>, and <code>payload</code>. Terminal events use <code>type:&quot;block_event&quot;</code> and an unqualified <code>name</code>. The daemon instance ID changes on restart, so sequences from different instances are incomparable. Reconnect with a new atomic subscription after restart.</p>
+<p>Each subscription has a receiver on the bounded 1024-event Tokio ring. A connection&#x27;s structured delivery queue is bounded to 128 frames and its request queue to 32. Publishing never waits for a network client. If a receiver lags:</p>
+<pre><code>{&quot;type&quot;:&quot;events.gap&quot;,&quot;subscription&quot;:&quot;builds&quot;,&quot;instance&quot;:&quot;...&quot;,&quot;after_sequence&quot;:43,&quot;missed&quot;:100}</code></pre>
+<p><code>after_sequence</code> is the last global event examined by this subscription, or its snapshot watermark. <code>missed</code> counts overwritten global events, including events that might not have matched its filter. The gap is therefore conservative. A sequence jump in a filtered stream alone is <strong>not</strong> evidence of loss. Filtered subscription sequence jumps are expected; clients must resync only on <code>events.gap</code> or a daemon-instance change. After a gap the subscription stops until <code>events.resync</code> supplies a fresh snapshot and receiver. Resync retains the filter and discards queued deliveries from the old generation. Unsubscribe aborts the receiver and suppresses its queued deliveries; it replies <code>ok</code>, or <code>error</code> for an unknown subscription. Socket writes preserve per-subscription order; events, replies, and PTY bytes may otherwise interleave.</p>
+<h2 id="typed-event-payload-catalog">Typed event payload catalog</h2>
+<p>The following are serde enums even where their corresponding feature is not implemented. Empty payloads serialize as <code>{}</code>. Unknown added payload fields are ignored on deserialization. Unknown event *variants* are not accepted by these enums; clients should ignore unfamiliar events before typed decoding.</p>
+<div class="table-scroll"><table>
+<tr><th>Session event</th><th>Payload fields</th><th>Emitted</th></tr>
+<tr><td><code>window_created</code></td><td><code>window_id</code>, <code>label</code></td><td>Yes</td></tr>
+<tr><td><code>window_closed</code></td><td><code>window_id</code></td><td>Yes</td></tr>
+<tr><td><code>window_label_changed</code></td><td><code>window_id</code>, <code>label</code></td><td>Yes</td></tr>
+<tr><td><code>active_window_changed</code></td><td><code>window_id</code></td><td>Yes</td></tr>
+<tr><td><code>block_created</code></td><td><code>block_id</code></td><td>Yes</td></tr>
+<tr><td><code>block_closed</code></td><td><code>block_id</code></td><td>Yes</td></tr>
+<tr><td><code>session_label_changed</code></td><td><code>label</code></td><td>Yes</td></tr>
+<tr><td><code>session_view_changed</code></td><td><code>revision</code></td><td>Yes</td></tr>
+<tr><td><code>client_connected</code></td><td><code>client_id</code>, <code>principal</code>, <code>connected_at</code></td><td>Forward type; session attachment unavailable</td></tr>
+<tr><td><code>client_disconnected</code></td><td><code>client_id</code>, <code>principal</code></td><td>Forward type</td></tr>
+<tr><td><code>client_connection_changed</code></td><td><code>client_id</code>, <code>principal</code>, <code>connection_state</code></td><td>Forward type</td></tr>
+<tr><td><code>creator_changed</code></td><td>None</td><td>Forward type; plugin creators unavailable</td></tr>
+</table></div>
+<div class="table-scroll"><table>
+<tr><th>Terminal event (<code>terminal.</code> prefix for filters)</th><th>Payload fields</th><th>Source</th></tr>
+<tr><td><code>child_exited</code></td><td><code>exit_code</code>, optional <code>error</code></td><td>Actual PTY child wait result</td></tr>
+<tr><td><code>pwd_changed</code></td><td><code>pwd</code>, <code>owner</code></td><td>OSC 7 file URL</td></tr>
+<tr><td><code>title_changed</code></td><td><code>title</code>, <code>owner</code></td><td>OSC 0 / 2</td></tr>
+<tr><td><code>bell</code></td><td>None</td><td>BEL outside OSC</td></tr>
+<tr><td><code>process_changed</code></td><td><code>generation</code>, <code>foreground</code>, <code>ancestors</code></td><td>macOS PTY foreground process group and kernel process metadata</td></tr>
+<tr><td><code>desktop_notification</code></td><td><code>title</code>, <code>body</code></td><td>OSC 9 or OSC 777 <code>notify</code></td></tr>
+<tr><td><code>progress_report</code></td><td><code>state</code>, <code>progress</code></td><td>OSC 9;4 (state 0–4, progress 0–100 or null)</td></tr>
+<tr><td><code>clipboard_written</code></td><td><code>text</code></td><td>Valid UTF-8 base64 OSC 52 write; queries ignored</td></tr>
+<tr><td><code>program_status_changed</code></td><td><code>id</code>, <code>record</code>, <code>reason</code></td><td>Valid OSC 7501 report</td></tr>
+<tr><td><code>program_status_removed</code></td><td><code>ids</code>, <code>reason</code></td><td>Clear, capacity eviction, prompt, reset, child exit</td></tr>
+</table></div>
+<p><code>child_exited</code> appears once for a retained block. Successful exit omits <code>error</code>; nonzero exit includes it, and wait failure uses null <code>exit_code</code> plus an error. The reader gets up to 200 ms to drain before exit publication. Descendants may keep the PTY open beyond that deadline, so byte output can continue after exit; subsequent structured reports from that stopped block are ignored. Completed blocks remain in snapshots until closed. Title/pwd <code>owner</code> is null because PTY bytes cannot reliably identify their writing process. The forward owner shape is <code>{pid,name}</code>. Process objects preserve <code>name</code>, <code>cwd</code>, <code>pid</code>, and any additional fields; <code>foreground</code> can be null. On macOS, the daemon samples the PTY foreground process group every 250 ms and publishes a change only when the observed process changes. <code>ancestors</code> is empty until reliable ancestry tracking is implemented. The current process is retained in each block snapshot as <code>foreground</code>, allowing icons to recover after reconnecting. Very short-lived commands may finish between samples; no process identity is guessed from output.</p>
+<div class="table-scroll"><table>
+<tr><th>Server event</th><th>Payload fields</th><th>Emitted</th></tr>
+<tr><td><code>session_created</code></td><td><code>session:{session_id,label}</code></td><td>Yes</td></tr>
+<tr><td><code>session_destroyed</code></td><td><code>session_id</code></td><td>Yes</td></tr>
+<tr><td><code>client_joined</code></td><td><code>client:{client_id,info,principal,connected_at}</code></td><td>After successful hello</td></tr>
+<tr><td><code>client_left</code></td><td><code>client_id</code></td><td>Disconnect</td></tr>
+<tr><td><code>client_changed</code></td><td><code>client</code></td><td>Forward type; identity updates unavailable</td></tr>
+<tr><td><code>keymap_changed</code></td><td><code>generation</code>, <code>hash</code></td><td>Forward type</td></tr>
+<tr><td><code>hosts_changed</code></td><td><code>hash</code></td><td>Forward type</td></tr>
+<tr><td><code>tailscale_status_changed</code></td><td>None</td><td>Forward type</td></tr>
+</table></div>
+<p>The reference does not specify JSON subtypes for <code>principal</code> or <code>connected_at</code>; the forward types preserve them as JSON values rather than inventing an identity schema. No synthetic events claim unavailable keymaps, hosts, Tailscale, process inspection, or session-client attachment behavior.</p>
+<h2 id="osc-7501-records">OSC 7501 records</h2>
+<p>Wire syntax is <code>ESC ] 7501 ; key=value (: key=value)* ST</code>, where <code>ST</code> is BEL or <code>ESC \</code>. A feature query with body <code>?</code> receives the fixed response <code>ESC ] 7501 ; ? ESC \</code> through the PTY input queue. No report content is sent back to the program. Other observed OSC sequences still reach the terminal renderer; observing clipboard writes does not write to the system clipboard.</p>
+<p>Recognized states are <code>idle</code>, <code>working</code>, <code>done</code>, <code>blocked</code>, <code>error</code>, and the removal operation <code>clear</code>. Missing/unknown states are ignored. <code>id</code> omission addresses the root record (<code>&quot;&quot;</code> in snapshots). Reports replace the addressed record completely; missing fields do not inherit values from its old report.</p>
+<ul>
+<li><code>msg</code> and <code>title</code> are standard base64 UTF-8, optionally unpadded. Decoded control</li>
+<p>characters are forbidden. Invalid text rejects the entire report atomically.</p>
+<li><code>kind</code> is <code>permission</code>, <code>question</code>, or <code>auth</code>, and applies only to <code>blocked</code>.</li>
+<li><code>progress</code> is an integer 0–100 for <code>working</code>/<code>blocked</code>; absent or invalid means</li>
+<p>indeterminate. It is absent for other states.</p>
+<li><code>app</code> is a 1–32 byte token using letters, digits, <code>_ . + -</code>. A record without</li>
+<p>one resolves the nearest ancestor&#x27;s <code>app</code>; <code>Records::effective_app</code> implements this dynamically. Snapshots retain only explicitly reported fields.</p>
+<li>IDs are slash-separated 1–32 byte tokens with the same character set, at most</li>
+<p>128 bytes and eight levels. Invalid IDs never fall back to root.</p>
+<li><code>clear</code> removes the addressed record and all descendants; root clear removes</li>
+<p>everything. A nonexistent parent is allowed. Clearing <code>a</code> does not clear <code>ab</code>.</p>
+<li>Unknown keys and malformed pairs are skipped. Surrounding whitespace is</li>
+<p>trimmed. The last well-formed duplicate wins, but limit/text validation checks every recognized pair before updating any stored record.</p>
+</ul>
+<p>Hard caps: 4096 bytes per complete sequence; keys 16 bytes; <code>msg</code> 2732 encoded / 2048 decoded bytes; <code>title</code> 256 encoded / 192 decoded bytes; 256 records per PTY. New records at capacity evict the least recently updated record. Oversized 7501 sequences are discarded through their terminator with bounded memory, then parsing resumes. Unterminated 7501 sequences are discarded at EOF.</p>
+<p>Full reset (<code>ESC c</code>) clears all records. OSC 133 <code>A</code> and attached-child exit remove <code>working</code> and <code>blocked</code>; <code>idle</code>, <code>done</code>, and <code>error</code> survive. Alternate screen changes and soft reset do not affect records. Removal reasons are <code>clear</code>, <code>capacity</code>, <code>reset</code>, <code>shell_prompt</code>, and <code>process_exit</code>; change reason is <code>report</code>. Status events preserve sequence order across fragmented PTY reads. Within a read, byte output is enqueued before its observed reports.</p>
+<p>Old Zurafa <code>state=...;message=literal text</code> reports remain accepted with the same text safety and size limits. Legacy <code>completed</code> maps to <code>done</code>. Legacy semicolon syntax is a compatibility extension; new programs should use colon pairs and base64 <code>msg</code>.</p>
+<h2 id="focused-validation">Focused validation</h2>
+<p>Run <code>cargo test --manifest-path rust/Cargo.toml --offline</code>. Tests cover all typed payload variants, combined routing filters, bounded lag and independent subscribers, atomic snapshot boundaries, concurrent publication ordering, layout validation/selection/revisions, status validation/hierarchy/eviction, stream fragmentation, and real PTYs reporting status, title, directory, bell, progress, clipboard text, and notifications. PTY tests also cover feature-query replies, prompt/reset/exit lifetimes, protocol 1 compatibility, protocol 2 snapshots/resync, and fresh daemon instance IDs after restart. Test sockets use relative names inside <code>TMPDIR</code> to stay below macOS Unix socket path limits.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/architecture/"><small>← Previous</small><strong>Architecture &amp; events</strong></a><a href="/docs/build/"><small>Next →</small><strong>Build from source</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#transport-and-negotiation">Transport and negotiation</a><a href="#pty-operations-both-versions">PTY operations (both versions)</a><a href="#rust-owned-layout-commands-protocol-2">Rust-owned layout commands (protocol 2)</a><a href="#subscriptions-and-recovery-protocol-2">Subscriptions and recovery (protocol 2)</a><a href="#typed-event-payload-catalog">Typed event payload catalog</a><a href="#osc-7501-records">OSC 7501 records</a><a href="#focused-validation">Focused validation</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

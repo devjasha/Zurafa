@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}} · Zurafa Docs</title><meta name="description" content="{{DESCRIPTION}}">
+  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="{{CANONICAL}}">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="docs-page" data-page="{{CURRENT}}">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases/tag/v0.1.0-beta.1" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for Mac ↗</a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary>{{NAV}}</details>
+      {{NAV}}
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>{{GROUP}}</div><h1>{{TITLE}}</h1><div class="prose">{{BODY}}</div>{{ADJACENT}}</main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p>{{TOC}}<a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Remote SSH · Zurafa Docs</title><meta name="description" content="Zurafa&#x27;s first remote transport is the **system SSH client**. Remote sessions run `/usr/bin/ssh` inside a PTY. This uses your usual `~/.ssh/config`, keys, known hosts, and authentication prompts.">
+  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa.rare-haven-5290.chatgpt.site/docs/ssh/">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="docs-page" data-page="ssh">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases/tag/v0.1.0-beta.1" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for Mac ↗</a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Workspace</div><h1>Remote SSH</h1><div class="prose"><p>Zurafa&#x27;s first remote transport is the <strong>system SSH client</strong>. Remote sessions run <code>/usr/bin/ssh</code> inside a PTY. This uses your usual <code>~/.ssh/config</code>, keys, known hosts, and authentication prompts.</p>
+<h2 id="add-a-host">Add a host</h2>
+<p>Open <code>⌘K</code> and choose <strong>Add Remote Host</strong>. The address field accepts a hostname or SSH alias, <code>user@host:port</code>, or <code>ssh://user@host:port</code>. A saved host appears in the session picker. Selecting it opens or switches to its remote session. A Tailscale DNS name works when this Mac can resolve and reach it over SSH; Zurafa has no separate Tailscale SSH transport.</p>
+<h2 id="work-in-a-remote-session">Work in a remote session</h2>
+<p>Create tabs and split panes as you would locally. Each remote pane starts an SSH PTY. The session label and host are visible in the top bar and picker. You can keep local and remote sessions open in the same app and switch between them.</p>
+<h2 id="saved-hosts-and-session-lifetime">Saved hosts and session lifetime</h2>
+<p>Host definitions are stored in <code>~/Library/Application Support/Zurafa/hosts.json</code> with owner-only permissions. A remote session keeps a copy of its host definition, so removing a saved host does not alter a session already open. Saved host definitions survive daemon restarts; the live SSH processes and session layouts do not.</p>
+<h2 id="security-and-transport-limits">Security and transport limits</h2>
+<p>Zurafa validates addresses before saving them and passes SSH arguments separately. Host authenticity and authentication are handled by system SSH. There is no mosh transport, separate Tailscale API, remote file browser, or session persistence across daemon restarts in this beta.</p>
+<p>If a connection fails, first run the same SSH target from macOS Terminal. Check DNS, network reachability, <code>~/.ssh/config</code>, your keys, and host verification there. <a href="/docs/troubleshooting/">Troubleshooting</a> covers more checks.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/shortcuts/"><small>← Previous</small><strong>Commands &amp; shortcuts</strong></a><a href="/docs/appearance/"><small>Next →</small><strong>Appearance &amp; Ghostty</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#add-a-host">Add a host</a><a href="#work-in-a-remote-session">Work in a remote session</a><a href="#saved-hosts-and-session-lifetime">Saved hosts and session lifetime</a><a href="#security-and-transport-limits">Security and transport limits</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Troubleshooting &amp; limits · Zurafa Docs</title><meta name="description" content="Zurafa 0.1.0 beta 1 is an early macOS release. These checks cover the current implementation and its known boundaries.">
+  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa.rare-haven-5290.chatgpt.site/docs/troubleshooting/">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="docs-page" data-page="troubleshooting">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases/tag/v0.1.0-beta.1" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for Mac ↗</a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Reference</div><h1>Troubleshooting &amp; limits</h1><div class="prose"><p>Zurafa 0.1.0 beta 1 is an early macOS release. These checks cover the current implementation and its known boundaries.</p>
+<h2 id="macos-blocks-the-app">macOS blocks the app</h2>
+<p>This build is ad-hoc signed and not notarized. After attempting to open the app, go to System Settings → Privacy &amp; Security and select <strong>Open Anyway</strong> for Zurafa. See <a href="https://support.apple.com/en-us/102445">Apple&#x27;s official instructions</a>. Only use this step for a download you trust; verify the archive checksum on the <a href="/docs/install/">installation page</a>.</p>
+<h2 id="app-cannot-connect-to-the-daemon">App cannot connect to the daemon</h2>
+<p>The daemon listens on <code>$HOME/Library/Application Support/Zurafa/daemon.sock</code> by default. The app starts its bundled daemon if none is running. An old daemon can remain after you quit the app. If it uses an incompatible protocol, stop it before relaunching:</p>
+<pre><code>pkill zurafa-daemon</code></pre>
+<p><strong>This ends all terminals and sessions owned by that daemon.</strong> The beta does not restore their screen contents or processes afterward. You can set <code>ZURAFA_SOCKET</code> to override the socket path for development.</p>
+<h2 id="a-remote-host-does-not-connect">A remote host does not connect</h2>
+<p>Zurafa uses <code>/usr/bin/ssh</code>. Try the same host or alias in macOS Terminal. Check DNS or Tailscale reachability, your <code>~/.ssh/config</code>, keys, host verification, and authentication prompts. There is no mosh or separate Tailscale SSH implementation.</p>
+<h2 id="terminal-screen-content-is-missing-after-reconnecting">Terminal screen content is missing after reconnecting</h2>
+<p>The app can recover layout, running state, titles, directories, and program status from a new snapshot. PTY screen bytes emitted while the app was disconnected are not replayed, so a full-screen program may need a redraw. A daemon restart ends active terminals and starts fresh state.</p>
+<h2 id="foreground-program-icon-is-delayed-or-absent">Foreground program icon is delayed or absent</h2>
+<p>The daemon samples the PTY foreground process group every 250 ms when reliable metadata is available. Very short-lived commands may end between samples. Zurafa does not infer program identity from arbitrary terminal text.</p>
+<h2 id="current-feature-limits">Current feature limits</h2>
+<ul>
+<li>Apple Silicon macOS 14+ only; Intel packaging is not provided yet.</li>
+<li>No Developer ID signing or notarization in the beta download.</li>
+<li>Session layouts and PTYs are in daemon memory, not persisted across daemon restarts.</li>
+<li>No standalone Zurafa CLI, Lua runtime, mosh transport, native Tailscale API, or remote file browser yet.</li>
+<li>No PTY scrollback replay after a client disconnect.</li>
+<li>Ghostty import covers supported terminal font and color settings, not all Ghostty settings.</li>
+</ul>
+<p>For a bug report, include the Zurafa version, macOS version, reproduction steps, and relevant daemon error text in a <a href="https://github.com/devjasha/Zurafa/issues/new">GitHub issue</a>. Do not post SSH keys or private credentials.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/build/"><small>← Previous</small><strong>Build from source</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#macos-blocks-the-app">macOS blocks the app</a><a href="#app-cannot-connect-to-the-daemon">App cannot connect to the daemon</a><a href="#a-remote-host-does-not-connect">A remote host does not connect</a><a href="#terminal-screen-content-is-missing-after-reconnecting">Terminal screen content is missing after reconnecting</a><a href="#foreground-program-icon-is-delayed-or-absent">Foreground program icon is delayed or absent</a><a href="#current-feature-limits">Current feature limits</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

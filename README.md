@@ -2,6 +2,8 @@
 
 A macOS terminal workspace: a SwiftUI app (`apps/macos`) whose terminals and workspace state live in a Rust daemon (`rust/`). The `zurafa-events` crate owns typed events, subscriptions, and snapshots; the socket protocol is documented in `docs/ipc-protocol.md`.
 
+**Website:** [zurafa.rare-haven-5290.chatgpt.site](https://zurafa.rare-haven-5290.chatgpt.site) · **Documentation:** [Getting started and reference](https://zurafa.rare-haven-5290.chatgpt.site/docs/)
+
 ## Download for macOS
 
 Download the latest macOS archive from [GitHub Releases](https://github.com/devjasha/Zurafa/releases), unzip it, and drag `Zurafa.app` into Applications. The current beta supports Apple Silicon Macs running macOS 14 or newer.
@@ -49,3 +51,7 @@ Ghostty's files, or choose Use Zurafa Terminal Defaults to undo the import.
 Terminal panes bundle Symbols Nerd Font Mono as an icon fallback. The chosen
 terminal font still renders ordinary text and any icons it already contains;
 only missing Nerd Font symbols use the bundled face.
+
+The static website and documentation source live in `website/`. Run
+`python3 website/build.py` and `python3 website/check.py` to rebuild and verify
+its generated `website/dist/` pages.

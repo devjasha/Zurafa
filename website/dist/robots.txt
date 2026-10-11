@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://zurafa.rare-haven-5290.chatgpt.site/sitemap.xml

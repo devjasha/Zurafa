@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Build from source · Zurafa Docs</title><meta name="description" content="The source repository is [devjasha/Zurafa on GitHub](https://github.com/devjasha/Zurafa). This page describes the current development build, not a Developer ID signed distribution workflow.">
+  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa.rare-haven-5290.chatgpt.site/docs/build/">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="docs-page" data-page="build">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases/tag/v0.1.0-beta.1" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for Mac ↗</a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Reference</div><h1>Build from source</h1><div class="prose"><p>The source repository is <a href="https://github.com/devjasha/Zurafa">devjasha/Zurafa on GitHub</a>. This page describes the current development build, not a Developer ID signed distribution workflow.</p>
+<h2 id="prerequisites">Prerequisites</h2>
+<p>Use a Mac with Xcode/Swift tooling and Rust/Cargo installed. The Swift package targets macOS 14 or newer; the release currently builds for Apple Silicon. Dependencies are resolved through SwiftPM and Cargo.</p>
+<h2 id="build-the-app-bundle">Build the app bundle</h2>
+<p>From the repository root:</p>
+<pre><code>scripts/bundle.sh
+open build/Zurafa.app</code></pre>
+<p>The script builds the Rust daemon and SwiftUI app in release mode, places both executables inside <code>build/Zurafa.app</code>, includes the app icon and font resources, and applies an ad-hoc signature. It does not notarize the result.</p>
+<h2 id="run-during-development">Run during development</h2>
+<pre><code>(cd rust &amp;&amp; cargo build)
+cd apps/macos &amp;&amp; ZURAFA_DAEMON=../../rust/target/debug/zurafa-daemon swift run</code></pre>
+<h2 id="run-tests">Run tests</h2>
+<pre><code>(cd rust &amp;&amp; cargo test)
+(cd apps/macos &amp;&amp; swift test)</code></pre>
+<p>The Rust test suite includes real PTY-backed integration tests, event routing, snapshots, reconnection, status parsing, and layout ordering. Swift tests cover protocol decoding, appearance, Ghostty import, SSH address parsing, Nerd Font fallback, dither processing, and terminal-host reattachment.</p>
+<h2 id="source-layout">Source layout</h2>
+<div class="table-scroll"><table>
+<tr><th>Path</th><th>Purpose</th></tr>
+<tr><td><code>rust/crates/zurafa-daemon</code></td><td>Socket server, PTYs, terminal parsing, SSH hosts</td></tr>
+<tr><td><code>rust/crates/zurafa-events</code></td><td>Typed events, dispatcher, snapshots, layout, status records</td></tr>
+<tr><td><code>apps/macos</code></td><td>SwiftUI application and tests</td></tr>
+<tr><td><code>docs/ipc-protocol.md</code></td><td>Protocol 1 and 2 reference</td></tr>
+<tr><td><code>scripts/bundle.sh</code></td><td>Local macOS app bundle build</td></tr>
+</table></div>
+<p>For the wire-level contract, see the <a href="/docs/ipc-reference/">IPC protocol reference</a>.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/ipc-reference/"><small>← Previous</small><strong>IPC protocol</strong></a><a href="/docs/troubleshooting/"><small>Next →</small><strong>Troubleshooting &amp; limits</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#prerequisites">Prerequisites</a><a href="#build-the-app-bundle">Build the app bundle</a><a href="#run-during-development">Run during development</a><a href="#run-tests">Run tests</a><a href="#source-layout">Source layout</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sessions, tabs &amp; panes · Zurafa Docs</title><meta name="description" content="Zurafa uses a hierarchy that lets you separate work without losing spatial context. In the backend, a **session** contains windows and terminal blocks. The macOS app presents these as a workspace session, tabs, and panes.">
+  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa.rare-haven-5290.chatgpt.site/docs/sessions/">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="docs-page" data-page="sessions">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases/tag/v0.1.0-beta.1" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for Mac ↗</a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Workspace</div><h1>Sessions, tabs &amp; panes</h1><div class="prose"><p>Zurafa uses a hierarchy that lets you separate work without losing spatial context. In the backend, a <strong>session</strong> contains windows and terminal blocks. The macOS app presents these as a workspace session, tabs, and panes.</p>
+<h2 id="sessions">Sessions</h2>
+<p>A session is an independent workspace with a label, tabs, and optional remote host. Use the session picker from the top bar or <strong>Change Session</strong> in <code>⌘K</code>. Choose <strong>New Session</strong> to create one, <strong>Rename Session</strong> to update its label, and <strong>Close Session</strong> to end it. Closing a session closes its terminals.</p>
+<p>Open sessions live in daemon memory. They remain while the daemon is running, including when the Swift app disconnects, but they disappear on daemon restart. Saved SSH host definitions are stored separately and survive daemon restarts.</p>
+<h2 id="tabs">Tabs</h2>
+<p>A tab is a top-level terminal layout. Add one with <code>⌘T</code>, the plus button, or the command picker. Select tabs in the top bar or with <code>⌘1</code> through <code>⌘9</code>. Rename the current tab from <code>⌘K</code>. The <strong>Close Tab</strong> command is <code>⌥⌘W</code> and closes every pane in that tab.</p>
+<h2 id="panes">Panes</h2>
+<p>Split the focused pane right with <code>⌘D</code> or down with <code>⇧⌘D</code>. The new pane receives its own shell or SSH process. Resize a split by dragging the divider. Click a pane to focus it; <code>⌘[</code> and <code>⌘]</code> cycle focus. <code>⇧⌘↩</code> zooms the focused pane without closing the others. <code>⌘W</code> closes only the focused pane. Closing one side of a split collapses the layout while the surviving pane keeps its process.</p>
+<h2 id="how-layout-updates-reach-the-app">How layout updates reach the app</h2>
+<p>The Rust daemon validates and commits each layout command, increments that session&#x27;s layout revision, and emits a <code>session_view_changed</code> event. The app then reads a fresh authoritative snapshot. Structural events can accompany the revision signal, but the frontend does not reconstruct a full layout by guessing from individual events. <a href="/docs/architecture/">Read the architecture guide</a>.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/quickstart/"><small>← Previous</small><strong>Quick start</strong></a><a href="/docs/shortcuts/"><small>Next →</small><strong>Commands &amp; shortcuts</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#sessions">Sessions</a><a href="#tabs">Tabs</a><a href="#panes">Panes</a><a href="#how-layout-updates-reach-the-app">How layout updates reach the app</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>
