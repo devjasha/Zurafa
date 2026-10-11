@@ -14,6 +14,7 @@ cp "$bin/Zurafa" "$app/Contents/MacOS/Zurafa"
 cp "$root/apps/macos/Sources/Zurafa/Resources/Claude.png" "$app/Contents/Resources/Claude.png"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFontMono-Regular.ttf" "$app/Contents/Resources/SymbolsNerdFontMono-Regular.ttf"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app/Contents/Resources/SymbolsNerdFont-LICENSE.txt"
+cp "$root/apps/macos/.build/checkouts/SwiftTerm/LICENSE" "$app/Contents/Resources/SwiftTerm-LICENSE.txt"
 cp "$root/rust/target/release/zurafa-daemon" "$app/Contents/MacOS/zurafa-daemon"
 
 # The app loads AppIcon via Bundle.main, so the SwiftPM resource bundle is not needed (codesign rejects it at the .app root).
@@ -39,6 +40,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>Zurafa</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>

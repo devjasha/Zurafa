@@ -2,6 +2,12 @@
 
 A macOS terminal workspace: a SwiftUI app (`apps/macos`) whose terminals and workspace state live in a Rust daemon (`rust/`). The `zurafa-events` crate owns typed events, subscriptions, and snapshots; the socket protocol is documented in `docs/ipc-protocol.md`.
 
+## Download for macOS
+
+Download the latest macOS archive from [GitHub Releases](https://github.com/devjasha/Zurafa/releases), unzip it, and drag `Zurafa.app` into Applications. The current beta supports Apple Silicon Macs running macOS 14 or newer.
+
+This beta is ad-hoc signed because a Developer ID certificate is not yet configured. On first launch, macOS may block it. Open System Settings → Privacy & Security and choose **Open Anyway** for Zurafa after attempting to launch it. See [Apple's instructions](https://support.apple.com/en-us/102445). A notarized release will remove this extra step.
+
 ## Build and run
 
 ```sh
