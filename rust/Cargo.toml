@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/zurafa-daemon", "crates/zurafa-events"]
+resolver = "2"
