@@ -53,6 +53,17 @@ impl HostRegistry {
         self.save(next)
     }
 
+    pub fn update(&mut self, host: RemoteHost) -> Result<String, String> {
+        validate(&host)?;
+        let mut next = self.hosts.clone();
+        let saved = next
+            .iter_mut()
+            .find(|saved| saved.id == host.id)
+            .ok_or("unknown host")?;
+        *saved = host;
+        self.save(next)
+    }
+
     pub fn remove(&mut self, id: &str) -> Result<String, String> {
         let mut next = self.hosts.clone();
         next.retain(|h| h.id != id);

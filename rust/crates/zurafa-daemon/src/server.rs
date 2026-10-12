@@ -63,6 +63,8 @@ enum Request {
     HostsList { id: u64 },
     #[serde(rename = "hosts.add")]
     HostsAdd { id: u64, host: RemoteHost },
+    #[serde(rename = "hosts.update")]
+    HostsUpdate { id: u64, host: RemoteHost },
     #[serde(rename = "hosts.remove")]
     HostsRemove { id: u64, host_id: String },
     #[serde(rename = "events.subscribe")]
@@ -207,6 +209,10 @@ async fn request(
     Some(match r {
         Request::HostsList { id } => json!({"id":id,"type":"hosts.list","hosts":terms.hosts()}),
         Request::HostsAdd { id, host } => match terms.add_host(host) {
+            Ok(()) => json!({"id":id,"type":"ok"}),
+            Err(e) => error(id, e),
+        },
+        Request::HostsUpdate { id, host } => match terms.update_host(host) {
             Ok(()) => json!({"id":id,"type":"ok"}),
             Err(e) => error(id, e),
         },

@@ -199,6 +199,13 @@ impl Terminals {
         Ok(())
     }
 
+    pub fn update_host(&self, host: RemoteHost) -> Result<(), String> {
+        let _guard = self.control.lock().unwrap();
+        let hash = self.hosts.lock().unwrap().update(host.clone())?;
+        self.dispatcher.host_updated(&host, hash);
+        Ok(())
+    }
+
     pub fn remove_host(&self, id: &str) -> Result<(), String> {
         let hash = self.hosts.lock().unwrap().remove(id)?;
         self.dispatcher.hosts_changed(hash);

@@ -72,9 +72,12 @@ struct SessionPicker: View {
                     if !matchingHosts.isEmpty {
                         section("Saved Hosts", symbol: "network")
                         ForEach(matchingHosts) { host in
-                            row(host.label, subtitle: host.hostname, symbol: "globe", selected: false) {
-                                ws.openHost(host)
-                                ws.sessionPickerOpen = false
+                            HStack(spacing: 2) {
+                                row(host.label, subtitle: host.addressLabel, symbol: "globe", selected: false) {
+                                    ws.openHost(host)
+                                    ws.sessionPickerOpen = false
+                                }
+                                hostSettingsButton(host)
                             }
                         }
                     }
@@ -110,8 +113,23 @@ struct SessionPicker: View {
     }
 
     private func sessionRow(_ session: SessionSnapshot) -> some View {
-        row(session.label, subtitle: session.remote?.hostname, symbol: session.remote == nil ? "laptopcomputer" : "globe",
-            selected: session.sessionID == ws.sessionID) { ws.selectSession(session.sessionID) }
+        HStack(spacing: 2) {
+            row(session.label, subtitle: session.remote?.addressLabel, symbol: session.remote == nil ? "laptopcomputer" : "globe",
+                selected: session.sessionID == ws.sessionID) { ws.selectSession(session.sessionID) }
+            if let host = session.remote { hostSettingsButton(host) }
+        }
+    }
+
+    private func hostSettingsButton(_ host: RemoteHost) -> some View {
+        Button { ws.beginEditingHost(host) } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 12))
+                .foregroundStyle(PickerStyle.secondary)
+                .frame(width: 27, height: 29)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Edit \(host.label) connection")
     }
 
     private func row(_ title: String, subtitle: String?, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -133,12 +151,16 @@ struct SessionPicker: View {
 }
 
 struct EditorSheet: View {
-    private enum FieldFocus: Hashable { case label, hostname }
+    private enum FieldFocus: Hashable { case label, hostname, username, port }
     let kind: EditorKind
     @EnvironmentObject var ws: Workspace
     @State private var label = ""
     @State private var address = ""
+    @State private var hostname = ""
+    @State private var username = ""
+    @State private var port = "22"
     @State private var hostError: String?
+    @State private var savingHost = false
     @FocusState private var focusedField: FieldFocus?
 
     private var heading: String {
@@ -146,6 +168,7 @@ struct EditorSheet: View {
         case .renameSession: "Rename Session"
         case .renameTab: "Rename Tab"
         case .addHost: "Add Host"
+        case .editHost: "Edit Connection"
         case .newSession: "New Session"
         case .goDirectory: "Go to Directory"
         }
@@ -165,6 +188,34 @@ struct EditorSheet: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(address.isEmpty)
+                } else if kind == .editHost {
+                    HStack {
+                        Text(heading).font(.system(size: 15, weight: .semibold))
+                        Spacer()
+                        Button(action: close) {
+                            Image(systemName: "xmark.circle.fill").font(.system(size: 17))
+                                .foregroundStyle(PickerStyle.secondary)
+                        }.buttonStyle(.plain).help("Close")
+                    }
+                    field("Saved host name", text: $label, focus: .label).onSubmit(save)
+                    field("Host name or IP address", text: $hostname, focus: .hostname).onSubmit(save)
+                    field("SSH user (optional)", text: $username, focus: .username).onSubmit(save)
+                    field("SSH port", text: $port, focus: .port).onSubmit(save)
+                    if let hostError {
+                        Text(hostError).font(.system(size: 11)).foregroundStyle(.red)
+                    } else {
+                        Text("New tabs use the updated connection. Existing terminals stay connected as they are.")
+                            .font(.system(size: 11)).foregroundStyle(PickerStyle.secondary)
+                    }
+                    HStack(spacing: 8) {
+                        Spacer()
+                        Button("Cancel", action: close).keyboardShortcut(.cancelAction)
+                        Button(savingHost ? "Saving…" : "Save", action: save)
+                            .keyboardShortcut(.defaultAction)
+                            .buttonStyle(.borderedProminent)
+                            .tint(PickerStyle.accent)
+                            .disabled(savingHost || label.trimmingCharacters(in: .whitespaces).isEmpty || hostname.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 } else {
                     HStack {
                         Text(heading).font(.system(size: 15, weight: .semibold))
@@ -188,7 +239,7 @@ struct EditorSheet: View {
                 }
             }
             .padding(kind == .addHost ? 10 : 13)
-            .frame(width: kind == .addHost ? 420 : 360)
+            .frame(width: kind == .addHost || kind == .editHost ? 420 : 360)
             .pickerGlass(in: RoundedRectangle(cornerRadius: 15))
             .overlay(RoundedRectangle(cornerRadius: 15).strokeBorder(PickerStyle.outline, lineWidth: 1))
             .shadow(color: .black.opacity(0.25), radius: 20, y: 8)
@@ -201,10 +252,17 @@ struct EditorSheet: View {
             case .renameSession: label = ws.name
             case .renameTab: label = ws.tab.label
             case .goDirectory: label = NSHomeDirectory()
+            case .editHost:
+                if let host = ws.editingHost {
+                    label = host.label
+                    hostname = host.hostname
+                    username = host.user ?? ""
+                    port = String(host.port)
+                }
             default: break
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                focusedField = kind == .addHost ? .hostname : .label
+                focusedField = kind == .addHost || kind == .editHost ? .hostname : .label
             }
         }
     }
@@ -258,6 +316,35 @@ struct EditorSheet: View {
             } catch { hostError = error.localizedDescription }
             return
         }
+        if kind == .editHost {
+            guard let original = ws.editingHost, !savingHost else { return }
+            do {
+                let user = username.trimmingCharacters(in: .whitespacesAndNewlines)
+                let destination = (user.isEmpty ? "" : "\(user)@")
+                    + hostname.trimmingCharacters(in: .whitespacesAndNewlines)
+                    + ":" + port.trimmingCharacters(in: .whitespacesAndNewlines)
+                let parsed = try SSHHostAddress(destination)
+                let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { hostError = "Enter a workspace name."; return }
+                let updated = RemoteHost(id: original.id, label: name, hostname: parsed.hostname,
+                                         user: parsed.user, port: parsed.port)
+                hostError = nil
+                savingHost = true
+                Task {
+                    do {
+                        try await ws.updateRemoteHost(updated)
+                        close()
+                    } catch {
+                        let message = error.localizedDescription
+                        hostError = message.contains("hosts.update") && message.contains("unknown variant")
+                            ? "The running Zurafa daemon is older than this app. Restart the daemon to edit connections."
+                            : message
+                        savingHost = false
+                    }
+                }
+            } catch { hostError = error.localizedDescription }
+            return
+        }
         let value = label.trimmingCharacters(in: .whitespaces)
         guard !value.isEmpty else { return }
         switch kind {
@@ -265,7 +352,7 @@ struct EditorSheet: View {
         case .renameTab: ws.renameTab(value)
         case .newSession: ws.createSession(label: value)
         case .goDirectory: ws.openDirectory(value)
-        case .addHost: break
+        case .addHost, .editHost: break
         }
         close()
     }

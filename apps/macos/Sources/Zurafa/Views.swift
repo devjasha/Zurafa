@@ -63,12 +63,33 @@ struct Backdrop: View {
     }
 }
 
+enum LobeIcon {
+    static func image(named name: String?) -> NSImage? {
+        guard let name else { return nil }
+        return Bundle.main.image(forResource: name)
+            ?? Bundle.module.url(forResource: name, withExtension: "png").flatMap { NSImage(contentsOf: $0) }
+            ?? Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources").flatMap { NSImage(contentsOf: $0) }
+    }
+
+    static func assetName(for app: String?) -> String? {
+        guard let app else { return nil }
+        let key = app.lowercased().filter { $0.isLetter || $0.isNumber }
+        switch key {
+        case "claude", "anthropic": return "LobeClaude"
+        case "codex": return "LobeCodex"
+        case "openai", "chatgpt", "gpt": return "LobeOpenAI"
+        case "gemini", "google", "bard": return "LobeGemini"
+        case "github": return "LobeGithub"
+        case "copilot", "githubcopilot": return "LobeGithubCopilot"
+        default: return nil
+        }
+    }
+}
+
 struct ProgramGlyph: View {
     let program: Program
-    private static let claudeIcon: NSImage? = Bundle.main.image(forResource: "Claude")
-        ?? Bundle.module.url(forResource: "Claude", withExtension: "png").flatMap { NSImage(contentsOf: $0) }
     var body: some View {
-        if program == .claude, let icon = Self.claudeIcon {
+        if let icon = LobeIcon.image(named: program.lobeIconName) {
             Image(nsImage: icon).resizable().scaledToFit()
         } else {
             Image(systemName: program.icon).resizable().scaledToFit()
@@ -115,13 +136,55 @@ struct StatusDot: View {
     }
 }
 
+/// Branded task icon for OSC 7501 records. AI/provider logos come from Lobe Icons static PNG assets.
+struct StatusIcon: View {
+    let item: StatusItem
+    let fallback: String
+    var size: CGFloat = 16
+
+    var body: some View {
+        let stateColor = StatusDot.colors[item.record.state] ?? Theme.inkSoft
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(.white.opacity(0.42), lineWidth: 0.5))
+                .overlay {
+                    if let icon = LobeIcon.image(named: item.lobeIconName) {
+                        Image(nsImage: icon).resizable().scaledToFit().padding(size * 0.16)
+                    } else {
+                        Image(systemName: fallbackSymbol)
+                            .font(.system(size: size * 0.56, weight: .semibold))
+                            .foregroundStyle(Theme.inkSoft)
+                    }
+                }
+            Circle()
+                .fill(stateColor)
+                .frame(width: max(6, size * 0.38), height: max(6, size * 0.38))
+                .overlay(Circle().stroke(.white.opacity(0.75), lineWidth: 0.5))
+                .symbolEffect(.pulse, isActive: item.record.state == "working")
+                .offset(x: size * 0.08, y: size * 0.08)
+        }
+        .frame(width: size, height: size)
+        .help("\(item.label(default: fallback)): \(item.stateLabel)\(item.record.msg.map { " — \($0)" } ?? "")")
+    }
+
+    private var fallbackSymbol: String {
+        switch item.record.kind?.lowercased() {
+        case "permission": "hand.raised.fill"
+        case "build": "hammer.fill"
+        case "test": "checklist"
+        default: item.record.state == "blocked" || item.record.state == "error" ? "exclamationmark" : "gearshape.fill"
+        }
+    }
+}
+
 struct StatusRecordRow: View {
     let item: StatusItem
     let fallback: String
 
     var body: some View {
         HStack(spacing: 6) {
-            StatusDot(item: item, fallback: fallback)
+            StatusIcon(item: item, fallback: fallback, size: 16)
             Text(item.label(default: fallback))
                 .foregroundStyle(Theme.ink)
                 .lineLimit(1)
@@ -285,7 +348,7 @@ struct WorkspacePickerButton: View {
                     .font(.system(size: 15))
                 VStack(alignment: .leading, spacing: 0) {
                     Text(ws.name).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.ink)
-                    Text(ws.currentSession?.remote?.hostname ?? Self.host)
+                    Text(ws.currentSession?.remote?.addressLabel ?? Self.host)
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 .lineLimit(1)
@@ -407,7 +470,7 @@ struct TabItem: View {
             ForEach(tab.layout.panes, id: \.self) { paneID in
                 let pane = ws.meta(paneID)
                 ForEach(pane.statusItems) { item in
-                    StatusDot(item: item, fallback: pane.program.title)
+                    StatusIcon(item: item, fallback: pane.program.title, size: 14)
                 }
             }
         }
@@ -491,7 +554,7 @@ struct PaneView: View {
                 Text(m.label ?? m.cwd).font(.system(size: 13)).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.head)
                 ForEach(m.statusItems) { item in
-                    StatusDot(item: item, fallback: m.program.title)
+                    StatusIcon(item: item, fallback: m.program.title, size: 15)
                 }
                 if let e = m.ended {
                     Text(e).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)

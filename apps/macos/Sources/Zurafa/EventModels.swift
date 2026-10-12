@@ -49,6 +49,7 @@ struct RemoteHost: Codable, Identifiable, Equatable {
     var port: Int
 
     var destination: String { user.map { "\($0)@\(hostname)" } ?? hostname }
+    var addressLabel: String { port == 22 ? hostname : "\(hostname):\(port)" }
     var wire: JSONValue {
         .object(["id": .string(id), "label": .string(label), "hostname": .string(hostname),
                  "user": user.map(JSONValue.string) ?? .null, "port": .number(Double(port))])

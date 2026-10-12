@@ -101,14 +101,18 @@ a session with that saved host copied into `remote`:
 {"id":30,"type":"hosts.add","host":{"id":"host-1","label":"Build server","hostname":"build.example.net","user":"alice","port":22}}
 {"id":31,"type":"hosts.list"}
 {"id":32,"type":"layout.command","command":{"op":"create_session","session":"build","label":"Build server","remote":{"id":"host-1","label":"Build server","hostname":"build.example.net","user":"alice","port":22}}}
+{"id":34,"type":"hosts.update","host":{"id":"host-1","label":"Build server","hostname":"new-build.example.net","user":"alice","port":2222}}
 {"id":33,"type":"hosts.remove","host_id":"host-1"}
 ```
 
-`hosts.list` replies with `{id,type:"hosts.list",hosts:[...]}`; add/remove reply
+`hosts.list` replies with `{id,type:"hosts.list",hosts:[...]}`; add/update/remove reply
 with `ok` or `error`. Saved hosts live in
 `~/Library/Application Support/Zurafa/hosts.json`, written with owner-only
 permissions. Set `ZURAFA_HOSTS_FILE` to override the path. A remote session
-keeps a copy of its host, so removing a saved host does not break an open
+keeps a copy of its host. `hosts.update` requires an existing host ID, replaces
+its saved definition, and refreshes matching remote sessions before emitting
+`hosts_changed`. New tabs and splits use the updated address and port; running
+SSH processes are not restarted. Removing a saved host does not break an open
 session. Host changes emit server `hosts_changed` with an opaque hash.
 The daemon validates host fields and only accepts a saved host when creating a
 remote session. Each tab or split in that session runs `/usr/bin/ssh -tt -p

@@ -313,6 +313,23 @@ impl Dispatcher {
             event: ServerEvent::HostsChanged { hash },
         });
     }
+    /// Refresh remote session definitions after the saved host has been updated.
+    /// Existing PTYs retain their process; the next terminal spawn uses this host.
+    pub fn host_updated(&self, host: &RemoteHost, hash: String) {
+        let mut inner = self.inner.lock().unwrap();
+        for session in inner.snapshot.sessions.values_mut() {
+            if session
+                .remote
+                .as_ref()
+                .is_some_and(|remote| remote.id == host.id)
+            {
+                session.remote = Some(host.clone());
+            }
+        }
+        inner.emit(Event::Server {
+            event: ServerEvent::HostsChanged { hash },
+        });
+    }
     /// Register the receiver and clone the state under the same publication lock.
     pub fn subscribe(&self) -> (Snapshot, broadcast::Receiver<Envelope>) {
         let i = self.inner.lock().unwrap();

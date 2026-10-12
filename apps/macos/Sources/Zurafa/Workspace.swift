@@ -36,6 +36,9 @@ enum Program {
     var icon: String {
         switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .shell: "terminal" }
     }
+    var lobeIconName: String? {
+        switch self { case .claude: "LobeClaude"; case .codex: "LobeCodex"; case .gemini: "LobeGemini"; default: nil }
+    }
     var tile: [Color] {
         switch self {
         case .claude: [Color(red: 0.83, green: 0.52, blue: 0.38)]
@@ -78,6 +81,8 @@ struct StatusItem: Identifiable {
     let id: String
     let record: ProgramStatus
 
+    var lobeIconName: String? { LobeIcon.assetName(for: record.app) }
+
     func label(default fallback: String) -> String {
         if let title = record.title, !title.isEmpty { return title }
         if !id.isEmpty { return id }
@@ -101,7 +106,7 @@ struct Tab: Identifiable {
 }
 
 enum EditorKind: String, Identifiable {
-    case renameSession, renameTab, addHost, newSession, goDirectory
+    case renameSession, renameTab, addHost, editHost, newSession, goDirectory
     var id: String { rawValue }
 }
 
@@ -115,6 +120,7 @@ enum EditorKind: String, Identifiable {
     @Published var paletteOpen = false
     @Published var sessionPickerOpen = false
     @Published var editor: EditorKind?
+    @Published private(set) var editingHost: RemoteHost?
     @Published var confirmCloseSession = false
     @Published var appearance = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "system") ?? .system
     @Published private(set) var tabStripLayout = TabStripLayout(rawValue: UserDefaults.standard.string(forKey: "tabStripLayout") ?? "horizontal") ?? .horizontal
@@ -203,7 +209,7 @@ enum EditorKind: String, Identifiable {
 
     private func apply(_ event: EventEnvelope) {
         latestEventSequence = max(latestEventSequence, event.sequence)
-        if event.eventName == "hosts_changed" { refreshHosts() }
+        if event.eventName == "hosts_changed" { refreshHosts(); refresh() }
         switch event.eventName {
         case "session_view_changed":
             if event.sessionID == sessionID, let revision = event.payload.object?["revision"]?.int { requiredRevision = max(requiredRevision, UInt64(max(0, revision))) }
@@ -418,6 +424,18 @@ enum EditorKind: String, Identifiable {
                 createSession(label: label, remote: host)
             } catch { commandError = error.localizedDescription }
         }
+    }
+
+    func beginEditingHost(_ host: RemoteHost) {
+        editingHost = hosts.first(where: { $0.id == host.id }) ?? host
+        sessionPickerOpen = false
+        editor = .editHost
+    }
+
+    func updateRemoteHost(_ host: RemoteHost) async throws {
+        _ = try await daemon.request(["type": .string("hosts.update"), "host": host.wire])
+        hosts = try await daemon.request(["type": .string("hosts.list")]).hosts ?? []
+        apply(try await daemon.snapshot())
     }
 
     func openHost(_ host: RemoteHost) {

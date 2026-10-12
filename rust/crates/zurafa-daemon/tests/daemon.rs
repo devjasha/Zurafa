@@ -199,6 +199,30 @@ fn saved_ssh_host_opens_remote_session_and_tabs_use_ssh() {
     let msgs = c.collect(|m| m.iter().any(|v| event_name(v, "child_exited")));
     assert_eq!(of_type(&msgs, "spawned").count(), 1);
     assert!(String::from_utf8_lossy(&output(&msgs)).contains("127.0.0.1"));
+    let updated =
+        json!({"id":"h1","label":"Updated host","hostname":"localhost","user":null,"port":2});
+    let missing =
+        json!({"id":"missing","label":"Missing","hostname":"localhost","user":null,"port":2});
+    assert_eq!(
+        c.request(json!({"id":79,"type":"hosts.update","host":missing}))["type"],
+        "error"
+    );
+    assert_eq!(
+        c.request(json!({"id":80,"type":"hosts.update","host":updated}))["type"],
+        "ok"
+    );
+    let saved = c.request(json!({"id":81,"type":"hosts.list"}));
+    assert_eq!(saved["hosts"].as_array().unwrap().len(), 1);
+    assert_eq!(saved["hosts"][0]["port"], 2);
+    let state = c.request(json!({"id":82,"type":"events.snapshot"}));
+    assert_eq!(
+        state["snapshot"]["sessions"]["remote-test"]["remote"]["hostname"],
+        "localhost"
+    );
+    c.send(json!({"id":83,"type":"layout.tab","session":"remote-test","cols":80,"rows":24}));
+    let msgs = c.collect(|m| m.iter().any(|v| event_name(v, "child_exited")));
+    assert_eq!(of_type(&msgs, "spawned").count(), 1);
+    assert!(String::from_utf8_lossy(&output(&msgs)).contains("localhost port 2"));
     assert_eq!(
         c.request(json!({"id":8,"type":"hosts.remove","host_id":"h1"}))["type"],
         "ok"

@@ -13,9 +13,13 @@ final class LayoutTests: XCTestCase {
             from: Data(#"{"name":"claude","cwd":"/tmp","pid":123}"#.utf8))
         XCTAssertEqual(Program.detect(process.name, remote: false), .claude)
         XCTAssertEqual(Program.detect("2.1.295", executable: "/Users/test/.local/share/claude/versions/2.1.295", remote: false), .claude)
+        XCTAssertEqual(Program.detect("codex", remote: false), .codex)
+        XCTAssertEqual(Program.detect("gemini", remote: false), .gemini)
         XCTAssertEqual(Program.detect("fish", remote: false), .shell)
         XCTAssertEqual(Program.detect("ssh", remote: true), .ssh)
-        XCTAssertNotNil(Bundle.module.url(forResource: "Claude", withExtension: "png"))
+        XCTAssertEqual(Program.codex.lobeIconName, "LobeCodex")
+        XCTAssertEqual(LobeIcon.assetName(for: "github-copilot"), "LobeGithubCopilot")
+        XCTAssertNotNil(Bundle.module.url(forResource: "LobeClaude", withExtension: "png"))
     }
     func testDaemonLayoutDecodesAndKeepsPaneOrder() throws {
         let data = Data(#"{"type":"split","axis":"horizontal","ratio":0.6,"first":{"type":"block","block_id":"t1"},"second":{"type":"split","axis":"vertical","ratio":0.5,"first":{"type":"block","block_id":"t2"},"second":{"type":"block","block_id":"t3"}}}"#.utf8)
@@ -46,6 +50,10 @@ final class LayoutTests: XCTestCase {
         let snapshot = try JSONDecoder().decode(EventSnapshot.self, from: data)
         let host = try XCTUnwrap(snapshot.sessions["remote"]?.remote)
         XCTAssertEqual(host.destination, "alice@hill.example.ts.net")
+        XCTAssertEqual(host.addressLabel, "hill.example.ts.net")
+        var edited = host
+        edited.port = 2222
+        XCTAssertEqual(edited.addressLabel, "hill.example.ts.net:2222")
         let request = try JSONEncoder().encode(host.wire)
         let decoded = try JSONDecoder().decode(RemoteHost.self, from: request)
         XCTAssertEqual(decoded, host)
