@@ -16,6 +16,7 @@ if ! otool -l "$app/Contents/MacOS/Zurafa" | grep -q '@executable_path/../Framew
   install_name_tool -add_rpath '@executable_path/../Frameworks' "$app/Contents/MacOS/Zurafa"
 fi
 cp "$root/apps/macos/Sources/Zurafa/Resources/Claude.png" "$app/Contents/Resources/Claude.png"
+cp "$root/apps/macos/Sources/Zurafa/Resources"/Lobe*.png "$app/Contents/Resources/"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFontMono-Regular.ttf" "$app/Contents/Resources/SymbolsNerdFontMono-Regular.ttf"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app/Contents/Resources/SymbolsNerdFont-LICENSE.txt"
 cp "$root/apps/macos/.build/checkouts/SwiftTerm/LICENSE" "$app/Contents/Resources/SwiftTerm-LICENSE.txt"
