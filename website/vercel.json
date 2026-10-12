@@ -1,0 +1,8 @@
+{
+  "buildCommand": "python3 build.py",
+  "outputDirectory": "dist",
+  "installCommand": null,
+  "framework": null,
+  "cleanUrls": true,
+  "trailingSlash": true
+}
