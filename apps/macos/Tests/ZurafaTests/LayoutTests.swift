@@ -31,6 +31,16 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(snapshot.sessions["default"]?.blocks["t1"]?.statuses.records["build"]?.state, "blocked")
     }
 
+    func testMultipleStatusRecordsRemainDistinctForDisplay() throws {
+        let data = Data(#"{"records":{"agent/b":{"state":"blocked","kind":"permission","progress":50,"app":"claude","title":"Review","msg":"Approve?"},"agent/a":{"state":"working","kind":null,"progress":20,"app":"codex","title":null,"msg":null},"":{"state":"idle","kind":null,"progress":null,"app":"pi","title":null,"msg":null}}}"#.utf8)
+        let records = try JSONDecoder().decode(StatusRecords.self, from: data)
+        var meta = PaneMeta()
+        meta.statuses = records.records
+        XCTAssertEqual(meta.statusItems.map(\.id), ["", "agent/a", "agent/b"])
+        XCTAssertEqual(meta.statusItems.map { $0.label(default: "Shell") }, ["pi", "agent/a", "Review"])
+        XCTAssertEqual(meta.statusItems.map(\.stateLabel), ["Idle", "Working 20%", "Blocked 50%"])
+    }
+
     func testRemoteSessionAndSavedHostDecode() throws {
         let data = Data(#"{"protocol":2,"instance":"daemon-a","sequence":3,"sessions":{"remote":{"session_id":"remote","label":"Build","remote":{"id":"h1","label":"Build","hostname":"hill.example.ts.net","user":"alice","port":22},"revision":0,"active_window":null,"windows":[],"blocks":{}}}}"#.utf8)
         let snapshot = try JSONDecoder().decode(EventSnapshot.self, from: data)

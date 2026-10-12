@@ -302,6 +302,8 @@ struct CommandPicker: View {
             .init(id: "Appearance: Follow System", detail: ws.appearance == .system ? "Current" : nil, shortcut: nil, symbol: "desktopcomputer") { ws.setAppearance(.system) },
             .init(id: "Appearance: Light", detail: ws.appearance == .light ? "Current" : nil, shortcut: nil, symbol: "sun.max") { ws.setAppearance(.light) },
             .init(id: "Appearance: Dark", detail: ws.appearance == .dark ? "Current" : nil, shortcut: nil, symbol: "moon") { ws.setAppearance(.dark) },
+            .init(id: "Tabs: Horizontal", detail: ws.tabStripLayout == .horizontal ? "Current" : nil, shortcut: nil, symbol: "rectangle.topthird.inset.filled") { ws.setTabStripLayout(.horizontal) },
+            .init(id: "Tabs: Vertical", detail: ws.tabStripLayout == .vertical ? "Current" : nil, shortcut: nil, symbol: "sidebar.left") { ws.setTabStripLayout(.vertical) },
             .init(id: "Import Ghostty Settings", detail: nil, shortcut: nil, symbol: "square.and.arrow.down") { ws.importGhosttySettings() },
             .init(id: "Use Zurafa Terminal Defaults", detail: nil, shortcut: nil, symbol: "arrow.uturn.backward") { ws.clearGhosttySettings() },
             .init(id: "Set Background Image…", detail: "Dithered", shortcut: nil, symbol: "photo") { ws.chooseBackgroundImage() },

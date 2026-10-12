@@ -95,20 +95,43 @@ let appIcon: NSImage = Bundle.main.image(forResource: "AppIcon")
     ?? Bundle.module.url(forResource: "Zurafa-iOS-Default-512@1x", withExtension: "png", subdirectory: "Resources").flatMap { NSImage(contentsOf: $0) }
     ?? NSImage()
 
-/// OSC 7501 state as a small pastel dot; idle or unknown shows nothing.
+/// One visible indicator per OSC 7501 record, including nested records.
 struct StatusDot: View {
-    let meta: PaneMeta
+    let item: StatusItem
+    let fallback: String
     static let colors: [String: Color] = [
         "working": Color(red: 0.95, green: 0.74, blue: 0.36),
         "blocked": Color(red: 0.93, green: 0.52, blue: 0.60),
-        "completed": Color(red: 0.50, green: 0.78, blue: 0.56),
+        "error": Color(red: 0.93, green: 0.52, blue: 0.60),
+        "done": Color(red: 0.50, green: 0.78, blue: 0.56),
+        "idle": Color(red: 0.57, green: 0.65, blue: 0.68),
     ]
     var body: some View {
-        if let s = meta.status, let c = Self.colors[s] {
+        if let c = Self.colors[item.record.state] {
             Image(systemName: "circle.fill").font(.system(size: 7)).foregroundStyle(c)
-                .symbolEffect(.pulse, isActive: s == "working")
-                .help(meta.statusMessage ?? s)
+                .symbolEffect(.pulse, isActive: item.record.state == "working")
+                .help("\(item.label(default: fallback)): \(item.stateLabel)\(item.record.msg.map { " — \($0)" } ?? "")")
         }
+    }
+}
+
+struct StatusRecordRow: View {
+    let item: StatusItem
+    let fallback: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            StatusDot(item: item, fallback: fallback)
+            Text(item.label(default: fallback))
+                .foregroundStyle(Theme.ink)
+                .lineLimit(1)
+            Spacer(minLength: 2)
+            Text(item.stateLabel)
+                .foregroundStyle(Theme.inkSoft)
+                .lineLimit(1)
+        }
+        .font(.system(size: 10, weight: .medium))
+        .help(item.record.msg ?? item.stateLabel)
     }
 }
 
@@ -150,16 +173,13 @@ struct RootView: View {
                      backgroundImage: ws.backgroundImageEnabled ? ws.backgroundImage : nil)
             VStack(spacing: 0) {
                 TopBar()
-                Group {
-                    if ws.tabs.isEmpty {
-                        Text("Starting terminal…").foregroundStyle(Theme.inkSoft).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if ws.tab.zoomed {
-                        PaneView(id: ws.tab.focus)
-                    } else {
-                        LayoutView(layout: ws.tab.layout, window: ws.tab.id)
+                HStack(spacing: 0) {
+                    if ws.tabStripLayout == .vertical {
+                        VerticalTabSidebar()
                     }
+                    terminalContent
+                        .padding(.horizontal, 4).padding(.bottom, 4)
                 }
-                .padding(.horizontal, 4).padding(.bottom, 4)
             }
             if ws.paletteOpen { CommandPicker() }
             if let kind = ws.editor { EditorSheet(kind: kind) }
@@ -173,43 +193,43 @@ struct RootView: View {
             Button("Close Session", role: .destructive) { ws.closeSession() }
         } message: { Text("This closes every terminal in the session.") }
     }
+
+    @ViewBuilder private var terminalContent: some View {
+        if ws.tabs.isEmpty {
+            Text("Starting terminal…").foregroundStyle(Theme.inkSoft).frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if ws.tab.zoomed {
+            PaneView(id: ws.tab.focus)
+        } else {
+            LayoutView(layout: ws.tab.layout, window: ws.tab.id)
+        }
+    }
 }
 
 struct TopBar: View {
     @EnvironmentObject var ws: Workspace
     @ObservedObject private var daemon = DaemonClient.shared
-    static let host = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
 
     var body: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78) // traffic lights
-            Button { ws.paletteOpen = false; ws.sessionPickerOpen.toggle() } label: {
-                HStack(spacing: 9) {
-                    Image(systemName: ws.currentSession?.remote == nil ? "macstudio" : "globe").font(.system(size: 15))
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(ws.name).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.ink)
-                        Text(ws.currentSession?.remote?.hostname ?? Self.host).font(.system(size: 11)).foregroundStyle(.secondary)
+            if ws.tabStripLayout == .horizontal {
+                WorkspacePickerButton()
+                    .padding(.trailing, 14)
+            }
+            if ws.tabStripLayout == .horizontal {
+                HStack(spacing: 0) {
+                    ForEach(Array(ws.tabs.enumerated()), id: \.element.id) { i, t in
+                        if i > 0 { // hairline between two inactive tabs only
+                            Rectangle().fill(Color.black.opacity(i == ws.selected || i - 1 == ws.selected ? 0 : 0.12)).frame(width: 1, height: 16)
+                        }
+                        TabItem(tab: t, on: i == ws.selected).onTapGesture { ws.selectTab(i) }
                     }
-                    .lineLimit(1)
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
                 }
+                .padding(2)
+                .zurafaGlass(in: Capsule())
+                .background(Color.black.opacity(0.035), in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
             }
-            .buttonStyle(.plain).foregroundStyle(Theme.inkSoft).padding(.trailing, 14)
-            .popover(isPresented: $ws.sessionPickerOpen, arrowEdge: .bottom) {
-                SessionPicker().environmentObject(ws)
-            }
-            HStack(spacing: 0) {
-                ForEach(Array(ws.tabs.enumerated()), id: \.element.id) { i, t in
-                    if i > 0 { // hairline between two inactive tabs only
-                        Rectangle().fill(Color.black.opacity(i == ws.selected || i - 1 == ws.selected ? 0 : 0.12)).frame(width: 1, height: 16)
-                    }
-                    TabItem(tab: t, on: i == ws.selected).onTapGesture { ws.selectTab(i) }
-                }
-            }
-            .padding(2)
-            .zurafaGlass(in: Capsule())
-            .background(Color.black.opacity(0.035), in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
             Spacer(minLength: 8)
             if let error = ws.commandError, !daemon.down {
                 Text(error).font(.system(size: 11)).foregroundStyle(Theme.inkSoft)
@@ -231,11 +251,134 @@ struct TopBar: View {
                 .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
                 .padding(.trailing, 8)
             }
+            BarButton(symbol: ws.tabStripLayout == .horizontal ? "sidebar.left" : "rectangle.topthird.inset.filled",
+                      help: ws.tabStripLayout == .horizontal ? "Use Vertical Tabs" : "Use Horizontal Tabs") {
+                ws.sessionPickerOpen = false
+                ws.toggleTabStripLayout()
+            }
             BarButton(symbol: "command", help: "Command Palette (⌘K)") { ws.paletteOpen = true }
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
         }
         .padding(.leading, 12).padding(.trailing, 6).frame(height: 40)
         .background(WindowDragView())
+        .background(alignment: .leading) {
+            if ws.tabStripLayout == .vertical {
+                Theme.background.opacity(0.12)
+                    .frame(width: 194)
+                    .overlay(alignment: .trailing) {
+                        Rectangle().fill(Theme.border.opacity(0.6)).frame(width: 1)
+                    }
+            }
+        }
+    }
+}
+
+struct WorkspacePickerButton: View {
+    @EnvironmentObject var ws: Workspace
+    static let host = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+    var inSidebar = false
+
+    var body: some View {
+        Button { ws.paletteOpen = false; ws.sessionPickerOpen.toggle() } label: {
+            HStack(spacing: 9) {
+                Image(systemName: ws.currentSession?.remote == nil ? "macstudio" : "globe")
+                    .font(.system(size: 15))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(ws.name).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.ink)
+                    Text(ws.currentSession?.remote?.hostname ?? Self.host)
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                .lineLimit(1)
+                if inSidebar { Spacer(minLength: 0) }
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Theme.inkSoft)
+        .popover(isPresented: $ws.sessionPickerOpen, arrowEdge: .bottom) {
+            SessionPicker().environmentObject(ws)
+        }
+        .help("Switch Workspace")
+    }
+}
+
+struct VerticalTabSidebar: View {
+    @EnvironmentObject var ws: Workspace
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            WorkspacePickerButton(inSidebar: true)
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 5)
+            Text("TABS")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Theme.inkSoft)
+                .padding(.horizontal, 12)
+            ScrollView {
+                LazyVStack(spacing: 3) {
+                    ForEach(Array(ws.tabs.enumerated()), id: \.element.id) { index, tab in
+                        Button { ws.selectTab(index) } label: {
+                            let meta = ws.meta(tab.focus)
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack(spacing: 9) {
+                                    Tile(program: meta.program)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(meta.label ?? meta.title)
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(Theme.ink)
+                                            .lineLimit(1)
+                                        Text(meta.cwd)
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(Theme.inkSoft)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                ForEach(tab.layout.panes, id: \.self) { paneID in
+                                    let pane = ws.meta(paneID)
+                                    ForEach(pane.statusItems) { item in
+                                        StatusRecordRow(item: item, fallback: pane.program.title)
+                                            .padding(.leading, 31)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 9)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background {
+                                if index == ws.selected {
+                                    RoundedRectangle(cornerRadius: 10).fill(Theme.activeTab.opacity(0.55))
+                                }
+                            }
+                            .contentShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                        .help(tab.label)
+                    }
+                }
+                .padding(.horizontal, 6)
+            }
+            Button { ws.newTab() } label: {
+                Label("New Tab", systemImage: "plus")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.inkSoft)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .frame(height: 32)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 7)
+        }
+        .frame(width: 194)
+        .background(Theme.background.opacity(0.12))
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Theme.border.opacity(0.6))
+                .frame(width: 1)
+        }
     }
 }
 
@@ -261,7 +404,12 @@ struct TabItem: View {
             .fixedSize()
             .frame(minWidth: 30, maxWidth: 150, alignment: .leading)
             .mask(LinearGradient(stops: [.init(color: .black, location: 0.8), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
-            ForEach(tab.layout.panes, id: \.self) { StatusDot(meta: ws.meta($0)) }
+            ForEach(tab.layout.panes, id: \.self) { paneID in
+                let pane = ws.meta(paneID)
+                ForEach(pane.statusItems) { item in
+                    StatusDot(item: item, fallback: pane.program.title)
+                }
+            }
         }
         .padding(.leading, 5).padding(.trailing, 10).frame(height: 30)
         .background {
@@ -342,7 +490,9 @@ struct PaneView: View {
                 Text(m.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                 Text(m.label ?? m.cwd).font(.system(size: 13)).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.head)
-                StatusDot(meta: m)
+                ForEach(m.statusItems) { item in
+                    StatusDot(item: item, fallback: m.program.title)
+                }
                 if let e = m.ended {
                     Text(e).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
                         .padding(.horizontal, 6).padding(.vertical, 1).background(Color.black.opacity(0.05), in: Capsule())

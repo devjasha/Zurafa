@@ -12,6 +12,10 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum TabStripLayout: String {
+    case horizontal, vertical
+}
+
 enum Program {
     case claude, codex, gemini, git, dev, ssh, shell
     static func detect(_ name: String?, executable: String? = nil, remote: Bool) -> Program {
@@ -52,6 +56,10 @@ struct PaneMeta {
     var label: String?
     var ended: String?
     var statuses: [String: ProgramStatus] = [:]
+    var statusItems: [StatusItem] {
+        statuses.map { StatusItem(id: $0.key, record: $0.value) }
+            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+    }
     var status: String? {
         let states = statuses.values.map(\.state)
         for state in ["blocked", "error", "working", "done", "idle"] where states.contains(state) {
@@ -63,6 +71,24 @@ struct PaneMeta {
         guard let status else { return nil }
         let original = status == "completed" ? "done" : status == "blocked" && statuses.values.contains(where: { $0.state == "error" }) ? "error" : status
         return statuses.values.first(where: { $0.state == original })?.msg
+    }
+}
+
+struct StatusItem: Identifiable {
+    let id: String
+    let record: ProgramStatus
+
+    func label(default fallback: String) -> String {
+        if let title = record.title, !title.isEmpty { return title }
+        if !id.isEmpty { return id }
+        if let app = record.app, !app.isEmpty { return app }
+        return fallback
+    }
+
+    var stateLabel: String {
+        let state = record.state == "done" ? "Done" : record.state.capitalized
+        if let progress = record.progress { return "\(state) \(progress)%" }
+        return state
     }
 }
 
@@ -91,6 +117,7 @@ enum EditorKind: String, Identifiable {
     @Published var editor: EditorKind?
     @Published var confirmCloseSession = false
     @Published var appearance = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "system") ?? .system
+    @Published private(set) var tabStripLayout = TabStripLayout(rawValue: UserDefaults.standard.string(forKey: "tabStripLayout") ?? "horizontal") ?? .horizontal
     @Published private(set) var commandError: String?
     @Published private(set) var notice: String?
     @Published private(set) var workspaceBackground: Color?
@@ -291,6 +318,15 @@ enum EditorKind: String, Identifiable {
     }
 
     func cycleAppearance() { setAppearance(appearance.next) }
+
+    func setTabStripLayout(_ layout: TabStripLayout) {
+        tabStripLayout = layout
+        UserDefaults.standard.set(layout.rawValue, forKey: "tabStripLayout")
+    }
+
+    func toggleTabStripLayout() {
+        setTabStripLayout(tabStripLayout == .horizontal ? .vertical : .horizontal)
+    }
 
     func syncTerminalAppearance(_ systemScheme: ColorScheme? = nil) {
         let systemDark = systemScheme.map { $0 == .dark } ??
