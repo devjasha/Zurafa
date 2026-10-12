@@ -252,9 +252,9 @@ struct RootView: View {
         .preferredColorScheme(ws.appearance.colorScheme)
         .onAppear { ws.syncTerminalAppearance(systemScheme) }
         .onChange(of: systemScheme) { _, newScheme in ws.syncTerminalAppearance(newScheme) }
-        .confirmationDialog("Close \(ws.name)?", isPresented: $ws.confirmCloseSession) {
-            Button("Close Session", role: .destructive) { ws.closeSession() }
-        } message: { Text("This closes every terminal in the session.") }
+        .confirmationDialog("Delete \(ws.name)?", isPresented: $ws.confirmCloseSession) {
+            Button("Delete Workspace", role: .destructive) { ws.closeSession() }
+        } message: { Text("This closes every terminal in the workspace.") }
     }
 
     @ViewBuilder private var terminalContent: some View {

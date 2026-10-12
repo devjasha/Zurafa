@@ -21,6 +21,7 @@ struct SessionPicker: View {
     @EnvironmentObject var ws: Workspace
     @State private var query = ""
     @State private var selection = 0
+    @State private var deletingSession: SessionSnapshot?
     @FocusState private var searchFocused: Bool
 
     private var matchingSessions: [SessionSnapshot] {
@@ -111,6 +112,18 @@ struct SessionPicker: View {
             ws.refreshSessions()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { searchFocused = true }
         }
+        .confirmationDialog("Delete \(deletingSession?.label ?? "workspace")?", isPresented: Binding(
+            get: { deletingSession != nil },
+            set: { if !$0 { deletingSession = nil } }
+        )) {
+            Button("Delete Workspace", role: .destructive) {
+                if let session = deletingSession { ws.closeSession(session.sessionID) }
+                deletingSession = nil
+            }
+            Button("Cancel", role: .cancel) { deletingSession = nil }
+        } message: {
+            Text("This closes every terminal in the workspace.")
+        }
     }
 
     private func section(_ title: String, symbol: String) -> some View {
@@ -124,8 +137,21 @@ struct SessionPicker: View {
         HStack(spacing: 2) {
             row(session.label, subtitle: session.remote?.addressLabel, symbol: session.remote == nil ? "laptopcomputer" : "globe",
                 selected: session.sessionID == ws.sessionID, highlighted: highlighted) { ws.selectSession(session.sessionID) }
+            deleteSessionButton(session)
             if let host = session.remote { hostSettingsButton(host) }
         }
+    }
+
+    private func deleteSessionButton(_ session: SessionSnapshot) -> some View {
+        Button { deletingSession = session } label: {
+            Image(systemName: "trash")
+                .font(.system(size: 12))
+                .foregroundStyle(PickerStyle.secondary)
+                .frame(width: 27, height: 29)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Delete \(session.label) workspace")
     }
 
     private func hostSettingsButton(_ host: RemoteHost) -> some View {
@@ -546,7 +572,7 @@ struct CommandPicker: View {
             .init(id: "Go to Directory…", detail: ws.meta(ws.tab.focus).cwd, shortcut: "⇧⌘G", symbol: "folder") { ws.editor = .goDirectory },
             .init(id: "Close Tab", detail: nil, shortcut: "⌥⌘W", symbol: nil) { ws.closeTab() },
             .init(id: "Refresh Sessions", detail: nil, shortcut: "⌘R", symbol: nil) { ws.refreshSessions() },
-            .init(id: "Close Session", detail: nil, shortcut: nil, symbol: nil) { ws.confirmCloseSession = true },
+            .init(id: "Delete Workspace", detail: ws.name, shortcut: nil, symbol: "trash") { ws.confirmCloseSession = true },
             .init(id: "Appearance: Follow System", detail: ws.appearance == .system ? "Current" : nil, shortcut: nil, symbol: "desktopcomputer") { ws.setAppearance(.system) },
             .init(id: "Appearance: Light", detail: ws.appearance == .light ? "Current" : nil, shortcut: nil, symbol: "sun.max") { ws.setAppearance(.light) },
             .init(id: "Appearance: Dark", detail: ws.appearance == .dark ? "Current" : nil, shortcut: nil, symbol: "moon") { ws.setAppearance(.dark) },

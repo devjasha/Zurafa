@@ -468,11 +468,11 @@ enum EditorKind: String, Identifiable {
         }
     }
 
-    func closeSession() {
-        let id = sessionID
+    func closeSession(_ id: String? = nil) {
+        let target = id ?? sessionID
         Task {
             do {
-                _ = try await daemon.request(["type": .string("layout.command"), "command": .object(["op": .string("destroy_session"), "session": .string(id)])])
+                _ = try await daemon.request(["type": .string("layout.command"), "command": .object(["op": .string("destroy_session"), "session": .string(target)])])
                 apply(try await daemon.snapshot())
                 if sessions.isEmpty { createSession(label: "Workspace") }
             } catch { commandError = error.localizedDescription }
