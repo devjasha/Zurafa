@@ -18,13 +18,15 @@
   <main id="main">
     <section class="hero shell"><div class="hero-copy">
       <p class="eyebrow"><span class="live-dot"></span> FIRST MACOS BETA · APPLE SILICON</p>
-      <h1>Terminal work,<br><em>in context.</em></h1>
-      <p class="lead">A calm macOS workspace for the shells, sessions, and remote machines you move between. Zurafa keeps the structure in Rust and the interface close to your work.</p>
-      <div class="hero-actions"><a class="button primary" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download Zurafa <span aria-hidden="true">↗</span></a><a class="button secondary" href="/docs/">Explore the docs <span aria-hidden="true">→</span></a></div>
-      <p class="support-line">Apple Silicon · macOS 14+ · 0.1.0 beta 1</p>
-    </div><div class="hero-stage" aria-label="Illustration of a Zurafa terminal workspace">
-      <div class="stage-glow"></div><div class="app-window"><div class="app-top"><span class="traffic"><i></i><i></i><i></i></span><div class="app-workspace">◉ <strong>Workspace</strong><small>This Mac</small></div><div class="app-tab active">⌘ <span>project</span></div><div class="app-tab">⌘ <span>shell</span></div><span class="app-plus">＋</span></div>
-      <div class="app-body"><div class="mock-pane"><div class="pane-head"><span>⌘ &nbsp; project <small>~/Projects/zurafa</small></span><span>◫ &nbsp; ⤢</span></div><div class="terminal-lines"><div><span class="prompt">❯</span> cargo test</div><div class="muted">running 37 tests</div><div class="success">test result: ok. 37 passed; 0 failed</div><div class="spacer"></div><div><span class="prompt">❯</span> <span class="caret"></span></div></div></div><div class="mock-pane smaller"><div class="pane-head"><span>⌘ &nbsp; build <small>~/Projects/zurafa</small></span><span class="status-pill">working</span></div><div class="terminal-lines"><div><span class="prompt">❯</span> swift build</div><div class="muted">Building for production…</div><div class="success">Build complete.</div></div></div></div></div><span class="stage-caption">Illustrative workspace preview</span>
+      <h1>Command your terminals without losing the thread.</h1>
+      <p class="lead">Zurafa is a composed macOS terminal workspace for local shells, split panes, remote SSH, and program status — designed to feel quiet even when the work gets loud.</p>
+      <div class="hero-actions"><a class="button primary" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for macOS <span aria-hidden="true">↗</span></a><a class="button secondary" href="/docs/install/">Install guide <span aria-hidden="true">→</span></a></div>
+      <div class="hero-meta" aria-label="Release details"><span>0.1.0 beta 1</span><span>macOS 14+</span><span>Apple Silicon</span></div>
+    </div><div class="hero-stage" aria-label="Typographic illustration of a Zurafa terminal workspace">
+      <div class="terminal-backdrop" aria-hidden="true"><span>❯ cargo test --workspace</span><span>running 37 tests</span><span>test result: ok. 37 passed</span><span>❯ ssh prod-observer</span><span>status: working · build</span></div>
+      <div class="stage-glow"></div>
+      <div class="type-card"><p class="type-kicker">ZURAFA WORKSPACE</p><div class="type-headline"><span>split</span><span>ship</span><span>switch</span></div><p>One place for the sessions, panes, and machines your day moves through.</p><div class="type-actions"><span>⌘ project</span><span>ssh</span><span>done</span></div></div>
+      <div class="mini-terminal"><div class="code-top"><span class="dot green"></span> terminal <span>live</span></div><div class="terminal-lines"><div><span class="prompt">❯</span> zurafa open project</div><div class="muted">restored 2 tabs · 4 panes</div><div class="success">workspace ready</div></div></div>
     </div></section>
 
     <section class="section shell" id="features"><div class="section-intro"><p class="kicker">THE WORKSPACE</p><h2>Stay oriented, even when<br>the work branches out.</h2><p>Zurafa brings the moving parts of terminal work into one coherent place.</p></div>
