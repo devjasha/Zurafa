@@ -1,8 +1,36 @@
-# Zurafa
+<p align="center">
+  <img src="website/assets/zurafa-icon.png" alt="Zurafa logo" width="120" height="120">
+</p>
+
+<h1 align="center">Zurafa</h1>
+
+<p align="center">
+  A macOS terminal workspace powered by a SwiftUI app and Rust daemon.
+</p>
+
+<p align="center">
+  <a href="https://github.com/devjasha/Zurafa/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/devjasha/Zurafa?style=for-the-badge"></a>
+  <a href="https://github.com/devjasha/Zurafa/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/devjasha/Zurafa?style=for-the-badge"></a>
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-000000?style=for-the-badge&logo=apple&logoColor=white">
+  <img alt="Built with Swift and Rust" src="https://img.shields.io/badge/Swift%20%2B%20Rust-terminal-orange?style=for-the-badge">
+</p>
 
 A macOS terminal workspace: a SwiftUI app (`apps/macos`) whose terminals and workspace state live in a Rust daemon (`rust/`). The `zurafa-events` crate owns typed events, subscriptions, and snapshots; the socket protocol is documented in `docs/ipc-protocol.md`.
 
 **Website:** [zurafa.rare-haven-5290.chatgpt.site](https://zurafa.rare-haven-5290.chatgpt.site) · **Documentation:** [Getting started and reference](https://zurafa.rare-haven-5290.chatgpt.site/docs/)
+
+## Achievements
+
+<p>
+  <a href="https://github.com/devjasha/Zurafa/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/devjasha/Zurafa?style=social"></a>
+  <a href="https://github.com/devjasha/Zurafa/network/members"><img alt="GitHub forks" src="https://img.shields.io/github/forks/devjasha/Zurafa?style=social"></a>
+  <a href="https://github.com/devjasha/Zurafa/watchers"><img alt="GitHub watchers" src="https://img.shields.io/github/watchers/devjasha/Zurafa?style=social"></a>
+</p>
+
+- Native macOS app with a SwiftUI interface and Rust-powered daemon.
+- Signed release builds with Sparkle auto-update support.
+- Typed event, subscription, and snapshot protocol for terminal workspaces.
+- Import support for Ghostty terminal appearance settings.
 
 ## Download for macOS
 
