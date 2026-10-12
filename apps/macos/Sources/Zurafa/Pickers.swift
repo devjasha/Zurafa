@@ -20,12 +20,15 @@ private extension View {
 struct SessionPicker: View {
     @EnvironmentObject var ws: Workspace
     @State private var query = ""
+    @State private var selection = 0
     @FocusState private var searchFocused: Bool
 
     private var matchingSessions: [SessionSnapshot] {
         ws.sessions.filter { query.isEmpty || $0.label.localizedCaseInsensitiveContains(query)
             || ($0.remote?.hostname.localizedCaseInsensitiveContains(query) ?? false) }
     }
+    private var localSessions: [SessionSnapshot] { matchingSessions.filter { $0.remote == nil } }
+    private var remoteSessions: [SessionSnapshot] { matchingSessions.filter { $0.remote != nil } }
     private var matchingHosts: [RemoteHost] {
         ws.hosts.filter { host in
             !ws.sessions.contains(where: { $0.remote?.id == host.id })
@@ -33,6 +36,7 @@ struct SessionPicker: View {
                     || host.hostname.localizedCaseInsensitiveContains(query))
         }
     }
+    private var selectableCount: Int { localSessions.count + remoteSessions.count + matchingHosts.count + 3 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -45,14 +49,12 @@ struct SessionPicker: View {
                         .foregroundStyle(Theme.ink)
                         .tint(PickerStyle.accent)
                         .focused($searchFocused)
-                        .onSubmit {
-                        if let first = matchingSessions.first { ws.selectSession(first.sessionID) }
-                        else if let first = matchingHosts.first { ws.openHost(first); ws.sessionPickerOpen = false }
-                        else if !query.trimmingCharacters(in: .whitespaces).isEmpty {
-                            ws.createSession(label: query.trimmingCharacters(in: .whitespaces))
-                            ws.sessionPickerOpen = false
-                        }
-                    }
+                        .onSubmit { runSelection() }
+                        .onKeyPress(.downArrow) { selection = min(selection + 1, max(0, selectableCount - 1)); return .handled }
+                        .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
+                        .onKeyPress(.escape) { ws.sessionPickerOpen = false; return .handled }
+                        .onChange(of: query) { selection = 0 }
+                        .onChange(of: selectableCount) { selection = min(selection, max(0, selectableCount - 1)) }
                 }
             }
             .foregroundStyle(PickerStyle.secondary)
@@ -64,16 +66,21 @@ struct SessionPicker: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 3) {
                     section("This Mac", symbol: "laptopcomputer")
-                    ForEach(matchingSessions.filter { $0.remote == nil }, id: \.sessionID) { session in sessionRow(session) }
-                    if matchingSessions.contains(where: { $0.remote != nil }) {
+                    ForEach(Array(localSessions.enumerated()), id: \.element.sessionID) { index, session in
+                        sessionRow(session, highlighted: selection == index)
+                    }
+                    if !remoteSessions.isEmpty {
                         section("Remote", symbol: "globe")
-                        ForEach(matchingSessions.filter { $0.remote != nil }, id: \.sessionID) { session in sessionRow(session) }
+                        ForEach(Array(remoteSessions.enumerated()), id: \.element.sessionID) { index, session in
+                            sessionRow(session, highlighted: selection == localSessions.count + index)
+                        }
                     }
                     if !matchingHosts.isEmpty {
                         section("Saved Hosts", symbol: "network")
-                        ForEach(matchingHosts) { host in
+                        ForEach(Array(matchingHosts.enumerated()), id: \.element.id) { index, host in
                             HStack(spacing: 2) {
-                                row(host.label, subtitle: host.addressLabel, symbol: "globe", selected: false) {
+                                row(host.label, subtitle: host.addressLabel, symbol: "globe", selected: false,
+                                    highlighted: selection == localSessions.count + remoteSessions.count + index) {
                                     ws.openHost(host)
                                     ws.sessionPickerOpen = false
                                 }
@@ -82,16 +89,17 @@ struct SessionPicker: View {
                         }
                     }
                     Divider().overlay(PickerStyle.secondary.opacity(0.25)).padding(.vertical, 4)
-                    row("New Session", subtitle: "⇧⌘N", symbol: "plus.rectangle", selected: false) {
+                    let actionOffset = localSessions.count + remoteSessions.count + matchingHosts.count
+                    row("New Session", subtitle: "⇧⌘N", symbol: "plus.rectangle", selected: false, highlighted: selection == actionOffset) {
                         ws.sessionPickerOpen = false
                         if query.isEmpty { ws.editor = .newSession }
                         else { ws.createSession(label: query) }
                     }
-                    row("Add Remote Host…", subtitle: nil, symbol: "globe.badge.chevron.backward", selected: false) {
+                    row("Add Remote Host…", subtitle: nil, symbol: "globe.badge.chevron.backward", selected: false, highlighted: selection == actionOffset + 1) {
                         ws.sessionPickerOpen = false
                         ws.editor = .addHost
                     }
-                    row("Refresh Sessions", subtitle: "⌘R", symbol: "arrow.clockwise", selected: false) { ws.refreshSessions() }
+                    row("Refresh Sessions", subtitle: "⌘R", symbol: "arrow.clockwise", selected: false, highlighted: selection == actionOffset + 2) { ws.refreshSessions() }
                 }
             }
             .frame(maxHeight: 300)
@@ -112,10 +120,10 @@ struct SessionPicker: View {
             .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 2)
     }
 
-    private func sessionRow(_ session: SessionSnapshot) -> some View {
+    private func sessionRow(_ session: SessionSnapshot, highlighted: Bool) -> some View {
         HStack(spacing: 2) {
             row(session.label, subtitle: session.remote?.addressLabel, symbol: session.remote == nil ? "laptopcomputer" : "globe",
-                selected: session.sessionID == ws.sessionID) { ws.selectSession(session.sessionID) }
+                selected: session.sessionID == ws.sessionID, highlighted: highlighted) { ws.selectSession(session.sessionID) }
             if let host = session.remote { hostSettingsButton(host) }
         }
     }
@@ -132,26 +140,59 @@ struct SessionPicker: View {
         .help("Edit \(host.label) connection")
     }
 
-    private func row(_ title: String, subtitle: String?, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func row(_ title: String, subtitle: String?, symbol: String, selected: Bool, highlighted: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 9) {
                 Image(systemName: selected ? "checkmark" : symbol).frame(width: 16)
                 Text(title).lineLimit(1)
                 Spacer(minLength: 6)
-                if let subtitle { Text(subtitle).font(.system(size: 11)).lineLimit(1).foregroundStyle(selected ? .black.opacity(0.65) : PickerStyle.secondary) }
+                if let subtitle { Text(subtitle).font(.system(size: 11)).lineLimit(1).foregroundStyle(selected || highlighted ? .black.opacity(0.65) : PickerStyle.secondary) }
             }
             .font(.system(size: 13, weight: selected ? .semibold : .regular))
             .padding(.horizontal, 8).frame(height: 29)
-            .foregroundStyle(selected ? Color.black : Theme.ink)
-            .background(selected ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .foregroundStyle(selected || highlighted ? Color.black : Theme.ink)
+            .background(selected || highlighted ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func runSelection() {
+        var index = selection
+        if localSessions.indices.contains(index) { ws.selectSession(localSessions[index].sessionID); return }
+        index -= localSessions.count
+        if remoteSessions.indices.contains(index) { ws.selectSession(remoteSessions[index].sessionID); return }
+        index -= remoteSessions.count
+        if matchingHosts.indices.contains(index) {
+            ws.openHost(matchingHosts[index])
+            ws.sessionPickerOpen = false
+            return
+        }
+        index -= matchingHosts.count
+        switch index {
+        case 0:
+            ws.sessionPickerOpen = false
+            if query.isEmpty { ws.editor = .newSession }
+            else { ws.createSession(label: query) }
+        case 1:
+            ws.sessionPickerOpen = false
+            ws.editor = .addHost
+        case 2:
+            ws.refreshSessions()
+        default:
+            break
+        }
     }
 }
 
 struct EditorSheet: View {
     private enum FieldFocus: Hashable { case label, hostname, username, port }
+    private struct DirectoryCandidate: Identifiable {
+        let id: String
+        let name: String
+        let path: String
+        let isDirectory: Bool
+    }
     let kind: EditorKind
     @EnvironmentObject var ws: Workspace
     @State private var label = ""
@@ -161,6 +202,8 @@ struct EditorSheet: View {
     @State private var port = "22"
     @State private var hostError: String?
     @State private var savingHost = false
+    @State private var directoryCandidates: [DirectoryCandidate] = []
+    @State private var directorySelection = 0
     @FocusState private var focusedField: FieldFocus?
 
     private var heading: String {
@@ -225,8 +268,12 @@ struct EditorSheet: View {
                                 .foregroundStyle(PickerStyle.secondary)
                         }.buttonStyle(.plain).help("Close")
                     }
-                    field(kind == .goDirectory ? "Local directory path" : "Name", text: $label, focus: .label)
-                        .onSubmit(save)
+                    if kind == .goDirectory {
+                        directoryField
+                    } else {
+                        field("Name", text: $label, focus: .label)
+                            .onSubmit(save)
+                    }
                     HStack(spacing: 8) {
                         Spacer()
                         Button("Cancel", action: close).keyboardShortcut(.cancelAction)
@@ -261,6 +308,7 @@ struct EditorSheet: View {
                 }
             default: break
             }
+            if kind == .goDirectory { refreshDirectoryCandidates() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 focusedField = kind == .addHost || kind == .editHost ? .hostname : .label
             }
@@ -289,6 +337,61 @@ struct EditorSheet: View {
         .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(PickerStyle.outline, lineWidth: 1))
     }
 
+    private var directoryField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            field("Local directory path", text: $label, focus: .label)
+                .onSubmit(save)
+                .onChange(of: label) { _, _ in refreshDirectoryCandidates() }
+                .onKeyPress(.downArrow) {
+                    directorySelection = min(directorySelection + 1, max(0, directoryCandidates.count - 1))
+                    return .handled
+                }
+                .onKeyPress(.upArrow) {
+                    directorySelection = max(directorySelection - 1, 0)
+                    return .handled
+                }
+                .onKeyPress(.tab) {
+                    completeSelectedDirectoryCandidate(open: false)
+                    return .handled
+                }
+            if !directoryCandidates.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(directoryCandidates.enumerated()), id: \.element.id) { index, candidate in
+                        Button {
+                            directorySelection = index
+                            completeSelectedDirectoryCandidate(open: candidate.isDirectory)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: candidate.isDirectory ? "folder" : "doc")
+                                    .frame(width: 16)
+                                Text(candidate.name)
+                                    .lineLimit(1)
+                                Spacer(minLength: 6)
+                                Text((candidate.path as NSString).abbreviatingWithTildeInPath)
+                                    .font(.system(size: 11))
+                                    .lineLimit(1)
+                                    .foregroundStyle(index == directorySelection ? Color.black.opacity(0.65) : PickerStyle.secondary)
+                            }
+                            .font(.system(size: 12))
+                            .foregroundStyle(index == directorySelection ? Color.black : Theme.ink)
+                            .padding(.horizontal, 8).frame(height: 26)
+                            .background(index == directorySelection ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 7))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!candidate.isDirectory)
+                    }
+                }
+                .padding(5)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(PickerStyle.outline, lineWidth: 1))
+                Text("↑↓ choose · Tab completes · Return opens a local tab")
+                    .font(.system(size: 11))
+                    .foregroundStyle(PickerStyle.secondary)
+            }
+        }
+    }
+
     private func field(_ placeholder: String, text: Binding<String>, focus: FieldFocus) -> some View {
         HStack(spacing: 8) {
             TextField(placeholder, text: text)
@@ -303,6 +406,46 @@ struct EditorSheet: View {
         .padding(.horizontal, 10).frame(height: 34)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(PickerStyle.outline, lineWidth: 1))
+    }
+
+    private func refreshDirectoryCandidates() {
+        guard kind == .goDirectory else { return }
+        let typed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let expanded = (typed.isEmpty ? NSHomeDirectory() : (typed as NSString).expandingTildeInPath)
+        let endsWithSlash = expanded.hasSuffix("/")
+        let parent = endsWithSlash ? expanded : (expanded as NSString).deletingLastPathComponent
+        let prefix = endsWithSlash ? "" : (expanded as NSString).lastPathComponent
+        let directory = parent.isEmpty ? "/" : parent
+        do {
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: URL(fileURLWithPath: directory, isDirectory: true),
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+            directoryCandidates = urls.compactMap { url in
+                let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
+                let isDirectory = values?.isDirectory == true
+                let name = url.lastPathComponent
+                guard prefix.isEmpty || name.localizedCaseInsensitiveContains(prefix) else { return nil }
+                return DirectoryCandidate(id: url.path, name: name, path: url.path, isDirectory: isDirectory)
+            }
+            .sorted {
+                if $0.isDirectory != $1.isDirectory { return $0.isDirectory && !$1.isDirectory }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+            directorySelection = min(directorySelection, max(0, directoryCandidates.count - 1))
+        } catch {
+            directoryCandidates = []
+            directorySelection = 0
+        }
+    }
+
+    private func completeSelectedDirectoryCandidate(open: Bool) {
+        guard directoryCandidates.indices.contains(directorySelection) else { return }
+        let candidate = directoryCandidates[directorySelection]
+        guard candidate.isDirectory else { return }
+        label = (candidate.path as NSString).abbreviatingWithTildeInPath
+        if open { save() }
     }
 
     private func close() { ws.editor = nil }
@@ -360,10 +503,20 @@ struct EditorSheet: View {
 
 private struct PaletteEntry: Identifiable {
     let id: String
+    let title: String
     let detail: String?
     let shortcut: String?
     let symbol: String?
     let action: @MainActor () -> Void
+
+    init(id: String, title: String? = nil, detail: String?, shortcut: String?, symbol: String?, action: @escaping @MainActor () -> Void) {
+        self.id = id
+        self.title = title ?? id
+        self.detail = detail
+        self.shortcut = shortcut
+        self.symbol = symbol
+        self.action = action
+    }
 }
 
 struct CommandPicker: View {
@@ -377,6 +530,14 @@ struct CommandPicker: View {
             .init(id: "Change Session", detail: ws.name, shortcut: "›", symbol: nil) {
                 DispatchQueue.main.async { ws.sessionPickerOpen = true }
             },
+        ] + ws.sessions.map { session in
+            .init(id: "session:\(session.sessionID)", title: "Workspace: \(session.label)",
+                  detail: session.remote?.addressLabel ?? "This Mac",
+                  shortcut: session.sessionID == ws.sessionID ? "Current" : nil,
+                  symbol: session.remote == nil ? "laptopcomputer" : "globe") {
+                ws.selectSession(session.sessionID)
+            }
+        } + [
             .init(id: "Rename Tab", detail: ws.tab.label, shortcut: "›", symbol: nil) { ws.editor = .renameTab },
             .init(id: "Rename Session", detail: ws.name, shortcut: "›", symbol: nil) { ws.editor = .renameSession },
             .init(id: "Add Remote Host…", detail: nil, shortcut: "›", symbol: "globe") { ws.editor = .addHost },
@@ -403,7 +564,8 @@ struct CommandPicker: View {
         ]
     }
     private var filtered: [PaletteEntry] {
-        entries.filter { query.isEmpty || $0.id.localizedCaseInsensitiveContains(query)
+        entries.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)
+            || ($0.detail?.localizedCaseInsensitiveContains(query) ?? false)
             || ($0.id == "Add Remote Host…" && "ssh".localizedCaseInsensitiveContains(query)) }
     }
     private func run(_ entry: PaletteEntry) {
@@ -441,6 +603,26 @@ struct CommandPicker: View {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(Array(filtered.enumerated()), id: \.element.id) { index, entry in
+                            if entry.id.hasPrefix("session:") && index == 1 && query.isEmpty {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "rectangle.stack")
+                                    Text("Workspaces")
+                                }
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(PickerStyle.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.leading, 10).padding(.top, 6)
+                            }
+                            if entry.id == "Rename Tab" && query.isEmpty {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "rectangle.stack")
+                                    Text("Commands")
+                                }
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(PickerStyle.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.leading, 10).padding(.top, 6)
+                            }
                             if entry.id == "Split Pane Right" && query.isEmpty {
                                 HStack(spacing: 6) {
                                     Image(systemName: "rectangle.split.2x1")
@@ -454,7 +636,7 @@ struct CommandPicker: View {
                             Button { run(entry) } label: {
                                 HStack(spacing: 9) {
                                     if let symbol = entry.symbol { Image(systemName: symbol).frame(width: 16) }
-                                    Text(entry.id)
+                                    Text(entry.title)
                                     Spacer(minLength: 4)
                                     if let detail = entry.detail { Text(detail).lineLimit(1).frame(maxWidth: 110, alignment: .trailing) }
                                     if let shortcut = entry.shortcut { Text(shortcut) }
