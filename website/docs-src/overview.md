@@ -1,6 +1,6 @@
 # Welcome to Zurafa
 
-Zurafa is a terminal workspace for macOS. The SwiftUI app renders terminals and workspace controls; a Rust daemon owns processes, session layouts, events, and authoritative snapshots. The current public build is **0.1.0 beta 1** for Apple Silicon Macs running macOS 14 or later.
+Zurafa is a terminal workspace for macOS. The SwiftUI app renders terminals and workspace controls; a Rust daemon owns processes, session layouts, events, and authoritative snapshots. The current public build is **0.1.1** for Apple Silicon Macs running macOS 14 or later.
 
 ## Find your way around
 
@@ -18,4 +18,4 @@ Multiple sessions, tabs, split panes, focus and zoom controls, system SSH remote
 
 ## Current limits
 
-This is an Apple Silicon build only. It is ad-hoc signed and not yet notarized by Apple. Open sessions live in daemon memory and do not survive a daemon restart. Zurafa does not yet include a standalone CLI, Lua scripting, mosh transport, or a native Tailscale integration. [Read the full limits and troubleshooting guide](/docs/troubleshooting/).
+This is an Apple Silicon build only. It is signed with Developer ID and notarized by Apple. Open sessions live in daemon memory and do not survive a daemon restart. Zurafa does not yet include a standalone CLI, Lua scripting, mosh transport, or a native Tailscale integration. [Read the full limits and troubleshooting guide](/docs/troubleshooting/).

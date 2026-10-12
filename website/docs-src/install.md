@@ -1,24 +1,24 @@
 # Install Zurafa on macOS
 
-The first beta supports **Apple Silicon** Macs with **macOS 14 or newer**. An Intel build is not available yet.
+The current release supports **Apple Silicon** Macs with **macOS 14 or newer**. An Intel build is not available yet.
 
 ## Download and install
 
-1. Download [Zurafa 0.1.0 beta 2 for macOS](https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.2/Zurafa-0.1.0-beta.2-macos-arm64.zip).
-2. Unzip the archive. It contains `Zurafa.app` with the Rust daemon bundled inside.
-3. Move `Zurafa.app` into your Applications folder and open it.
+1. Download [Zurafa 0.1.1 for macOS](/releases/Zurafa-0.1.1-macos-arm64.dmg).
+2. Open the DMG.
+3. Drag `Zurafa.app` into your Applications folder and open it.
 
-> This beta has an ad-hoc signature but no Apple Developer ID signature or notarization. macOS may block the first launch. After attempting to open Zurafa, go to System Settings → Privacy & Security and choose **Open Anyway** for Zurafa. Follow [Apple's instructions](https://support.apple.com/en-us/102445) if the option is unfamiliar.
+Zurafa is signed with Developer ID and notarized by Apple.
 
 ## Verify the download
 
-The release page includes a `.sha256` file. To check the archive in Terminal, run:
+To check the DMG in Terminal, run:
 
 ```sh
-shasum -a 256 Zurafa-0.1.0-beta.2-macos-arm64.zip
+shasum -a 256 Zurafa-0.1.1-macos-arm64.dmg
 ```
 
-The expected SHA-256 is `2b8f0b3949d5883c9b8251160c0304b68eb3d68708368b6077eeccce44ffc72c`.
+The expected SHA-256 is `1f031b15614e99993c14972ad46ba4c5f97fd0b9eb70cdbccc2657a3aa0708c6`.
 
 ## What starts with the app
 
@@ -26,4 +26,4 @@ Zurafa connects to a per-user Rust daemon over a Unix socket. If no daemon is ru
 
 ## Updating from an older build
 
-Quit the app, replace `Zurafa.app`, and reopen it. If an older daemon is still running with an incompatible protocol, stop that daemon before launching the new build. Stopping it ends its active terminal processes. See [Troubleshooting](/docs/troubleshooting/) for the command and its consequences.
+Zurafa includes Sparkle auto-updates. Use **Zurafa → Check for Updates…** to update from inside the app. If an older daemon is still running with an incompatible protocol, stop that daemon before launching the new build. Stopping it ends its active terminal processes. See [Troubleshooting](/docs/troubleshooting/) for the command and its consequences.

@@ -9,7 +9,7 @@ import shutil
 
 ROOT = Path(__file__).parent
 DIST = ROOT / "dist"
-ORIGIN = "https://zurafa.rare-haven-5290.chatgpt.site"
+ORIGIN = "https://zurafa-website.vercel.app"
 GROUPS = [
     ("Start here", [("overview", "Overview"), ("install", "Install on macOS"), ("quickstart", "Quick start")]),
     ("Workspace", [("sessions", "Sessions, tabs & panes"), ("shortcuts", "Commands & shortcuts"), ("ssh", "Remote SSH")]),

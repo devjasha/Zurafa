@@ -321,12 +321,6 @@ struct TopBar: View {
                 .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
                 .padding(.trailing, 8)
             }
-            BarButton(symbol: ws.tabStripLayout == .horizontal ? "sidebar.left" : "rectangle.topthird.inset.filled",
-                      help: ws.tabStripLayout == .horizontal ? "Use Vertical Tabs" : "Use Horizontal Tabs") {
-                ws.sessionPickerOpen = false
-                ws.toggleTabStripLayout()
-            }
-            BarButton(symbol: "command", help: "Command Palette (⌘K)") { ws.paletteOpen = true }
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
         }
         .padding(.leading, 12)
@@ -348,22 +342,18 @@ struct TopBar: View {
 
 struct WorkspacePickerButton: View {
     @EnvironmentObject var ws: Workspace
-    static let host = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
     var inSidebar = false
 
     var body: some View {
         Button { ws.paletteOpen = false; ws.sessionPickerOpen.toggle() } label: {
             HStack(spacing: 9) {
-                Image(systemName: ws.currentSession?.remote == nil ? "macstudio" : "globe")
+                Image(systemName: "rectangle.stack")
                     .font(.system(size: 15))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(ws.name).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.ink)
-                    Text(ws.currentSession?.remote?.addressLabel ?? Self.host)
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                .lineLimit(1)
+                Text(ws.name)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
                 if inSidebar { Spacer(minLength: 0) }
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
             }
             .contentShape(Rectangle())
         }
@@ -552,8 +542,6 @@ struct LayoutView: View {
 struct PaneView: View {
     let id: String
     @EnvironmentObject var ws: Workspace
-    @State private var hover = false
-
     var body: some View {
         let m = ws.meta(id), focused = ws.tab.focus == id
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -578,7 +566,8 @@ struct PaneView: View {
                                help: "Toggle Zoom") { ws.focus(id); ws.toggleZoom() }
                     IconButton(symbol: "xmark", help: "Close Pane") { ws.close(id) }
                 }
-                .opacity(hover || focused ? 1 : 0)
+                .opacity(focused ? 1 : 0)
+                .allowsHitTesting(focused)
             }
             .foregroundStyle(focused ? Theme.ink : Theme.inkSoft)
             .padding(.leading, 14).padding(.trailing, 8).frame(height: 38)
@@ -592,6 +581,5 @@ struct PaneView: View {
         .overlay(shape.strokeBorder(Theme.paneStroke, lineWidth: 1))
         .shadow(color: .black.opacity(focused ? 0.10 : 0.06), radius: focused ? 12 : 8, y: 3)
         .padding(4)
-        .onHover { hover = $0 }
     }
 }

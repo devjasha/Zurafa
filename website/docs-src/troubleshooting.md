@@ -1,10 +1,10 @@
 # Troubleshooting & beta limits
 
-Zurafa 0.1.0 beta 1 is an early macOS release. These checks cover the current implementation and its known boundaries.
+Zurafa 0.1.1 is an early macOS release. These checks cover the current implementation and its known boundaries.
 
 ## macOS blocks the app
 
-This build is ad-hoc signed and not notarized. After attempting to open the app, go to System Settings → Privacy & Security and select **Open Anyway** for Zurafa. See [Apple's official instructions](https://support.apple.com/en-us/102445). Only use this step for a download you trust; verify the archive checksum on the [installation page](/docs/install/).
+Zurafa is signed with Developer ID and notarized by Apple. If macOS still blocks the app, verify you downloaded the DMG from the official website and check the checksum on the [installation page](/docs/install/).
 
 ## App cannot connect to the daemon
 
@@ -31,7 +31,7 @@ The daemon samples the PTY foreground process group every 250 ms when reliable m
 ## Current feature limits
 
 - Apple Silicon macOS 14+ only; Intel packaging is not provided yet.
-- No Developer ID signing or notarization in the beta download.
+- Developer ID signing and notarization are configured for release builds.
 - Session layouts and PTYs are in daemon memory, not persisted across daemon restarts.
 - No standalone Zurafa CLI, Lua runtime, mosh transport, native Tailscale API, or remote file browser yet.
 - No PTY scrollback replay after a client disconnect.

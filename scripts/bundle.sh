@@ -9,8 +9,12 @@ app="$root/build/Zurafa.app"
 bin="$(cd "$root/apps/macos" && swift build -c release --show-bin-path)"
 
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 cp "$bin/Zurafa" "$app/Contents/MacOS/Zurafa"
+cp -R "$bin/Sparkle.framework" "$app/Contents/Frameworks/Sparkle.framework"
+if ! otool -l "$app/Contents/MacOS/Zurafa" | grep -q '@executable_path/../Frameworks'; then
+  install_name_tool -add_rpath '@executable_path/../Frameworks' "$app/Contents/MacOS/Zurafa"
+fi
 cp "$root/apps/macos/Sources/Zurafa/Resources/Claude.png" "$app/Contents/Resources/Claude.png"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFontMono-Regular.ttf" "$app/Contents/Resources/SymbolsNerdFontMono-Regular.ttf"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app/Contents/Resources/SymbolsNerdFont-LICENSE.txt"
@@ -44,6 +48,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>SUFeedURL</key><string>https://zurafa-website.vercel.app/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>Ck60GZlfckjuZg1qeMfyvfWzsEVAHlkGHdDyX0hG630=</string>
 </dict>
 </plist>
 PLIST

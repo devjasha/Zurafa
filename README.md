@@ -6,15 +6,28 @@ A macOS terminal workspace: a SwiftUI app (`apps/macos`) whose terminals and wor
 
 ## Download for macOS
 
-Download the latest macOS archive from [GitHub Releases](https://github.com/devjasha/Zurafa/releases), unzip it, and drag `Zurafa.app` into Applications. The current beta supports Apple Silicon Macs running macOS 14 or newer.
+Download the latest macOS DMG from [GitHub Releases](https://github.com/devjasha/Zurafa/releases), open it, and drag `Zurafa.app` into Applications. The current beta supports Apple Silicon Macs running macOS 14 or newer.
 
-This beta is ad-hoc signed because a Developer ID certificate is not yet configured. On first launch, macOS may block it. Open System Settings → Privacy & Security and choose **Open Anyway** for Zurafa after attempting to launch it. See [Apple's instructions](https://support.apple.com/en-us/102445). A notarized release will remove this extra step.
+Release builds are signed with Developer ID and can be notarized with Apple before publishing. The app includes Sparkle auto-updates and checks `https://zurafa-website.vercel.app/appcast.xml`.
 
 ## Build and run
 
 ```sh
 scripts/bundle.sh          # cargo + swift release builds, then build/Zurafa.app (ad-hoc signed)
+scripts/release-macos.sh   # signed release zip + dmg in build/
 open build/Zurafa.app      # starts zurafa-daemon if it is not running; it keeps running after you quit
+```
+
+To notarize during release, provide either a notarytool keychain profile:
+
+```sh
+BUILD_NUMBER=2 NOTARY_PROFILE=zurafa scripts/release-macos.sh 0.1.1
+```
+
+or Apple ID credentials:
+
+```sh
+BUILD_NUMBER=2 APPLE_ID=you@example.com APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx scripts/release-macos.sh 0.1.1
 ```
 
 Development without bundling:

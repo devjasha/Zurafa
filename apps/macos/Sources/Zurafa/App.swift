@@ -1,11 +1,18 @@
+import Sparkle
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+
     func applicationDidFinishLaunching(_ n: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.applicationIconImage = appIcon
         NSApp.activate(ignoringOtherApps: true)
     }
+    func checkForUpdates() {
+        updaterController.checkForUpdates(nil)
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
 }
 
@@ -21,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Free Cmd-W and Cmd-T from the stock Close and Show Fonts items.
                 CommandGroup(replacing: .saveItem) {}
                 CommandGroup(replacing: .textFormatting) {}
+                CommandGroup(after: .appInfo) {
+                    Button("Check for Updates…") { delegate.checkForUpdates() }
+                }
                 CommandMenu("Workspace") {
                     ForEach(Command.all) { c in
                         Button(c.title) { c.run(ws) }.keyboardShortcut(c.key, modifiers: c.mods)

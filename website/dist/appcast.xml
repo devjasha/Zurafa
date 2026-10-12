@@ -1,0 +1,30 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Zurafa</title>
+        <item>
+            <title>0.1.1</title>
+            <pubDate>Mon, 12 Oct 2026 16:35:09 +0200</pubDate>
+            <link>https://zurafa-website.vercel.app/</link>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <sparkle:releaseNotesLink>https://zurafa-website.vercel.app/Zurafa-0.1.1-macos-arm64.md</sparkle:releaseNotesLink>
+            <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa-0.1.1-macos-arm64.zip" length="7077905" type="application/octet-stream" sparkle:edSignature="XMChBbM2D+RC7oyRyQP7qyjbH1uDkxpI91EcjyJRFqwKU2lXBifxQN/mM3tAU4F6nMhNZZE9bFKA80T39OgIDQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa2-1.delta" sparkle:deltaFrom="1" length="12162" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="O9lANVCscQoviEaqPtBRRDeyTc3qC31rKmYq12XYqow1mtVRq8pTD8ANRIiuoVvwme5Q59wmGvA939N1ewLsAQ=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
+            <title>0.1.0</title>
+            <pubDate>Mon, 12 Oct 2026 16:25:52 +0200</pubDate>
+            <link>https://zurafa-website.vercel.app/</link>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa-0.1.0-macos-arm64.zip" length="7077912" type="application/octet-stream" sparkle:edSignature="yYc2szR1cD5lmoAvWYWPl9GdJB4Ejp4pgmz2Qqfh9ujsDQQHI7TzjNAIKx+33FxtzVRI1mUpw3kt9VA15YDkDg=="/>
+        </item>
+    </channel>
+</rss>
