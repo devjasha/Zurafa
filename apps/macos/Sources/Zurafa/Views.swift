@@ -63,20 +63,22 @@ struct Backdrop: View {
     }
 }
 
-enum LobeIcon {
-    static func image(named name: String?) -> NSImage? {
+enum AgentIcon {
+    static func image(named name: String?, colorScheme: ColorScheme) -> NSImage? {
         guard let name else { return nil }
-        return ZurafaResources.image(named: name)
+        let themedFolder = colorScheme == .dark ? "dark-icons" : "light-icons"
+        return ZurafaResources.image(named: name, subdirectory: themedFolder)
+            ?? ZurafaResources.image(named: name)
     }
 
     static func assetName(for app: String?) -> String? {
         guard let app else { return nil }
         let key = app.lowercased().filter { $0.isLetter || $0.isNumber }
         switch key {
-        case "claude", "anthropic": return "LobeClaude"
-        case "codex": return "LobeCodex"
-        case "openai", "chatgpt", "gpt": return "LobeOpenAI"
-        case "gemini", "google", "bard": return "LobeGemini"
+        case "claude", "anthropic": return "Claude"
+        case "codex": return "Codex"
+        case "pi": return "Pi"
+        case "terminal", "shell", "zsh", "bash", "fish": return "Terminal"
         case "github": return "LobeGithub"
         case "copilot", "githubcopilot": return "LobeGithubCopilot"
         default: return nil
@@ -86,8 +88,9 @@ enum LobeIcon {
 
 struct ProgramGlyph: View {
     let program: Program
+    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
-        if let icon = LobeIcon.image(named: program.lobeIconName) {
+        if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
             Image(nsImage: icon).resizable().scaledToFit()
         } else {
             Image(systemName: program.icon).resizable().scaledToFit()
@@ -134,11 +137,12 @@ struct StatusDot: View {
     }
 }
 
-/// Branded task icon for OSC 7501 records. AI/provider logos come from Lobe Icons static PNG assets.
+/// Branded task icon for OSC 7501 records. Agent icons follow the current light/dark appearance.
 struct StatusIcon: View {
     let item: StatusItem
     let fallback: String
     var size: CGFloat = 16
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let stateColor = StatusDot.colors[item.record.state] ?? Theme.inkSoft
@@ -147,7 +151,7 @@ struct StatusIcon: View {
                 .fill(.ultraThinMaterial)
                 .overlay(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(.white.opacity(0.42), lineWidth: 0.5))
                 .overlay {
-                    if let icon = LobeIcon.image(named: item.lobeIconName) {
+                    if let icon = AgentIcon.image(named: item.iconAssetName, colorScheme: colorScheme) {
                         Image(nsImage: icon).resizable().scaledToFit().padding(size * 0.16)
                     } else {
                         Image(systemName: fallbackSymbol)

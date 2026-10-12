@@ -15,7 +15,8 @@ cp -R "$bin/Sparkle.framework" "$app/Contents/Frameworks/Sparkle.framework"
 if ! otool -l "$app/Contents/MacOS/Zurafa" | grep -q '@executable_path/../Frameworks'; then
   install_name_tool -add_rpath '@executable_path/../Frameworks' "$app/Contents/MacOS/Zurafa"
 fi
-cp "$root/apps/macos/Sources/Zurafa/Resources/Claude.png" "$app/Contents/Resources/Claude.png"
+cp -R "$root/apps/macos/Sources/Zurafa/Resources/light-icons" "$app/Contents/Resources/light-icons"
+cp -R "$root/apps/macos/Sources/Zurafa/Resources/dark-icons" "$app/Contents/Resources/dark-icons"
 cp "$root/apps/macos/Sources/Zurafa/Resources"/Lobe*.png "$app/Contents/Resources/"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFontMono-Regular.ttf" "$app/Contents/Resources/SymbolsNerdFontMono-Regular.ttf"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app/Contents/Resources/SymbolsNerdFont-LICENSE.txt"

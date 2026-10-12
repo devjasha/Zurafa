@@ -17,7 +17,7 @@ enum TabStripLayout: String {
 }
 
 enum Program {
-    case claude, codex, gemini, git, dev, ssh, shell
+    case claude, codex, gemini, pi, git, dev, ssh, shell
     static func detect(_ name: String?, executable: String? = nil, remote: Bool) -> Program {
         guard let name else { return remote ? .ssh : .shell }
         let n = (name + " " + (executable ?? "")).lowercased()
@@ -25,25 +25,27 @@ enum Program {
         if n.contains("codex") { return .codex }
         if n.contains("gemini") { return .gemini }
         let base = name.lowercased()
+        if base == "pi" { return .pi }
         if base == "git" || base == "lazygit" { return .git }
         if base == "ssh" { return .ssh }
         if ["node", "npm", "pnpm", "bun", "deno", "vite"].contains(base) { return .dev }
         return remote ? .ssh : .shell
     }
     var title: String {
-        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .shell: "Shell" }
+        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .shell: "Shell" }
     }
     var icon: String {
-        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .shell: "terminal" }
+        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "brain.head.profile"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .shell: "terminal" }
     }
-    var lobeIconName: String? {
-        switch self { case .claude: "LobeClaude"; case .codex: "LobeCodex"; case .gemini: "LobeGemini"; default: nil }
+    var iconAssetName: String? {
+        switch self { case .claude: "Claude"; case .codex: "Codex"; case .pi: "Pi"; case .shell: "Terminal"; default: nil }
     }
     var tile: [Color] {
         switch self {
         case .claude: [Color(red: 0.83, green: 0.52, blue: 0.38)]
         case .codex: [.black]
         case .gemini: [Color(red: 0.35, green: 0.55, blue: 0.9)]
+        case .pi: [Color(red: 0.45, green: 0.58, blue: 0.92)]
         case .git: [Color(red: 0.49, green: 0.83, blue: 0.47), Color(red: 0.22, green: 0.62, blue: 0.32)]
         case .dev: [Color(red: 0.33, green: 0.34, blue: 0.38), Color(red: 0.11, green: 0.12, blue: 0.14)]
         case .ssh: [Color(red: 0.28, green: 0.47, blue: 0.57)]
@@ -81,7 +83,7 @@ struct StatusItem: Identifiable {
     let id: String
     let record: ProgramStatus
 
-    var lobeIconName: String? { LobeIcon.assetName(for: record.app) }
+    var iconAssetName: String? { AgentIcon.assetName(for: record.app) }
 
     func label(default fallback: String) -> String {
         if let title = record.title, !title.isEmpty { return title }

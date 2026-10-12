@@ -28,17 +28,19 @@ enum ZurafaResources {
         return bundles
     }
 
-    static func url(forResource name: String, withExtension ext: String) -> URL? {
+    static func url(forResource name: String, withExtension ext: String, subdirectory: String? = nil) -> URL? {
         for bundle in candidateBundles {
-            if let url = bundle.url(forResource: name, withExtension: ext) { return url }
-            if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: "Resources") { return url }
+            if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: subdirectory) { return url }
+            if let subdirectory {
+                if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: "Resources/\(subdirectory)") { return url }
+            } else if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: "Resources") { return url }
         }
         return nil
     }
 
-    static func image(named name: String) -> NSImage? {
-        Bundle.main.image(forResource: name)
-            ?? url(forResource: name, withExtension: "png").flatMap { NSImage(contentsOf: $0) }
-            ?? url(forResource: name, withExtension: "icns").flatMap { NSImage(contentsOf: $0) }
+    static func image(named name: String, subdirectory: String? = nil) -> NSImage? {
+        if subdirectory == nil, let image = Bundle.main.image(forResource: name) { return image }
+        return url(forResource: name, withExtension: "png", subdirectory: subdirectory).flatMap { NSImage(contentsOf: $0) }
+            ?? url(forResource: name, withExtension: "icns", subdirectory: subdirectory).flatMap { NSImage(contentsOf: $0) }
     }
 }
