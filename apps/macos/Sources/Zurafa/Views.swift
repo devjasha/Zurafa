@@ -66,9 +66,7 @@ struct Backdrop: View {
 enum LobeIcon {
     static func image(named name: String?) -> NSImage? {
         guard let name else { return nil }
-        return Bundle.main.image(forResource: name)
-            ?? Bundle.module.url(forResource: name, withExtension: "png").flatMap { NSImage(contentsOf: $0) }
-            ?? Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources").flatMap { NSImage(contentsOf: $0) }
+        return ZurafaResources.image(named: name)
     }
 
     static func assetName(for app: String?) -> String? {
@@ -113,7 +111,7 @@ struct Tile: View {
 
 /// Bundled: Contents/Resources/AppIcon.icns. `swift run`: the SwiftPM resource bundle, which a signed .app cannot hold at its root.
 let appIcon: NSImage = Bundle.main.image(forResource: "AppIcon")
-    ?? Bundle.module.url(forResource: "Zurafa-iOS-Default-512@1x", withExtension: "png", subdirectory: "Resources").flatMap { NSImage(contentsOf: $0) }
+    ?? ZurafaResources.image(named: "Zurafa-iOS-Default-512@1x")
     ?? NSImage()
 
 /// One visible indicator per OSC 7501 record, including nested records.

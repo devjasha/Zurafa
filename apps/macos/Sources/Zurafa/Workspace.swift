@@ -145,6 +145,7 @@ enum EditorKind: String, Identifiable {
 
     init() {
         TerminalStore.shared.onFocus = { [weak self] id in self?.focus(id) }
+        loadZurafaConfig()
         syncTerminalAppearance()
         daemon.onSnapshot = { [weak self] snapshot in self?.apply(snapshot) }
         daemon.onEvent = { [weak self] event in self?.apply(event) }
@@ -339,6 +340,15 @@ enum EditorKind: String, Identifiable {
             (NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
         TerminalStore.shared.setDark(appearance == .dark || (appearance == .system && systemDark))
         workspaceBackground = TerminalStore.shared.workspaceBackground.map(Color.init(nsColor:))
+    }
+
+    private func loadZurafaConfig() {
+        do {
+            guard let config = try ZurafaConfigLoader().load() else { return }
+            TerminalStore.shared.applyZurafaConfig(config.terminal.count > 0 ? config.terminal : nil)
+            if let path = config.backgroundImage { backgroundImage = NSImage(contentsOfFile: path) ?? backgroundImage }
+            if let enabled = config.backgroundImageEnabled { backgroundImageEnabled = enabled }
+        } catch { commandError = error.localizedDescription }
     }
 
     func importGhosttySettings() {

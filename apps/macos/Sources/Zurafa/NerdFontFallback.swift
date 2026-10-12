@@ -7,9 +7,8 @@ import SwiftTerm
 /// the selected terminal face does not contain them.
 final class NerdFontFallback: TerminalGlyphFallbackProvider, @unchecked Sendable {
     static let shared: NerdFontFallback? = {
-        let url = Bundle.main.url(forResource: "SymbolsNerdFontMono-Regular", withExtension: "ttf")
-            ?? Bundle.module.url(forResource: "SymbolsNerdFontMono-Regular", withExtension: "ttf")
-        return url.flatMap(NerdFontFallback.init)
+        ZurafaResources.url(forResource: "SymbolsNerdFontMono-Regular", withExtension: "ttf")
+            .flatMap(NerdFontFallback.init)
     }()
 
     let generation: UInt64 = 1

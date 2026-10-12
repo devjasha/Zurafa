@@ -1,0 +1,118 @@
+import AppKit
+
+struct ZurafaConfig: Equatable {
+    var terminal = GhosttyTerminalSettings()
+    var backgroundImage: String?
+    var backgroundImageEnabled: Bool?
+
+    var count: Int {
+        terminal.count + (backgroundImage == nil ? 0 : 1) + (backgroundImageEnabled == nil ? 0 : 1)
+    }
+}
+
+struct ZurafaConfigLoader {
+    private let home: URL
+    private let xdg: URL
+
+    init(home: URL = FileManager.default.homeDirectoryForCurrentUser, xdgConfigHome: URL? = nil) {
+        self.home = home
+        let environmentXDG = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"]
+            .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+        xdg = xdgConfigHome ?? environmentXDG ?? home.appendingPathComponent(".config")
+    }
+
+    var fileURL: URL { xdg.appendingPathComponent("config.zurafa") }
+
+    func load() throws -> ZurafaConfig? {
+        let url = fileURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe), data.count <= 1_048_576,
+              let content = String(data: data, encoding: .utf8) else {
+            throw GhosttyConfigError.unreadable(url.path)
+        }
+        return Self.parse(content, relativeTo: url.deletingLastPathComponent())
+    }
+
+    static func parse(_ content: String, relativeTo directory: URL? = nil) -> ZurafaConfig {
+        var config = ZurafaConfig()
+        for line in content.split(whereSeparator: \.isNewline) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, !trimmed.hasPrefix("#"), let equals = trimmed.firstIndex(of: "=") else { continue }
+            let key = String(trimmed[..<equals]).trimmingCharacters(in: .whitespaces).lowercased()
+            var value = String(trimmed[trimmed.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
+            if value.count >= 2, value.first == "\"", value.last == "\"" { value.removeFirst(); value.removeLast() }
+            apply(key: key, value: value, to: &config, relativeTo: directory)
+        }
+        return config
+    }
+
+    private static func apply(key: String, value: String, to config: inout ZurafaConfig, relativeTo directory: URL?) {
+        switch key {
+        case "font-family": config.terminal.fontFamily = value.isEmpty ? nil : value
+        case "font-size":
+            if let size = Double(value), (6...72).contains(size) { config.terminal.fontSize = size }
+        case "foreground": setColor(value, \GhosttyColors.foreground, light: &config.terminal.light, dark: &config.terminal.dark)
+        case "background": setColor(value, \GhosttyColors.background, light: &config.terminal.light, dark: &config.terminal.dark)
+        case "cursor-color": setColor(value, \GhosttyColors.cursor, light: &config.terminal.light, dark: &config.terminal.dark)
+        case "selection-foreground": setColor(value, \GhosttyColors.selectionForeground, light: &config.terminal.light, dark: &config.terminal.dark)
+        case "selection-background": setColor(value, \GhosttyColors.selectionBackground, light: &config.terminal.light, dark: &config.terminal.dark)
+        case "light-background": config.terminal.light.background = GhosttyConfigLoader.hex(value)
+        case "dark-background": config.terminal.dark.background = GhosttyConfigLoader.hex(value)
+        case "light-foreground": config.terminal.light.foreground = GhosttyConfigLoader.hex(value)
+        case "dark-foreground": config.terminal.dark.foreground = GhosttyConfigLoader.hex(value)
+        case "background-image":
+            let expanded = (value as NSString).expandingTildeInPath
+            if expanded.hasPrefix("/") { config.backgroundImage = expanded }
+            else if let directory { config.backgroundImage = directory.appendingPathComponent(expanded).path }
+            else { config.backgroundImage = expanded }
+        case "background-image-enabled": config.backgroundImageEnabled = bool(value)
+        case "palette":
+            if let pair = value.split(separator: "=", maxSplits: 1).first,
+               let index = Int(pair.trimmingCharacters(in: .whitespaces)), (0..<16).contains(index),
+               let color = GhosttyConfigLoader.hex(value.split(separator: "=", maxSplits: 1).last.map(String.init)) {
+                config.terminal.light.palette[index] = color
+                config.terminal.dark.palette[index] = color
+            }
+        default: break
+        }
+    }
+
+    private static func setColor(_ value: String, _ keyPath: WritableKeyPath<GhosttyColors, UInt32?>, light: inout GhosttyColors, dark: inout GhosttyColors) {
+        guard let color = GhosttyConfigLoader.hex(value) else { return }
+        light[keyPath: keyPath] = color
+        dark[keyPath: keyPath] = color
+    }
+
+    private static func bool(_ value: String) -> Bool? {
+        switch value.lowercased() {
+        case "true", "yes", "1", "on": return true
+        case "false", "no", "0", "off": return false
+        default: return nil
+        }
+    }
+}
+
+extension GhosttyTerminalSettings {
+    func applying(_ override: GhosttyTerminalSettings?) -> GhosttyTerminalSettings {
+        guard let override else { return self }
+        var next = self
+        next.fontFamily = override.fontFamily ?? next.fontFamily
+        next.fontSize = override.fontSize ?? next.fontSize
+        next.light = next.light.applying(override.light)
+        next.dark = next.dark.applying(override.dark)
+        return next
+    }
+}
+
+private extension GhosttyColors {
+    func applying(_ override: GhosttyColors) -> GhosttyColors {
+        var next = self
+        next.foreground = override.foreground ?? next.foreground
+        next.background = override.background ?? next.background
+        next.cursor = override.cursor ?? next.cursor
+        next.selectionForeground = override.selectionForeground ?? next.selectionForeground
+        next.selectionBackground = override.selectionBackground ?? next.selectionBackground
+        next.palette.merge(override.palette) { _, new in new }
+        return next
+    }
+}

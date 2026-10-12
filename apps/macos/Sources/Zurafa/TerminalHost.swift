@@ -49,6 +49,7 @@ final class PaneTerminal: TerminalView {
     private var isDark = false
     private var ghosttySettings: GhosttyTerminalSettings? = UserDefaults.standard.data(forKey: "ghosttyTerminalSettings")
         .flatMap { try? JSONDecoder().decode(GhosttyTerminalSettings.self, from: $0) }
+    private var zurafaSettings: GhosttyTerminalSettings?
     private let daemon = DaemonClient.shared
     private static let ansi: [UInt32] = [
         0x2a2d35, 0xd04f5a, 0x479a3c, 0xb0832a, 0x2f78e0, 0xa064c8, 0x8a8d93,
@@ -87,32 +88,44 @@ final class PaneTerminal: TerminalView {
         for view in views.values { configure(view) }
     }
 
+    func applyZurafaConfig(_ settings: GhosttyTerminalSettings?) {
+        zurafaSettings = settings
+        for view in views.values { configure(view) }
+    }
+
+    private var effectiveSettings: GhosttyTerminalSettings {
+        (ghosttySettings ?? GhosttyTerminalSettings()).applying(zurafaSettings)
+    }
+
     var workspaceBackground: NSColor? {
-        let hex = (isDark ? ghosttySettings?.dark : ghosttySettings?.light)?.background
+        let settings = effectiveSettings
+        let hex = (isDark ? settings.dark : settings.light).background
         return hex.map(Self.ns)
     }
 
     private func configure(_ view: PaneTerminal) {
-        let family = ghosttySettings?.fontFamily
-        let size = CGFloat(ghosttySettings?.fontSize ?? 13)
+        let settings = effectiveSettings
+        let family = settings.fontFamily
+        let size = CGFloat(settings.fontSize ?? 13)
         view.font = family.flatMap { NSFontManager.shared.font(withFamily: $0, traits: [], weight: 5, size: size) }
             ?? .monospacedSystemFont(ofSize: size, weight: .regular)
         configureColors(view)
     }
 
     private func configureColors(_ view: PaneTerminal) {
-        let imported = isDark ? ghosttySettings?.dark : ghosttySettings?.light
+        let settings = effectiveSettings
+        let imported = isDark ? settings.dark : settings.light
         var colors = isDark ? Self.darkANSI : Self.ansi
-        for (index, color) in imported?.palette ?? [:] where colors.indices.contains(index) { colors[index] = color }
+        for (index, color) in imported.palette where colors.indices.contains(index) { colors[index] = color }
         view.installColors(colors.map { SwiftTerm.Color(red8: UInt16($0 >> 16 & 255), green8: UInt16($0 >> 8 & 255), blue8: UInt16($0 & 255)) })
         // The imported background belongs to the whole workspace surface.
         // A per-terminal fill leaves a visible rectangle inside each pane.
         view.nativeBackgroundColor = .clear
-        view.nativeForegroundColor = Self.ns(imported?.foreground ?? (isDark ? 0xd7dce2 : 0x2a2d35))
-        view.caretColor = imported?.cursor.map(Self.ns) ?? view.nativeForegroundColor
-        view.selectedTextBackgroundColor = imported?.selectionBackground.map { Self.ns($0).withAlphaComponent(0.35) }
+        view.nativeForegroundColor = Self.ns(imported.foreground ?? (isDark ? 0xd7dce2 : 0x2a2d35))
+        view.caretColor = imported.cursor.map(Self.ns) ?? view.nativeForegroundColor
+        view.selectedTextBackgroundColor = imported.selectionBackground.map { Self.ns($0).withAlphaComponent(0.35) }
             ?? NSColor(srgbRed: 0.45, green: 0.6, blue: 0.9, alpha: 0.3)
-        view.selectedTextForegroundColor = imported?.selectionForeground.map(Self.ns) ?? .black
+        view.selectedTextForegroundColor = imported.selectionForeground.map(Self.ns) ?? .black
         view.needsDisplay = true
     }
 

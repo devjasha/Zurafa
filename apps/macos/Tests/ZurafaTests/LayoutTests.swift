@@ -19,7 +19,7 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(Program.detect("ssh", remote: true), .ssh)
         XCTAssertEqual(Program.codex.lobeIconName, "LobeCodex")
         XCTAssertEqual(LobeIcon.assetName(for: "github-copilot"), "LobeGithubCopilot")
-        XCTAssertNotNil(Bundle.module.url(forResource: "LobeClaude", withExtension: "png"))
+        XCTAssertNotNil(ZurafaResources.url(forResource: "LobeClaude", withExtension: "png"))
     }
     func testDaemonLayoutDecodesAndKeepsPaneOrder() throws {
         let data = Data(#"{"type":"split","axis":"horizontal","ratio":0.6,"first":{"type":"block","block_id":"t1"},"second":{"type":"split","axis":"vertical","ratio":0.5,"first":{"type":"block","block_id":"t2"},"second":{"type":"block","block_id":"t3"}}}"#.utf8)

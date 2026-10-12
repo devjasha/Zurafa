@@ -599,6 +599,16 @@ struct CommandPicker: View {
         ws.paletteOpen = false
         entry.action()
     }
+    private func moveSelection(_ delta: Int) {
+        guard !filtered.isEmpty else { selection = 0; return }
+        selection = min(max(selection + delta, 0), filtered.count - 1)
+    }
+    private func scrollSelection(_ selection: Int, proxy: ScrollViewProxy) {
+        guard filtered.indices.contains(selection) else { return }
+        withAnimation(.easeOut(duration: 0.12)) {
+            proxy.scrollTo(filtered[selection].id, anchor: .center)
+        }
+    }
 
     var body: some View {
         GeometryReader { bounds in
@@ -613,8 +623,8 @@ struct CommandPicker: View {
                         TextField("", text: $query)
                             .textFieldStyle(.plain).foregroundStyle(Theme.ink).tint(PickerStyle.accent).focused($searchFocused)
                         .onSubmit { if filtered.indices.contains(selection) { run(filtered[selection]) } }
-                        .onKeyPress(.downArrow) { selection = min(selection + 1, filtered.count - 1); return .handled }
-                        .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
+                        .onKeyPress(.downArrow) { moveSelection(1); return .handled }
+                        .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
                         .onKeyPress(.escape) { ws.paletteOpen = false; return .handled }
                         .onChange(of: query) { selection = 0 }
                     }
@@ -627,56 +637,63 @@ struct CommandPicker: View {
                 .padding(.horizontal, 10).frame(height: 34)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(PickerStyle.outline, lineWidth: 1))
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(Array(filtered.enumerated()), id: \.element.id) { index, entry in
-                            if entry.id.hasPrefix("session:") && index == 1 && query.isEmpty {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "rectangle.stack")
-                                    Text("Workspaces")
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, entry in
+                                if entry.id.hasPrefix("session:") && index == 1 && query.isEmpty {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "rectangle.stack")
+                                        Text("Workspaces")
+                                    }
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(PickerStyle.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.leading, 10).padding(.top, 6)
                                 }
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(PickerStyle.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 10).padding(.top, 6)
+                                if entry.id == "Rename Tab" && query.isEmpty {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "rectangle.stack")
+                                        Text("Commands")
+                                    }
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(PickerStyle.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.leading, 10).padding(.top, 6)
+                                }
+                                if entry.id == "Split Pane Right" && query.isEmpty {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "rectangle.split.2x1")
+                                        Text("Pane")
+                                    }
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(PickerStyle.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.leading, 10).padding(.top, 6)
+                                }
+                                Button { run(entry) } label: {
+                                    HStack(spacing: 9) {
+                                        if let symbol = entry.symbol { Image(systemName: symbol).frame(width: 16) }
+                                        Text(entry.title)
+                                        Spacer(minLength: 4)
+                                        if let detail = entry.detail { Text(detail).lineLimit(1).frame(maxWidth: 110, alignment: .trailing) }
+                                        if let shortcut = entry.shortcut { Text(shortcut) }
+                                    }
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(index == selection ? Color.black : Theme.ink)
+                                    .padding(.horizontal, 10).frame(height: 30)
+                                    .background(index == selection ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .id(entry.id)
                             }
-                            if entry.id == "Rename Tab" && query.isEmpty {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "rectangle.stack")
-                                    Text("Commands")
-                                }
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(PickerStyle.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 10).padding(.top, 6)
-                            }
-                            if entry.id == "Split Pane Right" && query.isEmpty {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "rectangle.split.2x1")
-                                    Text("Pane")
-                                }
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(PickerStyle.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 10).padding(.top, 6)
-                            }
-                            Button { run(entry) } label: {
-                                HStack(spacing: 9) {
-                                    if let symbol = entry.symbol { Image(systemName: symbol).frame(width: 16) }
-                                    Text(entry.title)
-                                    Spacer(minLength: 4)
-                                    if let detail = entry.detail { Text(detail).lineLimit(1).frame(maxWidth: 110, alignment: .trailing) }
-                                    if let shortcut = entry.shortcut { Text(shortcut) }
-                                }
-                                .font(.system(size: 13))
-                                .foregroundStyle(index == selection ? Color.black : Theme.ink)
-                                .padding(.horizontal, 10).frame(height: 30)
-                                .background(index == selection ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
-                                .contentShape(Rectangle())
-                            }.buttonStyle(.plain)
                         }
                     }
-                }.frame(maxHeight: min(420, max(120, bounds.size.height - topInset - 80)))
+                    .onChange(of: selection) { scrollSelection(selection, proxy: proxy) }
+                    .onChange(of: filtered.map(\.id)) { scrollSelection(selection, proxy: proxy) }
+                }
+                .frame(maxHeight: min(420, max(120, bounds.size.height - topInset - 80)))
             }
             .padding(8).frame(width: 420)
             .pickerGlass(in: RoundedRectangle(cornerRadius: 15))
