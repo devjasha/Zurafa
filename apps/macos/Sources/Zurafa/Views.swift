@@ -322,7 +322,10 @@ struct TopBar: View {
             BarButton(symbol: "command", help: "Command Palette (⌘K)") { ws.paletteOpen = true }
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
         }
-        .padding(.leading, 12).padding(.trailing, 6).frame(height: 40)
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .padding(.top, 4)
+        .frame(height: 44)
         .background(WindowDragView())
         .background(alignment: .leading) {
             if ws.tabStripLayout == .vertical {
