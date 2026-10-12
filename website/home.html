@@ -22,11 +22,16 @@
       <p class="lead">Zurafa is a composed macOS terminal workspace for local shells, split panes, remote SSH, and program status — designed to feel quiet even when the work gets loud.</p>
       <div class="hero-actions"><a class="button primary" href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Download for macOS <span aria-hidden="true">↗</span></a><a class="button secondary" href="/docs/install/">Install guide <span aria-hidden="true">→</span></a></div>
       <div class="hero-meta" aria-label="Release details"><span>0.1.0 beta 1</span><span>macOS 14+</span><span>Apple Silicon</span></div>
-    </div><div class="hero-stage" aria-label="Typographic illustration of a Zurafa terminal workspace">
-      <div class="terminal-backdrop" aria-hidden="true"><span>❯ cargo test --workspace</span><span>running 37 tests</span><span>test result: ok. 37 passed</span><span>❯ ssh prod-observer</span><span>status: working · build</span></div>
+    </div><div class="hero-stage" aria-label="Clean illustration of a Zurafa terminal workspace">
       <div class="stage-glow"></div>
-      <div class="type-card"><p class="type-kicker">ZURAFA WORKSPACE</p><div class="type-headline"><span>split</span><span>ship</span><span>switch</span></div><p>One place for the sessions, panes, and machines your day moves through.</p><div class="type-actions"><span>⌘ project</span><span>ssh</span><span>done</span></div></div>
-      <div class="mini-terminal"><div class="code-top"><span class="dot green"></span> terminal <span>live</span></div><div class="terminal-lines"><div><span class="prompt">❯</span> zurafa open project</div><div class="muted">restored 2 tabs · 4 panes</div><div class="success">workspace ready</div></div></div>
+      <div class="clean-window">
+        <div class="clean-titlebar"><span class="traffic"><i></i><i></i><i></i></span><span>Zurafa</span><b>Workspace</b></div>
+        <div class="clean-body">
+          <aside class="clean-sidebar" aria-hidden="true"><span class="active">project</span><span>build</span><span>remote</span></aside>
+          <div class="clean-terminal"><div class="terminal-lines"><div><span class="prompt">❯</span> cargo test --workspace</div><div class="muted">running 37 tests</div><div class="success">test result: ok. 37 passed</div><div class="spacer"></div><div><span class="prompt">❯</span> ssh prod-observer</div><div class="muted">connected · status working</div></div></div>
+        </div>
+      </div>
+      <div class="stage-note"><span class="dot green"></span> 4 panes restored <b>·</b> local + SSH ready</div>
     </div></section>
 
     <section class="section shell" id="features"><div class="section-intro"><p class="kicker">THE WORKSPACE</p><h2>Stay oriented, even when<br>the work branches out.</h2><p>Zurafa brings the moving parts of terminal work into one coherent place.</p></div>
