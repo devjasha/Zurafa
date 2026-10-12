@@ -4,7 +4,7 @@ The first beta supports **Apple Silicon** Macs with **macOS 14 or newer**. An In
 
 ## Download and install
 
-1. Download [Zurafa 0.1.0 beta 1 for macOS](https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip).
+1. Download [Zurafa 0.1.0 beta 2 for macOS](https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.2/Zurafa-0.1.0-beta.2-macos-arm64.zip).
 2. Unzip the archive. It contains `Zurafa.app` with the Rust daemon bundled inside.
 3. Move `Zurafa.app` into your Applications folder and open it.
 
@@ -15,10 +15,10 @@ The first beta supports **Apple Silicon** Macs with **macOS 14 or newer**. An In
 The release page includes a `.sha256` file. To check the archive in Terminal, run:
 
 ```sh
-shasum -a 256 Zurafa-0.1.0-beta.1-macos-arm64.zip
+shasum -a 256 Zurafa-0.1.0-beta.2-macos-arm64.zip
 ```
 
-The expected SHA-256 is `717c4464357fb31b849d212815de45b2f153f2d63cd56393a29ecdadaa1afbbf`.
+The expected SHA-256 is `2b8f0b3949d5883c9b8251160c0304b68eb3d68708368b6077eeccce44ffc72c`.
 
 ## What starts with the app
 

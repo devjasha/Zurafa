@@ -15,7 +15,7 @@ enum Theme {
     static let inkSoft = adaptive(light: NSColor(srgbRed: 0.45, green: 0.46, blue: 0.48, alpha: 1),
                                   dark: NSColor(srgbRed: 0.62, green: 0.70, blue: 0.74, alpha: 1))
     static let activeTab = adaptive(light: .white, dark: NSColor(srgbRed: 0.22, green: 0.28, blue: 0.32, alpha: 1))
-    static let paneTint = adaptive(light: NSColor.white.withAlphaComponent(0.3), dark: NSColor.black.withAlphaComponent(0.16))
+    static let paneTint = adaptive(light: .white, dark: NSColor(srgbRed: 0.13, green: 0.17, blue: 0.20, alpha: 1))
     static let paneStroke = adaptive(light: NSColor.white.withAlphaComponent(0.75), dark: NSColor.white.withAlphaComponent(0.15))
 }
 
@@ -23,7 +23,7 @@ struct WindowMaterial: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSVisualEffectView()
         view.material = .underWindowBackground
-        view.blendingMode = .behindWindow
+        view.blendingMode = .withinWindow
         view.state = .active
         return view
     }
@@ -213,16 +213,23 @@ struct WindowConfig: NSViewRepresentable {
         let appearance = appearance
         DispatchQueue.main.async {
             guard let w = v.window else { return }
-            w.titleVisibility = .hidden
-            w.titlebarAppearsTransparent = true
-            w.styleMask.insert(.fullSizeContentView)
-            if w.toolbar == nil { w.toolbar = NSToolbar(); w.toolbarStyle = .unifiedCompact }
-            w.titlebarSeparatorStyle = .none
-            w.isOpaque = false
-            w.backgroundColor = .clear
-            w.appearance = appearance == .system ? nil : NSAppearance(named: appearance == .dark ? .darkAqua : .aqua)
-            w.minSize = NSSize(width: 760, height: 480)
+            Self.configure(w, appearance: appearance)
         }
+    }
+
+    @MainActor static func configure(_ w: NSWindow, appearance: AppearanceMode) {
+        w.titleVisibility = .hidden
+        w.titlebarAppearsTransparent = true
+        w.styleMask.insert(.fullSizeContentView)
+        if w.toolbar == nil { w.toolbar = NSToolbar(); w.toolbarStyle = .unifiedCompact }
+        w.titlebarSeparatorStyle = .none
+        // Terminal transparency should reveal Zurafa's own backdrop, not the desktop or
+        // another Zurafa window behind this one. Keep the NSWindow opaque and compose
+        // all glass/material effects inside the window surface.
+        w.isOpaque = true
+        w.backgroundColor = .windowBackgroundColor
+        w.appearance = appearance == .system ? nil : NSAppearance(named: appearance == .dark ? .darkAqua : .aqua)
+        w.minSize = NSSize(width: 760, height: 480)
     }
 }
 
@@ -581,8 +588,7 @@ struct PaneView: View {
                          focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
                 .padding(.leading, 14).padding(.trailing, 8).padding(.bottom, 10)
         }
-        .zurafaGlass(in: shape)
-        .background(Theme.paneTint.opacity(focused ? 1 : 0.6), in: shape)
+        .background(Theme.paneTint, in: shape)
         .overlay(shape.strokeBorder(Theme.paneStroke, lineWidth: 1))
         .shadow(color: .black.opacity(focused ? 0.10 : 0.06), radius: focused ? 12 : 8, y: 3)
         .padding(4)

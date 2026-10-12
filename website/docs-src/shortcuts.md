@@ -11,8 +11,11 @@ The command picker is the quickest way to discover an action. Press `⌘K`, type
 | Close focused pane | `⌘W` |
 | Close tab | `⌥⌘W` |
 | New session | `⇧⌘N` |
+| Rename workspace | `⇧⌘E` |
+| Delete workspace | `⌥⇧⌘W` |
 | Go to directory | `⇧⌘G` |
 | Refresh sessions | `⌘R` |
+| Toggle tab layout | `⌥⌘T` |
 | Split pane right | `⌘D` |
 | Split pane down | `⇧⌘D` |
 | Zoom or unzoom pane | `⇧⌘↩` |
@@ -23,7 +26,7 @@ The command picker is the quickest way to discover an action. Press `⌘K`, type
 
 ## Command picker actions
 
-You can change or rename a session, rename a tab, add a remote host, create sessions and tabs, open a directory in a new local tab, close a tab or session, refresh sessions, choose Follow System / Light / Dark, import or clear Ghostty settings, set and toggle a dithered background image, split panes, and toggle pane zoom.
+You can change or rename a workspace, rename a tab, add a remote host, create workspaces and tabs, open a directory in a new local tab, close a tab or workspace, refresh workspaces, switch the tab layout, choose Follow System / Light / Dark, import or clear Ghostty settings, set and toggle a dithered background image, split panes, and toggle pane zoom.
 
 ## Input focus
 

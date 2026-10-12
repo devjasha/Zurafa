@@ -63,15 +63,15 @@
     <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Start here</div><h1>Install on macOS</h1><div class="prose"><p>The first beta supports <strong>Apple Silicon</strong> Macs with <strong>macOS 14 or newer</strong>. An Intel build is not available yet.</p>
 <h2 id="download-and-install">Download and install</h2>
 <ol>
-<li>Download <a href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.1/Zurafa-0.1.0-beta.1-macos-arm64.zip">Zurafa 0.1.0 beta 1 for macOS</a>.</li>
+<li>Download <a href="https://github.com/devjasha/Zurafa/releases/download/v0.1.0-beta.2/Zurafa-0.1.0-beta.2-macos-arm64.zip">Zurafa 0.1.0 beta 2 for macOS</a>.</li>
 <li>Unzip the archive. It contains <code>Zurafa.app</code> with the Rust daemon bundled inside.</li>
 <li>Move <code>Zurafa.app</code> into your Applications folder and open it.</li>
 </ol>
 <aside class="note">This beta has an ad-hoc signature but no Apple Developer ID signature or notarization. macOS may block the first launch. After attempting to open Zurafa, go to System Settings → Privacy &amp; Security and choose <strong>Open Anyway</strong> for Zurafa. Follow <a href="https://support.apple.com/en-us/102445">Apple&#x27;s instructions</a> if the option is unfamiliar.</aside>
 <h2 id="verify-the-download">Verify the download</h2>
 <p>The release page includes a <code>.sha256</code> file. To check the archive in Terminal, run:</p>
-<pre><code>shasum -a 256 Zurafa-0.1.0-beta.1-macos-arm64.zip</code></pre>
-<p>The expected SHA-256 is <code>717c4464357fb31b849d212815de45b2f153f2d63cd56393a29ecdadaa1afbbf</code>.</p>
+<pre><code>shasum -a 256 Zurafa-0.1.0-beta.2-macos-arm64.zip</code></pre>
+<p>The expected SHA-256 is <code>2b8f0b3949d5883c9b8251160c0304b68eb3d68708368b6077eeccce44ffc72c</code>.</p>
 <h2 id="what-starts-with-the-app">What starts with the app</h2>
 <p>Zurafa connects to a per-user Rust daemon over a Unix socket. If no daemon is running, the app starts the bundled one. Closing the app does not immediately stop that daemon or its terminal processes. Sessions and PTYs remain available while that daemon is alive; they are not restored after it exits.</p>
 <h2 id="updating-from-an-older-build">Updating from an older build</h2>

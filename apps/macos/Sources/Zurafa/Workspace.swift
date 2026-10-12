@@ -499,13 +499,20 @@ struct Command: Identifiable {
     let run: @MainActor (Workspace) -> Void
     var id: String { title }
     var shortcut: String {
-        (mods.contains(.shift) ? "⇧" : "") + "⌘" + (key == .return ? "↩" : String(key.character).uppercased())
+        (mods.contains(.control) ? "⌃" : "")
+            + (mods.contains(.option) ? "⌥" : "")
+            + (mods.contains(.shift) ? "⇧" : "")
+            + (mods.contains(.command) ? "⌘" : "")
+            + (key == .return ? "↩" : String(key.character).uppercased())
     }
     static let all: [Command] = [
         Command(title: "Cycle Appearance", key: "a", mods: [.command, .shift]) { $0.cycleAppearance() },
         Command(title: "New Session", key: "n", mods: [.command, .shift]) { $0.editor = .newSession },
+        Command(title: "Rename Session", key: "e", mods: [.command, .shift]) { $0.editor = .renameSession },
+        Command(title: "Delete Workspace", key: "w", mods: [.command, .option, .shift]) { $0.confirmCloseSession = true },
         Command(title: "New Tab", key: "t") { $0.newTab() },
         Command(title: "Close Tab", key: "w", mods: [.command, .option]) { $0.closeTab() },
+        Command(title: "Toggle Tab Layout", key: "t", mods: [.command, .option]) { $0.toggleTabStripLayout() },
         Command(title: "Go to Directory", key: "g", mods: [.command, .shift]) { $0.editor = .goDirectory },
         Command(title: "Refresh Sessions", key: "r") { $0.refreshSessions() },
         Command(title: "Split Right", key: "d") { $0.split(.horizontal) },
