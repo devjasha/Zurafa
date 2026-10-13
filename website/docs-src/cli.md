@@ -15,7 +15,7 @@ cargo run -p zurafa-cli -- ls
 cargo run -p zurafa-cli -- session inspect default
 ```
 
-Bundled app builds also include the executable at `Zurafa.app/Contents/MacOS/zurafa`.
+Bundled app builds also include the executable at `Zurafa.app/Contents/Resources/zurafa`.
 
 ## Commands
 

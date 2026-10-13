@@ -81,7 +81,7 @@ sign_app() {
 
   while IFS= read -r -d '' executable; do
     codesign --force --options runtime --timestamp --sign "$cert" "$executable"
-  done < <(find "$app/Contents/MacOS" -type f -perm -111 -print0)
+  done < <(find "$app/Contents/MacOS" "$app/Contents/Resources" -type f -perm -111 -print0)
 
   codesign --force --options runtime --timestamp --sign "$cert" "$app"
   codesign --verify --deep --strict --verbose=2 "$app"
