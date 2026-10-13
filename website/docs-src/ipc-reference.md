@@ -80,6 +80,13 @@ defaults to `Terminal`. Axes are `horizontal` or `vertical`; the old block is
 first and the new block second, initially at ratio 0.5. The new block becomes
 selected, its window becomes active, and splitting clears that window's zoom.
 
+Ask clients to show a file in the preview beside a block. `path` must be
+absolute; the reply is `ok` and subscribers receive `terminal.preview_requested`:
+
+```json
+{"id":12,"type":"layout.preview","session":"default","block":"t1","path":"/tmp/notes.md"}
+```
+
 Other changes use `{id,type:"layout.command",command:<one of the following>}`
 and reply with `ok`:
 
@@ -248,6 +255,7 @@ enums; clients should ignore unfamiliar events before typed decoding.
 | `desktop_notification` | `title`, `body` | OSC 9 or OSC 777 `notify` |
 | `progress_report` | `state`, `progress` | OSC 9;4 (state 0–4, progress 0–100 or null) |
 | `clipboard_written` | `text` | Valid UTF-8 base64 OSC 52 write; queries ignored |
+| `preview_requested` | `path` | `layout.preview` request |
 | `program_status_changed` | `id`, `record`, `reason` | Valid OSC 7501 report |
 | `program_status_removed` | `ids`, `reason` | Clear, capacity eviction, prompt, reset, child exit |
 

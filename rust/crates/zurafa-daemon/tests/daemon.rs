@@ -170,11 +170,17 @@ fn real_pty_reports_foreground_process_and_snapshot() {
     c.send(json!({"id":3,"type":"spawn","cols":80,"rows":24,
         "command":["/bin/sleep","2"]}));
     let messages = c.collect(|m| m.iter().any(|v| event_name(v, "process_changed")));
-    let event = messages.iter().find(|v| event_name(v, "process_changed")).unwrap();
+    let event = messages
+        .iter()
+        .find(|v| event_name(v, "process_changed"))
+        .unwrap();
     assert_eq!(event["event"]["payload"]["foreground"]["name"], "sleep");
     let snapshot = c.request(json!({"id":4,"type":"events.snapshot"}));
     let block = event["event"]["block_id"].as_str().unwrap();
-    assert_eq!(snapshot["snapshot"]["sessions"]["default"]["blocks"][block]["foreground"]["name"], "sleep");
+    assert_eq!(
+        snapshot["snapshot"]["sessions"]["default"]["blocks"][block]["foreground"]["name"],
+        "sleep"
+    );
 }
 
 #[test]
@@ -321,6 +327,14 @@ fn v2_layout_commands_and_validation() {
             "ok"
         );
     }
+    assert_eq!(c.request(json!({"id":15,"type":"layout.preview","session":"default","block":a,"path":"/tmp/a.md"}))["type"],"ok");
+    assert_eq!(c.request(json!({"id":16,"type":"layout.preview","session":"default","block":"nope","path":"/tmp/a.md"}))["type"],"error");
+    assert_eq!(
+        c.request(
+            json!({"id":17,"type":"layout.preview","session":"default","block":a,"path":"a.md"})
+        )["type"],
+        "error"
+    );
     let before = c.request(json!({"id":20,"type":"events.snapshot"}));
     assert_eq!(c.request(json!({"id":21,"type":"layout.command","command":{"op":"resize","session":"default","window":window,"path":[0],"ratio":0.2}}))["type"],"error");
     let after = c.request(json!({"id":22,"type":"events.snapshot"}));

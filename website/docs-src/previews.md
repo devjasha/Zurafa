@@ -12,6 +12,8 @@ Hold `⌘` and click a file path in terminal output. Relative paths resolve agai
 
 When the file is inside a git repository, the preview header shows its status (Modified, Untracked, Added, …) and how many lines were added and removed compared with the last commit.
 
+Other programs can open the preview too: `zurafa preview PATH` shows the file beside the current pane, or beside the focused pane of the active tab when run outside Zurafa. Pass `-s` and `-b` to choose another session or pane.
+
 Other file types show a short "no preview available" note. Directories, and paths that do not exist, open with the system default handler instead. Close the preview with its close button.
 
 ## Paste an image

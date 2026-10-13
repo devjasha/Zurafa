@@ -25,6 +25,7 @@ zurafa session inspect            # inspect the current or default session
 zurafa pane inspect               # inspect the current pane inside a Zurafa terminal
 zurafa tab new --label Build      # create a new tab in the current session
 zurafa split --axis vertical      # split the current pane
+zurafa preview README.md          # open a file in the preview beside the current pane
 ```
 
 Run `zurafa help` for the full command list.

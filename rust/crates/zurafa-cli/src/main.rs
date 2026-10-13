@@ -127,6 +127,7 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
         }
         "tab" if args.get(1).is_some_and(|s| s == "new") => cmd_tab(&mut client, &args[2..]),
         "split" => cmd_split(&mut client, &args[1..]),
+        "preview" => cmd_preview(&mut client, &args[1..]),
         other => Err((2, format!("unknown command {other:?}; run `zurafa help`"))),
     }
 }
@@ -248,6 +249,33 @@ fn cmd_split(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> 
     let command = command_after_double_dash(args);
     let reply = client.request(json!({"type":"layout.split","session":strv(&session["session_id"]),"block":pane,"axis":axis,"cols":80,"rows":24,"cwd":cwd,"command":command})).map_err(|e| (1, e))?;
     println!("created pane {}", strv(&reply["terminal"]));
+    Ok(())
+}
+
+fn cmd_preview(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
+    let file = first_positional(args).ok_or((2, "file path required".into()))?;
+    let path = std::fs::canonicalize(&file).map_err(|e| (2, format!("{file}: {e}")))?;
+    let snapshot = client.snapshot().map_err(|e| (1, e))?;
+    let session_target = option_value(args, &["-s", "--session"])
+        .or_else(|| env::var("ZURAFA_SESSION").ok())
+        .unwrap_or_else(|| "default".into());
+    let session = resolve_session(&snapshot, &session_target)?;
+    // Callers outside Zurafa have no ZURAFA_PANE, so fall back to the focused pane of the active tab.
+    let pane_target = option_value(args, &["-b", "--pane", "--block"])
+        .or_else(|| env::var("ZURAFA_PANE").ok())
+        .or_else(|| env::var("ZURAFA_BLOCK").ok())
+        .or_else(|| {
+            session["windows"]
+                .as_array()?
+                .iter()
+                .find(|w| w["window_id"] == session["active_window"])
+                .map(|w| strv(&w["selected_block"]))
+        })
+        .ok_or((3, "session has no open pane".into()))?;
+    let (pane, _) = resolve_pane(&session, &pane_target)?;
+    client
+        .request(json!({"type":"layout.preview","session":strv(&session["session_id"]),"block":pane,"path":path.to_string_lossy()}))
+        .map_err(|e| (1, e))?;
     Ok(())
 }
 
@@ -381,5 +409,5 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
 }

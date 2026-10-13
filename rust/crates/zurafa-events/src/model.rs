@@ -113,6 +113,9 @@ pub enum TerminalEvent {
     ClipboardWritten {
         text: String,
     },
+    PreviewRequested {
+        path: String,
+    },
     ProgramStatusChanged {
         id: String,
         record: crate::status::Record,
@@ -284,6 +287,7 @@ mod tests {
             json!({"name":"desktop_notification","payload":{"title":"t","body":"b"}}),
             json!({"name":"progress_report","payload":{"state":1,"progress":20}}),
             json!({"name":"clipboard_written","payload":{"text":"copy"}}),
+            json!({"name":"preview_requested","payload":{"path":"/tmp/a.md"}}),
             json!({"name":"program_status_changed","payload":{"id":"a","record":{"state":"working"},"reason":"report"}}),
             json!({"name":"program_status_removed","payload":{"ids":["a"],"reason":"clear"}}),
         ];

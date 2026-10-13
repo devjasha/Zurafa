@@ -10,7 +10,7 @@ use tokio::{
     sync::{broadcast::error::RecvError, mpsc},
     task::JoinHandle,
 };
-use zurafa_events::{Axis, Command, Filter, RemoteHost};
+use zurafa_events::{Axis, Command, Filter, RemoteHost, TerminalEvent};
 async fn recv<R: AsyncRead + Unpin>(r: &mut R) -> Option<Value> {
     let v: Value = serde_json::from_slice(&read_frame(r).await.ok()?).ok()?;
     v.is_object().then_some(v)
@@ -105,6 +105,13 @@ enum Request {
         rows: u16,
         cwd: Option<String>,
         command: Option<Vec<String>>,
+    },
+    #[serde(rename = "layout.preview")]
+    Preview {
+        id: u64,
+        session: String,
+        block: String,
+        path: String,
     },
 }
 fn label() -> String {
@@ -335,6 +342,25 @@ async fn request(
                 })
                 .await,
             )
+        }
+        Request::Preview {
+            id,
+            session,
+            block,
+            path,
+        } => {
+            if !path.starts_with('/') {
+                return Some(error(id, "path must be absolute"));
+            }
+            match terms.dispatcher.validate_target(&session, Some(&block)) {
+                Ok(()) => {
+                    terms
+                        .dispatcher
+                        .terminal_event(&block, TerminalEvent::PreviewRequested { path });
+                    json!({"id":id,"type":"ok"})
+                }
+                Err(e) => error(id, e),
+            }
         }
     })
 }

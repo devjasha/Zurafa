@@ -100,6 +100,8 @@
 <pre><code>{&quot;id&quot;:10,&quot;type&quot;:&quot;layout.tab&quot;,&quot;session&quot;:&quot;default&quot;,&quot;label&quot;:&quot;Shell&quot;,&quot;cols&quot;:80,&quot;rows&quot;:24}
 {&quot;id&quot;:11,&quot;type&quot;:&quot;layout.split&quot;,&quot;session&quot;:&quot;default&quot;,&quot;block&quot;:&quot;t1&quot;,&quot;axis&quot;:&quot;horizontal&quot;,&quot;cols&quot;:40,&quot;rows&quot;:24}</code></pre>
 <p>Both accept optional <code>cwd</code> and <code>command</code>, and reply with <code>spawned</code>. Tab label defaults to <code>Terminal</code>. Axes are <code>horizontal</code> or <code>vertical</code>; the old block is first and the new block second, initially at ratio 0.5. The new block becomes selected, its window becomes active, and splitting clears that window&#x27;s zoom.</p>
+<p>Ask clients to show a file in the preview beside a block. <code>path</code> must be absolute; the reply is <code>ok</code> and subscribers receive <code>terminal.preview_requested</code>:</p>
+<pre><code>{&quot;id&quot;:12,&quot;type&quot;:&quot;layout.preview&quot;,&quot;session&quot;:&quot;default&quot;,&quot;block&quot;:&quot;t1&quot;,&quot;path&quot;:&quot;/tmp/notes.md&quot;}</code></pre>
 <p>Other changes use <code>{id,type:&quot;layout.command&quot;,command:&lt;one of the following&gt;}</code> and reply with <code>ok</code>:</p>
 <pre><code>{&quot;op&quot;:&quot;focus&quot;,&quot;session&quot;:&quot;default&quot;,&quot;block&quot;:&quot;t1&quot;}
 {&quot;op&quot;:&quot;zoom&quot;,&quot;session&quot;:&quot;default&quot;,&quot;block&quot;:&quot;t1&quot;,&quot;enabled&quot;:true}
@@ -161,6 +163,7 @@
 <tr><td><code>desktop_notification</code></td><td><code>title</code>, <code>body</code></td><td>OSC 9 or OSC 777 <code>notify</code></td></tr>
 <tr><td><code>progress_report</code></td><td><code>state</code>, <code>progress</code></td><td>OSC 9;4 (state 0–4, progress 0–100 or null)</td></tr>
 <tr><td><code>clipboard_written</code></td><td><code>text</code></td><td>Valid UTF-8 base64 OSC 52 write; queries ignored</td></tr>
+<tr><td><code>preview_requested</code></td><td><code>path</code></td><td><code>layout.preview</code> request</td></tr>
 <tr><td><code>program_status_changed</code></td><td><code>id</code>, <code>record</code>, <code>reason</code></td><td>Valid OSC 7501 report</td></tr>
 <tr><td><code>program_status_removed</code></td><td><code>ids</code>, <code>reason</code></td><td>Clear, capacity eviction, prompt, reset, child exit</td></tr>
 </table></div>

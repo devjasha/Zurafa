@@ -270,6 +270,10 @@ enum EditorKind: String, Identifiable {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
             }
+        case "terminal.preview_requested":
+            if event.sessionID == sessionID, let id = event.blockID, let path = event.payload.object?["path"]?.string {
+                _ = openPreview(path, from: id)
+            }
         default: break // Future event names are intentionally ignored.
         }
     }
