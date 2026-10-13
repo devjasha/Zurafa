@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Files &amp; images · Zurafa Docs</title><meta name="description" content="Zurafa keeps the files your programs mention one click away, and lets you hand images to terminal programs such as coding agents.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f6f4"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1114"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/previews/">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="docs-page" data-page="previews">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.6-macos-arm64.dmg" download>Download for Mac</a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Workspace</div><h1>Files &amp; images</h1><div class="prose"><p>Zurafa keeps the files your programs mention one click away, and lets you hand images to terminal programs such as coding agents.</p>
+<h2 id="preview-a-file">Preview a file</h2>
+<p>Hold <code>⌘</code> and click a file path in terminal output. Relative paths resolve against the pane&#x27;s current directory. Zurafa opens a preview beside your panes:</p>
+<ul>
+<li><strong>Images</strong> show at their full aspect ratio.</li>
+<li><strong>Markdown</strong> files render as formatted text.</li>
+<li><strong>Code and plain text</strong> show in a monospaced view you can select and copy.</li>
+</ul>
+<p>Other file types show a short &quot;no preview available&quot; note. Directories, and paths that do not exist, open with the system default handler instead. Close the preview with its close button.</p>
+<h2 id="paste-an-image">Paste an image</h2>
+<p>Paste (<code>⌘V</code>) while an image is on the clipboard, such as a screenshot or an image file copied in Finder. Zurafa saves it as a PNG in the system temporary folder and types the file path into the focused pane, followed by a space. Programs that accept image paths, such as Claude Code, can then read it.</p>
+<p>Pasting text works as usual.</p>
+<h2 id="program-icons">Program icons</h2>
+<p>Tabs show an icon for each program running in their panes. Zurafa recognizes Claude Code, Codex, and Pi, including Pi launched through Node or the <code>pi-coding-agent</code> package; everything else shows a terminal icon.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/shortcuts/"><small>← Previous</small><strong>Commands &amp; shortcuts</strong></a><a href="/docs/ssh/"><small>Next →</small><strong>Remote SSH</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#preview-a-file">Preview a file</a><a href="#paste-an-image">Paste an image</a><a href="#program-icons">Program icons</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

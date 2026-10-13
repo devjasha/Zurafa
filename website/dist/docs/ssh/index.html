@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Remote SSH · Zurafa Docs</title><meta name="description" content="Zurafa&#x27;s first remote transport is the **system SSH client**. Remote sessions run `/usr/bin/ssh` inside a PTY. This uses your usual `~/.ssh/config`, keys, known hosts, and authentication prompts.">
-  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/ssh/">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f6f4"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1114"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/ssh/">
   <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
 </head>
 <body class="docs-page" data-page="ssh">
@@ -11,7 +11,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases" target="_blank" rel="noopener">Releases ↗</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.3-macos-arm64.dmg" download>Download for Mac</a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.6-macos-arm64.dmg" download>Download for Mac</a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -25,10 +25,11 @@
 <div class="nav-group"><p>Workspace</p>
 <a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
 </div>
 <div class="nav-group"><p>Personalization</p>
-<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
 <a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
 <a href="/docs/status/" data-page="status">Program status</a>
 </div>
@@ -47,10 +48,11 @@
 <div class="nav-group"><p>Workspace</p>
 <a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
 </div>
 <div class="nav-group"><p>Personalization</p>
-<a href="/docs/appearance/" data-page="appearance">Appearance &amp; Ghostty</a>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
 <a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
 <a href="/docs/status/" data-page="status">Program status</a>
 </div>
@@ -71,7 +73,7 @@
 <p>Host definitions are stored in <code>~/Library/Application Support/Zurafa/hosts.json</code> with owner-only permissions. A remote session keeps a copy of its host definition, so removing a saved host does not alter a session already open. Saved host definitions survive daemon restarts; the live SSH processes and session layouts do not.</p>
 <h2 id="security-and-transport-limits">Security and transport limits</h2>
 <p>Zurafa validates addresses before saving them and passes SSH arguments separately. Host authenticity and authentication are handled by system SSH. There is no mosh transport, separate Tailscale API, remote file browser, or session persistence across daemon restarts in this beta.</p>
-<p>If a connection fails, first run the same SSH target from macOS Terminal. Check DNS, network reachability, <code>~/.ssh/config</code>, your keys, and host verification there. <a href="/docs/troubleshooting/">Troubleshooting</a> covers more checks.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/shortcuts/"><small>← Previous</small><strong>Commands &amp; shortcuts</strong></a><a href="/docs/appearance/"><small>Next →</small><strong>Appearance &amp; Ghostty</strong></a></nav></main>
+<p>If a connection fails, first run the same SSH target from macOS Terminal. Check DNS, network reachability, <code>~/.ssh/config</code>, your keys, and host verification there. <a href="/docs/troubleshooting/">Troubleshooting</a> covers more checks.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/previews/"><small>← Previous</small><strong>Files &amp; images</strong></a><a href="/docs/appearance/"><small>Next →</small><strong>Appearance, config &amp; Ghostty</strong></a></nav></main>
     <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#add-a-host">Add a host</a><a href="#work-in-a-remote-session">Work in a remote session</a><a href="#saved-hosts-and-session-lifetime">Saved hosts and session lifetime</a><a href="#security-and-transport-limits">Security and transport limits</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>

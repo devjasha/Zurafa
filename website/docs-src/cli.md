@@ -15,7 +15,7 @@ cargo run -p zurafa-cli -- ls
 cargo run -p zurafa-cli -- session inspect default
 ```
 
-Bundled app builds also include the executable at `Zurafa.app/Contents/Resources/zurafa`.
+Bundled app builds also include the executable at `Zurafa.app/Contents/Resources/zurafa`. On first launch Zurafa offers to install it as `/usr/local/bin/zurafa` so you can run `zurafa` from any terminal; macOS may ask for your password.
 
 ## Commands
 

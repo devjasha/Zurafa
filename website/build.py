@@ -12,8 +12,8 @@ DIST = ROOT / "dist"
 ORIGIN = "https://zurafa-website.vercel.app"
 GROUPS = [
     ("Start here", [("overview", "Overview"), ("install", "Install on macOS"), ("quickstart", "Quick start")]),
-    ("Workspace", [("sessions", "Sessions, tabs & panes"), ("shortcuts", "Commands & shortcuts"), ("ssh", "Remote SSH")]),
-    ("Personalization", [("appearance", "Appearance & Ghostty"), ("backgrounds", "Dithered backgrounds"), ("status", "Program status")]),
+    ("Workspace", [("sessions", "Sessions, tabs & panes"), ("shortcuts", "Commands & shortcuts"), ("previews", "Files & images"), ("ssh", "Remote SSH")]),
+    ("Personalization", [("appearance", "Appearance, config & Ghostty"), ("backgrounds", "Dithered backgrounds"), ("status", "Program status")]),
     ("Reference", [("architecture", "Architecture & events"), ("ipc-reference", "IPC protocol"), ("cli", "CLI"), ("build", "Build from source"), ("troubleshooting", "Troubleshooting & limits")]),
 ]
 PAGES = [(slug, title, group) for group, items in GROUPS for slug, title in items]
@@ -101,7 +101,7 @@ def markdown(source):
 def main():
     DIST.mkdir(exist_ok=True)
     (DIST / 'assets').mkdir(exist_ok=True)
-    for name in ('style.css', 'site.js', 'zurafa-icon.png'):
+    for name in ('style.css', 'site.js', 'zurafa-icon.png', 'zurafa-workspace.png'):
         shutil.copy2(ROOT / 'assets' / name, DIST / 'assets' / name)
     (DIST / 'index.html').write_text((ROOT / 'home.html').read_text(), encoding='utf-8')
     template = (ROOT / 'docs-template.html').read_text()

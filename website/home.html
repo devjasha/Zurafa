@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Zurafa — Terminal work, in context</title>
-  <meta name="description" content="A calm macOS terminal workspace for local sessions, split panes, remote SSH, and structured program status.">
-  <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa-website.vercel.app/">
+  <meta name="description" content="A calm macOS terminal workspace for local sessions, split panes, file previews, remote SSH, and coding agents.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f6f4"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1114"><link rel="canonical" href="https://zurafa-website.vercel.app/">
   <meta property="og:title" content="Zurafa — Terminal work, in context"><meta property="og:description" content="A calm macOS terminal workspace for the shells, sessions, and machines you move between."><meta property="og:type" content="website"><meta property="og:image" content="https://zurafa-website.vercel.app/assets/zurafa-icon.png">
   <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
 </head>
@@ -19,32 +19,26 @@
     <section class="hero shell"><div class="hero-copy">
       <p class="eyebrow"><span class="live-dot"></span> FIRST MACOS BETA · APPLE SILICON</p>
       <h1>Command your terminals without losing the thread.</h1>
-      <p class="lead">Zurafa is a composed macOS terminal workspace for local shells, split panes, remote SSH, and program status — designed to feel quiet even when the work gets loud.</p>
+      <p class="lead">Zurafa is a composed macOS terminal workspace for local shells, split panes, file previews, remote SSH, and coding agents — designed to feel quiet even when the work gets loud.</p>
       <div class="hero-actions"><a class="button primary" href="/releases/Zurafa-0.1.6-macos-arm64.dmg" download>Download for macOS</a><a class="button secondary" href="/docs/install/">Install guide <span aria-hidden="true">→</span></a></div>
       <div class="hero-meta" aria-label="Release details"><span>0.1.6</span><span>macOS 14+</span><span>Apple Silicon</span><span>Notarized</span></div>
-    </div><div class="hero-stage" aria-label="Clean illustration of a Zurafa terminal workspace">
-      <div class="stage-glow"></div>
-      <div class="clean-window">
-        <div class="clean-titlebar"><span class="traffic"><i></i><i></i><i></i></span><span>Zurafa</span><b>Workspace</b></div>
-        <div class="clean-body">
-          <aside class="clean-sidebar" aria-hidden="true"><span class="active">project</span><span>build</span><span>remote</span></aside>
-          <div class="clean-terminal"><div class="terminal-lines"><div><span class="prompt">❯</span> cargo test --workspace</div><div class="muted">running 37 tests</div><div class="success">test result: ok. 37 passed</div><div class="spacer"></div><div><span class="prompt">❯</span> ssh prod-observer</div><div class="muted">connected · status working</div></div></div>
-        </div>
-      </div>
-      <div class="stage-note"><span class="dot green"></span> 4 panes restored <b>·</b> local + SSH ready</div>
-    </div></section>
+    </div>
+      <img class="hero-shot" src="/assets/zurafa-workspace.png" width="2000" height="1222" alt="The Zurafa window: a tab bar with Claude Code and shell tabs above three split terminal panes running fish.">
+    </section>
 
     <section class="section shell" id="features"><div class="section-intro"><p class="kicker">THE WORKSPACE</p><h2>Stay oriented, even when<br>the work branches out.</h2><p>Zurafa brings the moving parts of terminal work into one coherent place.</p></div>
       <div class="feature-grid">
-        <article class="feature feature-wide"><span class="feature-index">01 / STRUCTURE</span><h3>Sessions with room to think.</h3><p>Organize work into sessions. Open tabs, split panes, focus what matters, and zoom a pane when you need every pixel.</p><div class="feature-diagram" aria-hidden="true"><span>Workspace</span><span>Tab 01 <b>╱</b> Tab 02</span><span>Pane A <b>│</b> Pane B</span></div></article>
-        <article class="feature"><span class="feature-index">02 / REMOTE</span><div class="feature-symbol">⌁</div><h3>Go remote with SSH.</h3><p>Save hosts and open remote sessions through the system SSH client. Your existing keys, aliases, and host verification stay in play.</p></article>
-        <article class="feature"><span class="feature-index">03 / SIGNAL</span><div class="status-demo"><span class="dot amber"></span> working <span class="dot green"></span> done <span class="dot pink"></span> blocked</div><h3>See structured status.</h3><p>OSC 7501 reports let compatible programs share progress and state without Zurafa guessing from terminal text.</p></article>
-        <article class="feature"><span class="feature-index">04 / YOUR SETUP</span><div class="feature-symbol">◐</div><h3>Bring your terminal taste.</h3><p>Import Ghostty colors and fonts, follow your system appearance, and add an optional dithered background image.</p></article>
-        <article class="feature"><span class="feature-index">05 / UNDER THE HOOD</span><div class="feature-symbol">↺</div><h3>Built around real state.</h3><p>A Rust daemon owns sessions, layout, PTYs, events, and snapshots. The macOS app follows that state and can recover after reconnecting.</p></article>
+        <article class="feature feature-wide"><span class="feature-index">01 / PREVIEW</span><h3>Open files without leaving the terminal.</h3><p>⌘-click a path in terminal output to preview images, Markdown, and code beside your panes.</p><div class="feature-diagram" aria-hidden="true"><span><i>❯</i> ls docs/</span><span>README.md</span><b>→</b><span>preview</span></div></article>
+        <article class="feature"><span class="feature-index">02 / AGENTS</span><div class="status-demo">Claude Code · Codex · Pi</div><h3>Made for coding agents.</h3><p>Tabs show the icon of every program running in their panes. Paste a screenshot and Zurafa hands the agent a file path.</p></article>
+        <article class="feature"><span class="feature-index">03 / CONFIG</span><div class="feature-symbol">⌘,</div><h3>One plain config file.</h3><p>Theme, accent color, opacity, and pane spacing live in <code>~/.config/config.zurafa</code>. Changes apply when you save.</p></article>
+        <article class="feature"><span class="feature-index">04 / YOUR SETUP</span><div class="feature-symbol">◐</div><h3>Your Ghostty theme, everywhere.</h3><p>Use any Ghostty theme or import your Ghostty colors and fonts. The whole app follows them, down to the command palette.</p></article>
+        <article class="feature"><span class="feature-index">05 / REMOTE</span><div class="feature-symbol">⌁</div><h3>Go remote with SSH.</h3><p>Save hosts and open remote sessions through the system SSH client. Your existing keys, aliases, and host verification stay in play.</p></article>
+        <article class="feature"><span class="feature-index">06 / SIGNAL</span><div class="status-demo"><span class="dot amber"></span> working <span class="dot green"></span> done <span class="dot pink"></span> blocked</div><h3>See structured status.</h3><p>OSC 7501 reports let compatible programs share progress and state without Zurafa guessing from terminal text.</p></article>
+        <article class="feature feature-wide"><span class="feature-index">07 / SCRIPTABLE</span><h3>Drive it from the command line.</h3><p>Zurafa offers to install the <code>zurafa</code> CLI on first launch, so scripts can list and control sessions, tabs, and panes.</p><div class="feature-diagram" aria-hidden="true"><span><i>❯</i> zurafa ls</span><span><i>❯</i> zurafa session inspect default</span></div></article>
       </div>
     </section>
     <section class="section rhythm"><div class="shell rhythm-grid"><div><p class="kicker">A PRACTICAL FLOW</p><h2>From local prompt<br>to remote work.</h2></div><div class="steps"><div><b>01</b><span><strong>Open a session.</strong><small>Give each line of work its own place.</small></span></div><div><b>02</b><span><strong>Split for context.</strong><small>Keep a build, editor, and shell in view.</small></span></div><div><b>03</b><span><strong>Switch machines.</strong><small>Use a saved SSH host or a local workspace.</small></span></div></div></div></section>
-    <section class="section shell open-design"><div class="open-copy"><p class="kicker">OPEN BY DESIGN</p><h2>Understand the machinery.</h2><p>The event schema and IPC protocol are documented. Explore how snapshots, revisions, terminal reports, and reconnection fit together.</p><a class="text-link" href="/docs/architecture/">Read the architecture <span aria-hidden="true">→</span></a></div><div class="code-card" aria-label="Example structured event"><div class="code-top"><span class="dot green"></span> event stream <span>protocol 2</span></div><pre><code>{
+    <section class="section shell open-design"><div class="open-copy"><p class="kicker">OPEN BY DESIGN</p><h2>Understand the machinery.</h2><p>A Rust daemon owns sessions, layout, PTYs, events, and snapshots; the macOS app follows that state and recovers after reconnecting. The event schema and IPC protocol are documented.</p><a class="text-link" href="/docs/architecture/">Read the architecture <span aria-hidden="true">→</span></a></div><div class="code-card" aria-label="Example structured event"><div class="code-top"><span class="dot green"></span> event stream <span>protocol 2</span></div><pre><code>{
   "category": "terminal",
   "name": "program_status_changed",
   "payload": {
