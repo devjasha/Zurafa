@@ -32,6 +32,9 @@ struct FilePreview: Identifiable {
         if ["md", "markdown"].contains(ext), let text = try? String(contentsOf: url, encoding: .utf8) {
             return FilePreview(url: url, kind: .markdown(text), git: git)
         }
+        if ext == "org", let text = try? String(contentsOf: url, encoding: .utf8) {
+            return FilePreview(url: url, kind: .markdown(OrgMarkdown.convert(text)), git: git)
+        }
         if isReadableText(url), let text = try? String(contentsOf: url, encoding: .utf8) {
             return FilePreview(url: url, kind: .text(text), git: git)
         }

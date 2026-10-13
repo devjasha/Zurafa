@@ -8,6 +8,7 @@ Hold `⌘` and click a file path in terminal output. Relative paths resolve agai
 
 - **Images** show at their full aspect ratio.
 - **Markdown** renders with headings, lists, tables, and syntax-highlighted code blocks.
+- **Org** files (`.org`) render the same way: headings, lists, tables, links, emphasis, and `#+BEGIN_SRC` blocks. Property drawers, comments, and `#+` keywords other than `#+TITLE` are hidden.
 - **Code and plain text** are syntax highlighted in a monospaced view you can select and copy; long lines scroll horizontally.
 
 When the file is inside a git repository, the preview header shows its status (Modified, Untracked, Added, …) and how many lines were added and removed compared with the last commit.

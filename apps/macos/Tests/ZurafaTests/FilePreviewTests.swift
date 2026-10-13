@@ -28,6 +28,52 @@ final class FilePreviewTests: XCTestCase {
         }
     }
 
+    func testConvertsOrgToMarkdown() {
+        let org = """
+        #+TITLE: Notes
+        #+AUTHOR: me
+        * Heading with *bold*, /italic/ and =code=
+        ** TODO Sub
+        :PROPERTIES:
+        :ID: 1
+        :END:
+        + item [[https://zurafa.app][site]] and [[file:other.org]]
+        # a comment
+        #+BEGIN_SRC rust
+        let a = *b;
+        #+END_SRC
+        | a | b |
+        |---+---|
+        | 1 | 2 |
+        #+BEGIN_QUOTE
+        said
+        #+END_QUOTE
+        a/b/c stays
+        """
+        XCTAssertEqual(OrgMarkdown.convert(org), """
+        # Notes
+        # Heading with **bold**, *italic* and `code`
+        ## TODO Sub
+        - item [site](<https://zurafa.app>) and [other.org](<other.org>)
+        ```rust
+        let a = *b;
+        ```
+        | a | b |
+        |---|---|
+        | 1 | 2 |
+        > said
+        a/b/c stays
+        """)
+    }
+
+    @MainActor func testLoadsOrgAsMarkdownPreview() throws {
+        let dir = try temporaryDirectory()
+        try "* Hello".write(to: dir.appendingPathComponent("notes.org"), atomically: true, encoding: .utf8)
+        guard case .markdown("# Hello")? = FilePreview.load(link: "notes.org", currentDirectory: dir.path)?.kind else {
+            return XCTFail("expected org rendered as markdown")
+        }
+    }
+
     func testGitStatusReportsModifiedLineCounts() throws {
         let dir = try temporaryDirectory()
         let file = dir.appendingPathComponent("main.swift")
