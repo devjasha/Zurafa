@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Appearance &amp; Ghostty · Zurafa Docs</title><meta name="description" content="Zurafa offers Follow System, Light, and Dark modes. Open `⌘K` and choose an appearance directly; the change takes effect immediately. `⇧⌘A` cycles through the three modes. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.">
+  <title>Appearance &amp; Ghostty · Zurafa Docs</title><meta name="description" content="Zurafa offers Follow System, Light, and Dark modes. Open `⌘K` and choose an appearance directly; the change takes effect immediately. `⇧⌘A` switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.">
   <meta name="theme-color" content="#e9ece9"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/appearance/">
   <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
 </head>
@@ -62,7 +62,18 @@
 <a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
 </div>
     </div></aside>
-    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Personalization</div><h1>Appearance &amp; Ghostty</h1><div class="prose"><p>Zurafa offers Follow System, Light, and Dark modes. Open <code>⌘K</code> and choose an appearance directly; the change takes effect immediately. <code>⇧⌘A</code> cycles through the three modes. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.</p>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Personalization</div><h1>Appearance &amp; Ghostty</h1><div class="prose"><p>Zurafa offers Follow System, Light, and Dark modes. Open <code>⌘K</code> and choose an appearance directly; the change takes effect immediately. <code>⇧⌘A</code> switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.</p>
+<h2 id="configuration-file">Configuration file</h2>
+<p>Press <code>⌘,</code> to open <code>~/.config/config.zurafa</code> (or <code>$XDG_CONFIG_HOME/config.zurafa</code>) in your default text editor. The first time, Zurafa writes a commented template that lists every setting; remove the <code>#</code> in front of a line to use it. Changes apply a moment after you save, and deleting a line returns that setting to its default.</p>
+<pre><code>theme = light:Catppuccin Latte,dark:Catppuccin Mocha
+accent-color = #3a69cc
+window-opacity = 0.9
+pane-gap = 8
+pane-padding = 12
+pane-corner-radius = 14
+unfocused-pane-opacity = 0.7
+sidebar-width = 194</code></pre>
+<p><code>theme</code> accepts any Ghostty theme name from <code>~/.config/ghostty/themes</code> or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (<code>foreground</code>, <code>background</code>, <code>cursor-color</code>, <code>palette</code>, <code>font-family</code>, <code>font-size</code>) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored.</p>
 <h2 id="import-ghostty-settings">Import Ghostty settings</h2>
 <p>Choose <strong>Import Ghostty Settings</strong> from <code>⌘K</code>. Zurafa reads Ghostty&#x27;s standard XDG and macOS configuration paths, including supported includes and named light and dark themes. The import can apply the terminal font family, font size, foreground and background colors, cursor and selection colors, and the ANSI palette.</p>
 <p>The imported background color tints the entire workspace surface; terminal drawing areas stay transparent so the pane and window feel continuous. Color changes remain local to Zurafa after import. If you later edit Ghostty&#x27;s files, run the import again to refresh Zurafa&#x27;s copy.</p>
@@ -71,7 +82,7 @@
 <p>Zurafa bundles Symbols Nerd Font Mono as a fallback for missing Nerd Font glyphs in terminal content. Your selected terminal font still renders ordinary text and glyphs it already contains. Zurafa also uses foreground-process information reported by the Rust PTY manager to choose pane and tab program icons when that information is available.</p>
 <h2 id="background-images">Background images</h2>
 <p>You can add a dithered image behind the workspace separately from Ghostty color import. See <a href="/docs/backgrounds/">Dithered backgrounds</a> for selection, storage, and toggling.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/ssh/"><small>← Previous</small><strong>Remote SSH</strong></a><a href="/docs/backgrounds/"><small>Next →</small><strong>Dithered backgrounds</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#import-ghostty-settings">Import Ghostty settings</a><a href="#icons-and-fonts">Icons and fonts</a><a href="#background-images">Background images</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#configuration-file">Configuration file</a><a href="#import-ghostty-settings">Import Ghostty settings</a><a href="#icons-and-fonts">Icons and fonts</a><a href="#background-images">Background images</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
