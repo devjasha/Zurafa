@@ -7,8 +7,10 @@ Zurafa keeps the files your programs mention one click away, and lets you hand i
 Hold `⌘` and click a file path in terminal output. Relative paths resolve against the pane's current directory. Zurafa opens a preview beside your panes:
 
 - **Images** show at their full aspect ratio.
-- **Markdown** files render as formatted text.
-- **Code and plain text** show in a monospaced view you can select and copy.
+- **Markdown** renders with headings, lists, tables, and syntax-highlighted code blocks.
+- **Code and plain text** are syntax highlighted in a monospaced view you can select and copy; long lines scroll horizontally.
+
+When the file is inside a git repository, the preview header shows its status (Modified, Untracked, Added, …) and how many lines were added and removed compared with the last commit.
 
 Other file types show a short "no preview available" note. Directories, and paths that do not exist, open with the system default handler instead. Close the preview with its close button.
 
