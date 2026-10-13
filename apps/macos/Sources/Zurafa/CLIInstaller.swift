@@ -6,6 +6,7 @@ enum CLIInstaller {
     private static let promptDeclinedVersionKey = "zurafaCLIPromptDeclinedVersion"
 
     @MainActor static func offerInstallIfNeeded() {
+        guard offersInstall else { return }
         guard let sourcePath = bundledCLIPath(), needsInstall(sourcePath: sourcePath) else { return }
         guard UserDefaults.standard.string(forKey: promptDeclinedVersionKey) != appVersion else { return }
 
@@ -29,6 +30,10 @@ enum CLIInstaller {
 
     static var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+    }
+
+    static var offersInstall: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "ZURAFAOffersCLIInstall") as? Bool ?? true
     }
 
     static func bundledCLIPath() -> String? {

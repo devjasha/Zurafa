@@ -58,7 +58,11 @@ struct FrameDecoder {
 @MainActor final class DaemonClient: ObservableObject {
     static let shared = DaemonClient()
     static let socket = ProcessInfo.processInfo.environment["ZURAFA_SOCKET"]
-        ?? NSHomeDirectory() + "/Library/Application Support/Zurafa/daemon.sock"
+        ?? NSHomeDirectory() + "/Library/Application Support/\(applicationSupportName)/daemon.sock"
+
+    private static var applicationSupportName: String {
+        Bundle.main.object(forInfoDictionaryKey: "ZURAFAApplicationSupportName") as? String ?? "Zurafa"
+    }
 
     /// True when the daemon is unreachable; the top bar shows a Reconnect banner.
     @Published private(set) var down = false

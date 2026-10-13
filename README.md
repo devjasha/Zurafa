@@ -42,9 +42,9 @@ Release builds are signed with Developer ID and can be notarized with Apple befo
 ## Build and run
 
 ```sh
-scripts/bundle.sh          # cargo + swift release builds, then build/Zurafa.app (ad-hoc signed)
+scripts/bundle.sh          # cargo + swift release builds, then build/zurafa-development.app (ad-hoc signed)
 scripts/release-macos.sh   # signed release zip + dmg in build/
-open build/Zurafa.app      # starts zurafa-daemon if it is not running; it keeps running after you quit
+open build/zurafa-development.app  # starts its own dev daemon, separate from Zurafa.app
 ```
 
 To notarize during release, provide either a notarytool keychain profile:
@@ -63,7 +63,7 @@ Development without bundling:
 
 ```sh
 (cd rust && cargo build)
-cd apps/macos && ZURAFA_DAEMON=../../rust/target/debug/zurafa-daemon swift run
+cd apps/macos && ZURAFA_DAEMON=../../rust/target/debug/zurafa-daemon ZURAFA_SOCKET="$HOME/Library/Application Support/ZurafaDevelopment/daemon.sock" swift run
 ```
 
 Tests: `cargo test` in `rust/`, `swift test` in `apps/macos/`.

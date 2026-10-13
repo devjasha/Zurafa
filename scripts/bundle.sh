@@ -1,8 +1,29 @@
 #!/usr/bin/env bash
-# Builds build/Zurafa.app: the SwiftUI app plus zurafa-daemon next to it, ad-hoc signed.
+# Builds an ad-hoc signed local app bundle: the SwiftUI app plus zurafa-daemon next to it.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-app="$root/build/Zurafa.app"
+variant="${ZURAFA_BUILD_VARIANT:-development}"
+case "$variant" in
+  development|dev|local)
+    app_name="zurafa-development"
+    executable_name="zurafa-development"
+    bundle_identifier="app.zurafa.zurafa-development"
+    app_support_name="ZurafaDevelopment"
+    offers_cli_install="false"
+    ;;
+  release|production|prod)
+    app_name="Zurafa"
+    executable_name="Zurafa"
+    bundle_identifier="app.zurafa.Zurafa"
+    app_support_name="Zurafa"
+    offers_cli_install="true"
+    ;;
+  *)
+    echo "unknown ZURAFA_BUILD_VARIANT: $variant (expected development or release)" >&2
+    exit 1
+    ;;
+esac
+app="$root/build/$app_name.app"
 
 (cd "$root/rust" && cargo build --release)
 (cd "$root/apps/macos" && swift build -c release)
@@ -10,10 +31,10 @@ bin="$(cd "$root/apps/macos" && swift build -c release --show-bin-path)"
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
-cp "$bin/Zurafa" "$app/Contents/MacOS/Zurafa"
+cp "$bin/Zurafa" "$app/Contents/MacOS/$executable_name"
 cp -R "$bin/Sparkle.framework" "$app/Contents/Frameworks/Sparkle.framework"
-if ! otool -l "$app/Contents/MacOS/Zurafa" | grep -q '@executable_path/../Frameworks'; then
-  install_name_tool -add_rpath '@executable_path/../Frameworks' "$app/Contents/MacOS/Zurafa"
+if ! otool -l "$app/Contents/MacOS/$executable_name" | grep -q '@executable_path/../Frameworks'; then
+  install_name_tool -add_rpath '@executable_path/../Frameworks' "$app/Contents/MacOS/$executable_name"
 fi
 cp -R "$root/apps/macos/Sources/Zurafa/Resources/light-icons" "$app/Contents/Resources/light-icons"
 cp -R "$root/apps/macos/Sources/Zurafa/Resources/dark-icons" "$app/Contents/Resources/dark-icons"
@@ -44,9 +65,10 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleIdentifier</key><string>app.zurafa.Zurafa</string>
-  <key>CFBundleName</key><string>Zurafa</string>
-  <key>CFBundleExecutable</key><string>Zurafa</string>
+  <key>CFBundleIdentifier</key><string>$bundle_identifier</string>
+  <key>CFBundleName</key><string>$app_name</string>
+  <key>CFBundleDisplayName</key><string>$app_name</string>
+  <key>CFBundleExecutable</key><string>$executable_name</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
@@ -55,6 +77,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>SUFeedURL</key><string>https://zurafa-website.vercel.app/appcast.xml</string>
   <key>SUPublicEDKey</key><string>Ck60GZlfckjuZg1qeMfyvfWzsEVAHlkGHdDyX0hG630=</string>
+  <key>ZURAFAApplicationSupportName</key><string>$app_support_name</string>
+  <key>ZURAFAOffersCLIInstall</key><$offers_cli_install/>
 </dict>
 </plist>
 PLIST

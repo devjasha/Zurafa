@@ -141,7 +141,7 @@ create_dmg() {
   shasum -a 256 "$output" > "$output.sha256"
 }
 
-"$root/scripts/bundle.sh"
+ZURAFA_BUILD_VARIANT=release "$root/scripts/bundle.sh"
 
 if [[ -n "$version" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$app/Contents/Info.plist"
