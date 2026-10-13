@@ -33,7 +33,7 @@ The daemon samples the PTY foreground process group every 250 ms when reliable m
 - Apple Silicon macOS 14+ only; Intel packaging is not provided yet.
 - Developer ID signing and notarization are configured for release builds.
 - Session layouts and PTYs are in daemon memory, not persisted across daemon restarts.
-- No standalone Zurafa CLI, Lua runtime, mosh transport, native Tailscale API, or remote file browser yet.
+- The standalone `zurafa` CLI is early and intentionally small; there is no Lua runtime, mosh transport, native Tailscale API, or remote file browser yet.
 - No PTY scrollback replay after a client disconnect.
 - Ghostty import covers supported terminal font and color settings, not all Ghostty settings.
 

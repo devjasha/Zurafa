@@ -11,7 +11,7 @@ Status parsing follows [OSC 7501 revision 0.3](https://www.superlogical.com/rex/
 as checked on 2026-10-09. `zurafa-events` contains the serde payload enums,
 layout model, snapshot dispatcher, and status record store. Zurafa's version 2
 transport envelope below is its own API; it is not Rex's nested CLI envelope.
-There is no CLI or Lua implementation.
+Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon administration. There is no Lua implementation.
 
 ## Transport and negotiation
 

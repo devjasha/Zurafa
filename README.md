@@ -30,6 +30,7 @@ A macOS terminal workspace: a SwiftUI app (`apps/macos`) whose terminals and wor
 - Native macOS app with a SwiftUI interface and Rust-powered daemon.
 - Signed release builds with Sparkle auto-update support.
 - Typed event, subscription, and snapshot protocol for terminal workspaces.
+- Early `zurafa` CLI for daemon automation and inspection.
 - Import support for Ghostty terminal appearance settings.
 
 ## Download for macOS
@@ -92,6 +93,12 @@ Ghostty's files, or choose Use Zurafa Terminal Defaults to undo the import.
 Terminal panes bundle Symbols Nerd Font Mono as an icon fallback. The chosen
 terminal font still renders ordinary text and any icons it already contains;
 only missing Nerd Font symbols use the bundled face.
+
+The Rust workspace also builds the early CLI as `zurafa`:
+
+```sh
+(cd rust && cargo run -p zurafa-cli -- --help)
+```
 
 The static website and documentation source live in `website/`. Run
 `python3 website/build.py` and `python3 website/check.py` to rebuild and verify

@@ -22,6 +22,7 @@ cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFontMono-Regular.ttf" "
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app/Contents/Resources/SymbolsNerdFont-LICENSE.txt"
 cp "$root/apps/macos/.build/checkouts/SwiftTerm/LICENSE" "$app/Contents/Resources/SwiftTerm-LICENSE.txt"
 cp "$root/rust/target/release/zurafa-daemon" "$app/Contents/MacOS/zurafa-daemon"
+cp "$root/rust/target/release/zurafa" "$app/Contents/MacOS/zurafa"
 
 # The app loads AppIcon via Bundle.main, so the SwiftPM resource bundle is not needed (codesign rejects it at the .app root).
 icon_work="$(mktemp -d)"

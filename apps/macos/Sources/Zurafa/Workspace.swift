@@ -25,8 +25,11 @@ enum Program {
         if n.contains("codex") { return .codex }
         if n.contains("gemini") { return .gemini }
         let base = name.lowercased()
-        let argv0 = argv?.first.map { URL(fileURLWithPath: $0).lastPathComponent.lowercased() }
-        if base == "pi" || argv0 == "pi" { return .pi }
+        let argvParts = (argv ?? []).flatMap { arg -> [String] in
+            let path = URL(fileURLWithPath: arg)
+            return [path.lastPathComponent.lowercased(), arg.lowercased()]
+        }
+        if base == "pi" || argvParts.contains("pi") || argvParts.contains(where: { $0.contains("pi-coding-agent") }) { return .pi }
         if base == "git" || base == "lazygit" { return .git }
         if base == "ssh" { return .ssh }
         if ["node", "npm", "pnpm", "bun", "deno", "vite"].contains(base) { return .dev }

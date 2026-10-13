@@ -14,7 +14,7 @@ GROUPS = [
     ("Start here", [("overview", "Overview"), ("install", "Install on macOS"), ("quickstart", "Quick start")]),
     ("Workspace", [("sessions", "Sessions, tabs & panes"), ("shortcuts", "Commands & shortcuts"), ("ssh", "Remote SSH")]),
     ("Personalization", [("appearance", "Appearance & Ghostty"), ("backgrounds", "Dithered backgrounds"), ("status", "Program status")]),
-    ("Reference", [("architecture", "Architecture & events"), ("ipc-reference", "IPC protocol"), ("build", "Build from source"), ("troubleshooting", "Troubleshooting & limits")]),
+    ("Reference", [("architecture", "Architecture & events"), ("ipc-reference", "IPC protocol"), ("cli", "CLI"), ("build", "Build from source"), ("troubleshooting", "Troubleshooting & limits")]),
 ]
 PAGES = [(slug, title, group) for group, items in GROUPS for slug, title in items]
 

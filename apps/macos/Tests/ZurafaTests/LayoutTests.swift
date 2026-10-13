@@ -12,6 +12,8 @@ final class LayoutTests: XCTestCase {
         let process = try JSONDecoder().decode(ForegroundProcess.self,
             from: Data(#"{"name":"node","cwd":"/tmp","pid":123,"argv":["pi"]}"#.utf8))
         XCTAssertEqual(Program.detect(process.name, argv: process.argv, remote: false), .pi)
+        XCTAssertEqual(Program.detect("node", argv: ["/opt/homebrew/bin/node", "/Users/test/.pi/agent/npm/node_modules/@earendil-works/pi-coding-agent/dist/cli.js"], remote: false), .pi)
+        XCTAssertEqual(Program.detect("node", argv: ["/opt/homebrew/bin/node", "/Users/test/.local/bin/pi"], remote: false), .pi)
         XCTAssertEqual(Program.detect("2.1.295", executable: "/Users/test/.local/share/claude/versions/2.1.295", remote: false), .claude)
         XCTAssertEqual(Program.detect("codex", remote: false), .codex)
         XCTAssertEqual(Program.detect("gemini", remote: false), .gemini)

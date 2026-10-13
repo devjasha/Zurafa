@@ -289,6 +289,7 @@ impl Terminals {
             return Err("command must not be empty".into());
         }
         self.dispatcher.validate_target(session, split)?;
+        let id = format!("t{}", self.next.fetch_add(1, Ordering::Relaxed));
         let pair = native_pty_system().openpty(size(cols, rows)).map_err(err)?;
         let mut reader = pair.master.try_clone_reader().map_err(err)?;
         let mut writer = pair.master.take_writer().map_err(err)?;
@@ -325,9 +326,14 @@ impl Terminals {
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         cmd.env("TERM_PROGRAM", "Zurafa");
+        cmd.env("ZURAFA_SESSION", session);
+        cmd.env("ZURAFA_PANE", &id);
+        cmd.env("ZURAFA_BLOCK", &id);
+        if let Ok(socket) = env::var("ZURAFA_SOCKET") {
+            cmd.env("ZURAFA_SOCKET", socket);
+        }
         let mut child = pair.slave.spawn_command(cmd).map_err(err)?;
         drop(pair.slave); // otherwise the reader never sees EOF
-        let id = format!("t{}", self.next.fetch_add(1, Ordering::Relaxed));
         self.dispatcher
             .add_block(session, &id, split, axis, label)?;
         let (input, input_rx) = mpsc::sync_channel::<Vec<u8>>(64);

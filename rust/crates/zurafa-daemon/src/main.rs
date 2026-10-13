@@ -29,6 +29,7 @@ fn socket_path() -> PathBuf {
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let path = socket_path();
+    env::set_var("ZURAFA_SOCKET", &path);
     if let Some(dir) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::DirBuilder::new()
             .recursive(true)

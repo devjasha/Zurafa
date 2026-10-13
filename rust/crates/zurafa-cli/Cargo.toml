@@ -1,0 +1,11 @@
+[package]
+name = "zurafa-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "zurafa"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"

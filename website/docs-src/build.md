@@ -15,7 +15,7 @@ scripts/bundle.sh
 open build/Zurafa.app
 ```
 
-The script builds the Rust daemon and SwiftUI app in release mode, places both executables inside `build/Zurafa.app`, includes the app icon and font resources, and applies an ad-hoc signature. It does not notarize the result.
+The script builds the Rust daemon, Rust CLI, and SwiftUI app in release mode, places the executables inside `build/Zurafa.app`, includes the app icon and font resources, and applies an ad-hoc signature. It does not notarize the result.
 
 ## Run during development
 
@@ -37,6 +37,7 @@ The Rust test suite includes real PTY-backed integration tests, event routing, s
 
 | Path | Purpose |
 | --- | --- |
+| `rust/crates/zurafa-cli` | `zurafa` command-line interface |
 | `rust/crates/zurafa-daemon` | Socket server, PTYs, terminal parsing, SSH hosts |
 | `rust/crates/zurafa-events` | Typed events, dispatcher, snapshots, layout, status records |
 | `apps/macos` | SwiftUI application and tests |

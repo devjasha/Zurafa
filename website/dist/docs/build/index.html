@@ -35,6 +35,7 @@
 <div class="nav-group"><p>Reference</p>
 <a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
 <a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
 <a href="/docs/build/" data-page="build">Build from source</a>
 <a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
 </div></details>
@@ -56,6 +57,7 @@
 <div class="nav-group"><p>Reference</p>
 <a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
 <a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
 <a href="/docs/build/" data-page="build">Build from source</a>
 <a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
 </div>
@@ -67,7 +69,7 @@
 <p>From the repository root:</p>
 <pre><code>scripts/bundle.sh
 open build/Zurafa.app</code></pre>
-<p>The script builds the Rust daemon and SwiftUI app in release mode, places both executables inside <code>build/Zurafa.app</code>, includes the app icon and font resources, and applies an ad-hoc signature. It does not notarize the result.</p>
+<p>The script builds the Rust daemon, Rust CLI, and SwiftUI app in release mode, places the executables inside <code>build/Zurafa.app</code>, includes the app icon and font resources, and applies an ad-hoc signature. It does not notarize the result.</p>
 <h2 id="run-during-development">Run during development</h2>
 <pre><code>(cd rust &amp;&amp; cargo build)
 cd apps/macos &amp;&amp; ZURAFA_DAEMON=../../rust/target/debug/zurafa-daemon swift run</code></pre>
@@ -78,13 +80,14 @@ cd apps/macos &amp;&amp; ZURAFA_DAEMON=../../rust/target/debug/zurafa-daemon swi
 <h2 id="source-layout">Source layout</h2>
 <div class="table-scroll"><table>
 <tr><th>Path</th><th>Purpose</th></tr>
+<tr><td><code>rust/crates/zurafa-cli</code></td><td><code>zurafa</code> command-line interface</td></tr>
 <tr><td><code>rust/crates/zurafa-daemon</code></td><td>Socket server, PTYs, terminal parsing, SSH hosts</td></tr>
 <tr><td><code>rust/crates/zurafa-events</code></td><td>Typed events, dispatcher, snapshots, layout, status records</td></tr>
 <tr><td><code>apps/macos</code></td><td>SwiftUI application and tests</td></tr>
 <tr><td><code>docs/ipc-protocol.md</code></td><td>Protocol 1 and 2 reference</td></tr>
 <tr><td><code>scripts/bundle.sh</code></td><td>Local macOS app bundle build</td></tr>
 </table></div>
-<p>For the wire-level contract, see the <a href="/docs/ipc-reference/">IPC protocol reference</a>.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/ipc-reference/"><small>← Previous</small><strong>IPC protocol</strong></a><a href="/docs/troubleshooting/"><small>Next →</small><strong>Troubleshooting &amp; limits</strong></a></nav></main>
+<p>For the wire-level contract, see the <a href="/docs/ipc-reference/">IPC protocol reference</a>.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/cli/"><small>← Previous</small><strong>CLI</strong></a><a href="/docs/troubleshooting/"><small>Next →</small><strong>Troubleshooting &amp; limits</strong></a></nav></main>
     <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#prerequisites">Prerequisites</a><a href="#build-the-app-bundle">Build the app bundle</a><a href="#run-during-development">Run during development</a><a href="#run-tests">Run tests</a><a href="#source-layout">Source layout</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
