@@ -66,6 +66,11 @@ enum CLIInstaller {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
+    // String(reflecting:) escapes ' as \', which AppleScript rejects.
+    static func appleScriptQuoted(_ value: String) -> String {
+        "\"" + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+
     private static func installWithoutPrivileges(sourcePath: String, installPath: String) throws {
         let directory = URL(fileURLWithPath: installPath).deletingLastPathComponent().path
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
@@ -78,7 +83,7 @@ enum CLIInstaller {
     private static func installWithPrivileges(sourcePath: String, installPath: String) throws {
         let directory = URL(fileURLWithPath: installPath).deletingLastPathComponent().path
         let command = "/bin/mkdir -p \(shellQuoted(directory)) && /bin/rm -f \(shellQuoted(installPath)) && /bin/ln -s \(shellQuoted(sourcePath)) \(shellQuoted(installPath))"
-        let script = "do shell script \(String(reflecting: command)) with administrator privileges"
+        let script = "do shell script \(appleScriptQuoted(command)) with administrator privileges"
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")

@@ -23,6 +23,10 @@ final class CLIInstallerTests: XCTestCase {
         XCTAssertFalse(CLIInstaller.needsInstall(sourcePath: source.path, installPath: link.path))
     }
 
+    func testAppleScriptQuotingKeepsSingleQuotes() {
+        XCTAssertEqual(CLIInstaller.appleScriptQuoted("ln -s 'a\\b' \"c\""), "\"ln -s 'a\\\\b' \\\"c\\\"\"")
+    }
+
     func testShellQuoting() {
         XCTAssertEqual(CLIInstaller.shellQuoted("/tmp/Zurafa's CLI"), "'/tmp/Zurafa'\\''s CLI'")
     }
