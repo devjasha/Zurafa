@@ -62,6 +62,7 @@ struct PaneMeta {
     var program: Program = .shell
     var title = "Shell"
     var cwd = "~"
+    var pwd: String?
     var label: String?
     var ended: String?
     var statuses: [String: ProgramStatus] = [:]
@@ -133,6 +134,7 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var commandError: String?
     @Published private(set) var notice: String?
     @Published private(set) var workspaceBackground: Color?
+    @Published var preview: FilePreview?
     @Published private(set) var backgroundImage = BackgroundImageStore.load()
     @Published private(set) var backgroundImageEnabled = UserDefaults.standard.object(forKey: "backgroundImageEnabled") as? Bool ?? true
 
@@ -151,6 +153,7 @@ enum EditorKind: String, Identifiable {
 
     init() {
         TerminalStore.shared.onFocus = { [weak self] id in self?.focus(id) }
+        TerminalStore.shared.onOpenLink = { [weak self] id, link in self?.openPreview(link, from: id) ?? false }
         loadZurafaConfig()
         syncTerminalAppearance()
         daemon.onSnapshot = { [weak self] snapshot in self?.apply(snapshot) }
@@ -195,6 +198,7 @@ enum EditorKind: String, Identifiable {
             var m = metas[id] ?? PaneMeta()
             m.title = block.title ?? m.title
             m.cwd = displayPath(block.pwd)
+            m.pwd = URL(string: block.pwd ?? "")?.isFileURL == true ? URL(string: block.pwd!)!.path : block.pwd
             m.ended = block.running ? nil : "exited"
             m.statuses = block.statuses.records
             m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
@@ -225,7 +229,10 @@ enum EditorKind: String, Identifiable {
         case "terminal.title_changed":
             if event.sessionID == sessionID, let id = event.blockID, let title = event.payload.object?["title"]?.string { metas[id]?.title = title }
         case "terminal.pwd_changed":
-            if event.sessionID == sessionID, let id = event.blockID, let pwd = event.payload.object?["pwd"]?.string { metas[id]?.cwd = displayPath(pwd) }
+            if event.sessionID == sessionID, let id = event.blockID, let pwd = event.payload.object?["pwd"]?.string {
+                metas[id]?.cwd = displayPath(pwd)
+                metas[id]?.pwd = URL(string: pwd)?.isFileURL == true ? URL(string: pwd)!.path : pwd
+            }
         case "terminal.process_changed":
             if event.sessionID == sessionID, let id = event.blockID {
                 let name = event.payload.object?["foreground"]?.object?["name"]?.string
@@ -295,6 +302,12 @@ enum EditorKind: String, Identifiable {
     }
     func close(_ id: String) { command(["op": .string("close"), "session": .string(sessionID), "block": .string(id)]) }
     func closeFocused() { if !tab.focus.isEmpty { close(tab.focus) } }
+    func openPreview(_ link: String, from pane: String) -> Bool {
+        guard let file = FilePreview.load(link: link, currentDirectory: metas[pane]?.pwd) else { return false }
+        preview = file
+        return true
+    }
+    func closePreview() { preview = nil }
     func toggleZoom() {
         guard !tab.focus.isEmpty else { return }
         command(["op": .string("zoom"), "session": .string(sessionID), "block": .string(tab.focus), "enabled": .bool(!tab.zoomed)])

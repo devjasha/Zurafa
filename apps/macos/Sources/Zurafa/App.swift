@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.applicationIconImage = appIcon
         NSApp.activate(ignoringOtherApps: true)
+        CLIInstaller.offerInstallIfNeeded()
     }
     func checkForUpdates() {
         updaterController.checkForUpdates(nil)

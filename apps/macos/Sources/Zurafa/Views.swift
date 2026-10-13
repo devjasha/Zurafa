@@ -285,12 +285,20 @@ struct RootView: View {
     }
 
     @ViewBuilder private var terminalContent: some View {
-        if ws.tabs.isEmpty {
-            Text("Starting terminal…").foregroundStyle(Theme.inkSoft).frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if ws.tab.zoomed {
-            PaneView(id: ws.tab.focus)
-        } else {
-            LayoutView(layout: ws.tab.layout, window: ws.tab.id)
+        HStack(spacing: 0) {
+            Group {
+                if ws.tabs.isEmpty {
+                    Text("Starting terminal…").foregroundStyle(Theme.inkSoft).frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if ws.tab.zoomed {
+                    PaneView(id: ws.tab.focus)
+                } else {
+                    LayoutView(layout: ws.tab.layout, window: ws.tab.id)
+                }
+            }
+            if let preview = ws.preview {
+                FilePreviewPane(preview: preview) { ws.closePreview() }
+                    .frame(minWidth: 280, idealWidth: 420, maxWidth: 560)
+            }
         }
     }
 }

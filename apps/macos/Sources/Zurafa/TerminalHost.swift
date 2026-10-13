@@ -46,6 +46,7 @@ final class PaneTerminal: TerminalView {
 @MainActor final class TerminalStore: NSObject, TerminalViewDelegate {
     static let shared = TerminalStore()
     var onFocus: (String) -> Void = { _ in }
+    var onOpenLink: (String, String) -> Bool = { _, _ in false }
     private var views: [String: PaneTerminal] = [:]
     private var pendingOutput: [String: Data] = [:]
     private var knownBlocks: Set<String> = []
@@ -150,6 +151,7 @@ final class PaneTerminal: TerminalView {
         view.glyphFallbackProvider = NerdFontFallback.shared
         view.terminal = runningBlocks.contains(id) ? id : nil
         configure(view)
+        view.linkHighlightMode = .hover
         view.terminalDelegate = self
         view.onFocus = { [weak self] in self?.onFocus(id) }
         view.onSized = { [weak self, weak view] in
@@ -203,6 +205,12 @@ final class PaneTerminal: TerminalView {
     }
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
         if let id = (source as? PaneTerminal)?.terminal { daemon.send(Msg(type: "resize", cols: newCols, rows: newRows, terminal: id)) }
+    }
+    func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+        guard let id = (source as? PaneTerminal)?.terminal, onOpenLink(id, link) else {
+            TerminalView.openDefaultLink(link)
+            return
+        }
     }
     func setTerminalTitle(source: TerminalView, title: String) {}
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
