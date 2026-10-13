@@ -10,8 +10,8 @@ final class LayoutTests: XCTestCase {
     }
     func testForegroundProcessSelectsReportedProgramIcon() throws {
         let process = try JSONDecoder().decode(ForegroundProcess.self,
-            from: Data(#"{"name":"claude","cwd":"/tmp","pid":123}"#.utf8))
-        XCTAssertEqual(Program.detect(process.name, remote: false), .claude)
+            from: Data(#"{"name":"node","cwd":"/tmp","pid":123,"argv":["pi"]}"#.utf8))
+        XCTAssertEqual(Program.detect(process.name, argv: process.argv, remote: false), .pi)
         XCTAssertEqual(Program.detect("2.1.295", executable: "/Users/test/.local/share/claude/versions/2.1.295", remote: false), .claude)
         XCTAssertEqual(Program.detect("codex", remote: false), .codex)
         XCTAssertEqual(Program.detect("gemini", remote: false), .gemini)

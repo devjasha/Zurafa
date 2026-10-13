@@ -18,14 +18,15 @@ enum TabStripLayout: String {
 
 enum Program {
     case claude, codex, gemini, pi, git, dev, ssh, shell
-    static func detect(_ name: String?, executable: String? = nil, remote: Bool) -> Program {
+    static func detect(_ name: String?, executable: String? = nil, argv: [String]? = nil, remote: Bool) -> Program {
         guard let name else { return remote ? .ssh : .shell }
-        let n = (name + " " + (executable ?? "")).lowercased()
+        let n = ([name, executable] + (argv ?? [])).compactMap { $0 }.joined(separator: " ").lowercased()
         if n.contains("claude") { return .claude }
         if n.contains("codex") { return .codex }
         if n.contains("gemini") { return .gemini }
         let base = name.lowercased()
-        if base == "pi" { return .pi }
+        let argv0 = argv?.first.map { URL(fileURLWithPath: $0).lastPathComponent.lowercased() }
+        if base == "pi" || argv0 == "pi" { return .pi }
         if base == "git" || base == "lazygit" { return .git }
         if base == "ssh" { return .ssh }
         if ["node", "npm", "pnpm", "bun", "deno", "vite"].contains(base) { return .dev }
@@ -194,7 +195,7 @@ enum EditorKind: String, Identifiable {
             m.ended = block.running ? nil : "exited"
             m.statuses = block.statuses.records
             m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
-                                       remote: session?.remote != nil)
+                                       argv: block.foreground?.argv, remote: session?.remote != nil)
             next[id] = m
         }
         metas = next
@@ -226,7 +227,8 @@ enum EditorKind: String, Identifiable {
             if event.sessionID == sessionID, let id = event.blockID {
                 let name = event.payload.object?["foreground"]?.object?["name"]?.string
                 let executable = event.payload.object?["foreground"]?.object?["executable"]?.string
-                metas[id]?.program = Program.detect(name, executable: executable, remote: currentSession?.remote != nil)
+                let argv = event.payload.object?["foreground"]?.object?["argv"]?.array?.compactMap(\.string)
+                metas[id]?.program = Program.detect(name, executable: executable, argv: argv, remote: currentSession?.remote != nil)
             }
         case "terminal.child_exited":
             if let id = event.blockID { if event.sessionID == sessionID { metas[id]?.ended = "exited" }; TerminalStore.shared.exited(id, code: event.payload.object?["exit_code"]?.int) }

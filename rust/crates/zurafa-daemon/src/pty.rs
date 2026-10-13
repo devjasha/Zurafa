@@ -46,7 +46,37 @@ fn foreground_process(pid: libc::pid_t) -> Option<zurafa_events::Process> {
             extra.insert("executable".to_owned(), serde_json::Value::String(path.to_owned()));
         }
     }
+    if let Some(argv) = process_args(pid) {
+        extra.insert("argv".to_owned(), serde_json::Value::Array(argv.into_iter().map(serde_json::Value::String).collect()));
+    }
     Some(zurafa_events::Process { name, cwd, pid: pid as u32, extra })
+}
+
+#[cfg(target_os = "macos")]
+fn process_args(pid: libc::pid_t) -> Option<Vec<String>> {
+    let mut mib = [libc::CTL_KERN, libc::KERN_PROCARGS2, pid];
+    let mut size = 0usize;
+    if unsafe { libc::sysctl(mib.as_mut_ptr(), mib.len() as u32, std::ptr::null_mut(), &mut size, std::ptr::null_mut(), 0) } != 0 || size < 4 {
+        return None;
+    }
+    let mut buf = vec![0u8; size];
+    if unsafe { libc::sysctl(mib.as_mut_ptr(), mib.len() as u32, buf.as_mut_ptr().cast(), &mut size, std::ptr::null_mut(), 0) } != 0 {
+        return None;
+    }
+    buf.truncate(size);
+    let argc = i32::from_ne_bytes(buf.get(0..4)?.try_into().ok()?).max(0) as usize;
+    let mut i = 4;
+    while i < buf.len() && buf[i] != 0 { i += 1; }
+    while i < buf.len() && buf[i] == 0 { i += 1; }
+    let mut args = Vec::new();
+    for _ in 0..argc {
+        if i >= buf.len() { break; }
+        let start = i;
+        while i < buf.len() && buf[i] != 0 { i += 1; }
+        if i > start { args.push(String::from_utf8_lossy(&buf[start..i]).into_owned()); }
+        while i < buf.len() && buf[i] == 0 { i += 1; }
+    }
+    (!args.is_empty()).then_some(args)
 }
 
 #[cfg(not(target_os = "macos"))]

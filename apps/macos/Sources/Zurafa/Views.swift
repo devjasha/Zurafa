@@ -100,15 +100,28 @@ struct ProgramGlyph: View {
 
 /// Compact glass badge for the process reported by the Rust PTY manager.
 struct Tile: View {
+    static let size: CGFloat = 30
+
     let program: Program
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
-        shape.fill(.ultraThinMaterial)
-            .overlay(shape.fill(program.tile[0].opacity(0.16)))
-            .overlay(shape.strokeBorder(.white.opacity(0.45), lineWidth: 0.5))
-            .overlay(ProgramGlyph(program: program).foregroundStyle(Theme.ink).frame(width: 12, height: 12))
-            .frame(width: 22, height: 22)
-            .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+        if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
+            Image(nsImage: icon)
+                .resizable()
+                .scaledToFill()
+                .frame(width: Self.size, height: Self.size)
+                .clipShape(shape)
+                .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+        } else {
+            shape.fill(.ultraThinMaterial)
+                .overlay(shape.fill(program.tile[0].opacity(0.16)))
+                .overlay(shape.strokeBorder(.white.opacity(0.45), lineWidth: 0.5))
+                .overlay(ProgramGlyph(program: program).foregroundStyle(Theme.ink).frame(width: 18, height: 18))
+                .frame(width: Self.size, height: Self.size)
+                .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+        }
     }
 }
 
@@ -146,19 +159,24 @@ struct StatusIcon: View {
 
     var body: some View {
         let stateColor = StatusDot.colors[item.record.state] ?? Theme.inkSoft
+        let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
         ZStack(alignment: .bottomTrailing) {
-            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(.white.opacity(0.42), lineWidth: 0.5))
-                .overlay {
-                    if let icon = AgentIcon.image(named: item.iconAssetName, colorScheme: colorScheme) {
-                        Image(nsImage: icon).resizable().scaledToFit().padding(size * 0.16)
-                    } else {
+            if let icon = AgentIcon.image(named: item.iconAssetName, colorScheme: colorScheme) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(shape)
+            } else {
+                shape
+                    .fill(.ultraThinMaterial)
+                    .overlay(shape.strokeBorder(.white.opacity(0.42), lineWidth: 0.5))
+                    .overlay {
                         Image(systemName: fallbackSymbol)
                             .font(.system(size: size * 0.56, weight: .semibold))
                             .foregroundStyle(Theme.inkSoft)
                     }
-                }
+            }
             Circle()
                 .fill(stateColor)
                 .frame(width: max(6, size * 0.38), height: max(6, size * 0.38))
@@ -461,7 +479,7 @@ struct TabItem: View {
                 }
                 Tile(program: m.program)
             }
-            .frame(width: 22 + 4 * CGFloat(behind.count), alignment: .leading)
+            .frame(width: Tile.size + 4 * CGFloat(behind.count), alignment: .leading)
             HStack(spacing: 5) {
                 Text(m.label ?? m.title).font(.system(size: 13, weight: .medium)).foregroundStyle(on ? Theme.ink : Theme.inkSoft)
                 Text(m.cwd).font(.system(size: 13)).foregroundStyle(.secondary)
@@ -469,12 +487,6 @@ struct TabItem: View {
             .fixedSize()
             .frame(minWidth: 30, maxWidth: 150, alignment: .leading)
             .mask(LinearGradient(stops: [.init(color: .black, location: 0.8), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
-            ForEach(tab.layout.panes, id: \.self) { paneID in
-                let pane = ws.meta(paneID)
-                ForEach(pane.statusItems) { item in
-                    StatusIcon(item: item, fallback: pane.program.title, size: 14)
-                }
-            }
         }
         .padding(.leading, 5).padding(.trailing, 10).frame(height: 30)
         .background {
