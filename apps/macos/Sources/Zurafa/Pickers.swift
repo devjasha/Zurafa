@@ -1,10 +1,11 @@
 import SwiftUI
 
 private enum PickerStyle {
-    static let accent = Color(red: 0.18, green: 0.62, blue: 0.57)
-    static let secondary = Theme.inkSoft
-    static let outline = Theme.paneStroke
-    static let glassTint = Theme.background.opacity(0.32)
+    static var accent: Color { Theme.imported == nil && Theme.customAccent == nil ? Color(red: 0.22, green: 0.41, blue: 0.80) : Theme.accent }
+    static var secondary: Color { Theme.inkSoft }
+    static var outline: Color { Theme.paneStroke }
+    /// An imported theme tints the glass almost solid so text keeps the theme's contrast.
+    static var glassTint: Color { Theme.background.opacity(Theme.imported == nil ? 0.32 : 0.85) }
 }
 
 private extension View {
@@ -21,15 +22,14 @@ struct SessionPicker: View {
     @EnvironmentObject var ws: Workspace
     @State private var query = ""
     @State private var selection = 0
+    @State private var hovered: String?
     @State private var deletingSession: SessionSnapshot?
     @FocusState private var searchFocused: Bool
 
-    private var matchingSessions: [SessionSnapshot] {
-        ws.sessions.filter { query.isEmpty || $0.label.localizedCaseInsensitiveContains(query)
+    private var shownSessions: [SessionSnapshot] {
+        ws.orderedSessions.filter { query.isEmpty || $0.label.localizedCaseInsensitiveContains(query)
             || ($0.remote?.hostname.localizedCaseInsensitiveContains(query) ?? false) }
     }
-    private var localSessions: [SessionSnapshot] { matchingSessions.filter { $0.remote == nil } }
-    private var remoteSessions: [SessionSnapshot] { matchingSessions.filter { $0.remote != nil } }
     private var matchingHosts: [RemoteHost] {
         ws.hosts.filter { host in
             !ws.sessions.contains(where: { $0.remote?.id == host.id })
@@ -37,7 +37,7 @@ struct SessionPicker: View {
                     || host.hostname.localizedCaseInsensitiveContains(query))
         }
     }
-    private var selectableCount: Int { localSessions.count + remoteSessions.count + matchingHosts.count + 3 }
+    private var selectableCount: Int { shownSessions.count + matchingHosts.count + 2 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -58,55 +58,58 @@ struct SessionPicker: View {
                         .onChange(of: selectableCount) { selection = min(selection, max(0, selectableCount - 1)) }
                 }
             }
+            .font(.system(size: 13))
             .foregroundStyle(PickerStyle.secondary)
-            .padding(.horizontal, 9).frame(height: 30)
-            .background(.ultraThinMaterial, in: Capsule())
+            .padding(.horizontal, 10).frame(height: 32)
+            .background(Theme.ink.opacity(0.06), in: Capsule())
             .overlay(Capsule().strokeBorder(PickerStyle.outline, lineWidth: 1))
-            .padding(.bottom, 5)
+            .padding(.bottom, 2)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 3) {
-                    section("This Mac", symbol: "laptopcomputer")
-                    ForEach(Array(localSessions.enumerated()), id: \.element.sessionID) { index, session in
+                VStack(alignment: .leading, spacing: 2) {
+                    let sessions = shownSessions
+                    if sessions.contains(where: { $0.remote == nil }) { header("This Mac", symbol: "laptopcomputer") }
+                    ForEach(Array(sessions.enumerated()), id: \.element.sessionID) { index, session in
+                        if let remote = session.remote, index == 0 || sessions[index - 1].remote?.id != remote.id {
+                            header(remote.addressLabel, symbol: "globe")
+                        }
                         sessionRow(session, highlighted: selection == index)
                     }
-                    if !remoteSessions.isEmpty {
-                        section("Remote", symbol: "globe")
-                        ForEach(Array(remoteSessions.enumerated()), id: \.element.sessionID) { index, session in
-                            sessionRow(session, highlighted: selection == localSessions.count + index)
-                        }
-                    }
                     if !matchingHosts.isEmpty {
-                        section("Saved Hosts", symbol: "network")
+                        header("Saved Hosts", symbol: "network")
                         ForEach(Array(matchingHosts.enumerated()), id: \.element.id) { index, host in
-                            HStack(spacing: 2) {
-                                row(host.label, subtitle: host.addressLabel, symbol: "globe", selected: false,
-                                    highlighted: selection == localSessions.count + remoteSessions.count + index) {
-                                    ws.openHost(host)
-                                    ws.sessionPickerOpen = false
-                                }
-                                hostSettingsButton(host)
+                            row(host.label, symbol: nil, shortcut: hovered == host.id ? nil : host.addressLabel,
+                                highlighted: selection == sessions.count + index) {
+                                ws.openHost(host)
+                                ws.sessionPickerOpen = false
                             }
+                            .overlay(alignment: .trailing) {
+                                if hovered == host.id {
+                                    iconButton("gearshape", help: "Edit \(host.label) connection") { ws.beginEditingHost(host) }
+                                        .foregroundStyle(PickerStyle.secondary).padding(.trailing, 4)
+                                }
+                            }
+                            .onHover { hover(host.id, $0) }
                         }
                     }
-                    Divider().overlay(PickerStyle.secondary.opacity(0.25)).padding(.vertical, 4)
-                    let actionOffset = localSessions.count + remoteSessions.count + matchingHosts.count
-                    row("New Session", subtitle: "⇧⌘N", symbol: "plus.rectangle", selected: false, highlighted: selection == actionOffset) {
+                    let actionOffset = sessions.count + matchingHosts.count
+                    divider
+                    row("New Session", symbol: "plus.rectangle.on.rectangle", shortcut: "⇧⌘N", highlighted: selection == actionOffset) {
                         ws.sessionPickerOpen = false
                         if query.isEmpty { ws.editor = .newSession }
                         else { ws.createSession(label: query) }
                     }
-                    row("Add Remote Host…", subtitle: nil, symbol: "globe.badge.chevron.backward", selected: false, highlighted: selection == actionOffset + 1) {
+                    divider
+                    row("Add Remote Host…", symbol: "globe.badge.chevron.backward", shortcut: nil, highlighted: selection == actionOffset + 1) {
                         ws.sessionPickerOpen = false
                         ws.editor = .addHost
                     }
-                    row("Refresh Sessions", subtitle: "⌘R", symbol: "arrow.clockwise", selected: false, highlighted: selection == actionOffset + 2) { ws.refreshSessions() }
                 }
             }
-            .frame(maxHeight: 300)
+            .frame(maxHeight: 340)
         }
         .padding(8)
-        .frame(width: 280)
+        .frame(width: 300)
         .foregroundStyle(Theme.ink)
         .onAppear {
             ws.refreshSessions()
@@ -126,58 +129,79 @@ struct SessionPicker: View {
         }
     }
 
-    private func section(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(PickerStyle.secondary)
-            .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 2)
+    private var divider: some View {
+        Divider().overlay(PickerStyle.secondary.opacity(0.25)).padding(.vertical, 4).padding(.horizontal, 6)
     }
 
+    private func header(_ title: String, symbol: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).frame(width: 18)
+            Text(title).lineLimit(1)
+        }
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(PickerStyle.secondary)
+        .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 2)
+    }
+
+    /// Delete and edit appear on hover, in place of the shortcut, so idle rows stay clean.
     private func sessionRow(_ session: SessionSnapshot, highlighted: Bool) -> some View {
-        HStack(spacing: 2) {
-            row(session.label, subtitle: session.remote?.addressLabel, symbol: session.remote == nil ? "laptopcomputer" : "globe",
-                selected: session.sessionID == ws.sessionID, highlighted: highlighted) { ws.selectSession(session.sessionID) }
-            deleteSessionButton(session)
-            if let host = session.remote { hostSettingsButton(host) }
+        let current = session.sessionID == ws.sessionID
+        let number = ws.orderedSessions.firstIndex { $0.sessionID == session.sessionID }.flatMap { $0 < 9 ? "⌘\($0 + 1)" : nil }
+        let hovering = hovered == session.sessionID
+        return row(session.label, symbol: nil, shortcut: hovering ? nil : number, selected: current, highlighted: highlighted) {
+            ws.selectSession(session.sessionID)
         }
-    }
-
-    private func deleteSessionButton(_ session: SessionSnapshot) -> some View {
-        Button { deletingSession = session } label: {
-            Image(systemName: "trash")
-                .font(.system(size: 12))
-                .foregroundStyle(PickerStyle.secondary)
-                .frame(width: 27, height: 29)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Delete \(session.label) workspace")
-    }
-
-    private func hostSettingsButton(_ host: RemoteHost) -> some View {
-        Button { ws.beginEditingHost(host) } label: {
-            Image(systemName: "gearshape")
-                .font(.system(size: 12))
-                .foregroundStyle(PickerStyle.secondary)
-                .frame(width: 27, height: 29)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Edit \(host.label) connection")
-    }
-
-    private func row(_ title: String, subtitle: String?, symbol: String, selected: Bool, highlighted: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: selected ? "checkmark" : symbol).frame(width: 16)
-                Text(title).lineLimit(1)
-                Spacer(minLength: 6)
-                if let subtitle { Text(subtitle).font(.system(size: 11)).lineLimit(1).foregroundStyle(selected || highlighted ? .black.opacity(0.65) : PickerStyle.secondary) }
+        .overlay(alignment: .trailing) {
+            if hovering {
+                HStack(spacing: 0) {
+                    if let host = session.remote {
+                        iconButton("gearshape", help: "Edit \(host.label) connection") { ws.beginEditingHost(host) }
+                    }
+                    iconButton("trash", help: "Delete \(session.label) workspace") { deletingSession = session }
+                }
+                .foregroundStyle(current ? Theme.onAccent : PickerStyle.secondary)
+                .padding(.trailing, 4)
             }
-            .font(.system(size: 13, weight: selected ? .semibold : .regular))
-            .padding(.horizontal, 8).frame(height: 29)
-            .foregroundStyle(selected || highlighted ? Color.black : Theme.ink)
-            .background(selected || highlighted ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .onHover { hover(session.sessionID, $0) }
+    }
+
+    private func hover(_ id: String, _ inside: Bool) {
+        if inside { hovered = id } else if hovered == id { hovered = nil }
+    }
+
+    private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12))
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    private func row(_ title: String, symbol: String?, shortcut: String?, selected: Bool = false, highlighted: Bool,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Group {
+                    if selected { Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)) }
+                    else if let symbol { Image(systemName: symbol) }
+                }
+                .frame(width: 18)
+                Text(title).lineLimit(1)
+                Spacer(minLength: 8)
+                if let shortcut {
+                    Text(shortcut).lineLimit(1)
+                        .foregroundStyle(selected ? Theme.onAccent.opacity(0.75) : PickerStyle.secondary)
+                }
+            }
+            .font(.system(size: 13, weight: .medium))
+            .padding(.horizontal, 8).frame(height: 30)
+            .foregroundStyle(selected ? Theme.onAccent : Theme.ink)
+            .background(selected ? PickerStyle.accent : highlighted ? Theme.ink.opacity(0.08) : .clear,
+                        in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -185,26 +209,22 @@ struct SessionPicker: View {
 
     private func runSelection() {
         var index = selection
-        if localSessions.indices.contains(index) { ws.selectSession(localSessions[index].sessionID); return }
-        index -= localSessions.count
-        if remoteSessions.indices.contains(index) { ws.selectSession(remoteSessions[index].sessionID); return }
-        index -= remoteSessions.count
+        let sessions = shownSessions
+        if sessions.indices.contains(index) { ws.selectSession(sessions[index].sessionID); return }
+        index -= sessions.count
         if matchingHosts.indices.contains(index) {
             ws.openHost(matchingHosts[index])
             ws.sessionPickerOpen = false
             return
         }
         index -= matchingHosts.count
+        ws.sessionPickerOpen = false
         switch index {
         case 0:
-            ws.sessionPickerOpen = false
             if query.isEmpty { ws.editor = .newSession }
             else { ws.createSession(label: query) }
         case 1:
-            ws.sessionPickerOpen = false
             ws.editor = .addHost
-        case 2:
-            ws.refreshSessions()
         default:
             break
         }
@@ -396,10 +416,10 @@ struct EditorSheet: View {
                                 Text((candidate.path as NSString).abbreviatingWithTildeInPath)
                                     .font(.system(size: 11))
                                     .lineLimit(1)
-                                    .foregroundStyle(index == directorySelection ? Color.black.opacity(0.65) : PickerStyle.secondary)
+                                    .foregroundStyle(index == directorySelection ? Theme.onAccent.opacity(0.65) : PickerStyle.secondary)
                             }
                             .font(.system(size: 12))
-                            .foregroundStyle(index == directorySelection ? Color.black : Theme.ink)
+                            .foregroundStyle(index == directorySelection ? Theme.onAccent : Theme.ink)
                             .padding(.horizontal, 8).frame(height: 26)
                             .background(index == directorySelection ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 7))
                             .contentShape(Rectangle())
@@ -532,15 +552,13 @@ private struct PaletteEntry: Identifiable {
     let title: String
     let detail: String?
     let shortcut: String?
-    let symbol: String?
     let action: @MainActor () -> Void
 
-    init(id: String, title: String? = nil, detail: String?, shortcut: String?, symbol: String?, action: @escaping @MainActor () -> Void) {
+    init(id: String, title: String? = nil, detail: String?, shortcut: String?, action: @escaping @MainActor () -> Void) {
         self.id = id
         self.title = title ?? id
         self.detail = detail
         self.shortcut = shortcut
-        self.symbol = symbol
         self.action = action
     }
 }
@@ -553,47 +571,51 @@ struct CommandPicker: View {
 
     private var entries: [PaletteEntry] {
         [
-            .init(id: "Change Session", detail: ws.name, shortcut: "›", symbol: nil) {
+            .init(id: "Change Session", detail: ws.name, shortcut: "›") {
                 DispatchQueue.main.async { ws.sessionPickerOpen = true }
             },
         ] + ws.sessions.map { session in
             .init(id: "session:\(session.sessionID)", title: "Workspace: \(session.label)",
                   detail: session.remote?.addressLabel ?? "This Mac",
-                  shortcut: session.sessionID == ws.sessionID ? "Current" : nil,
-                  symbol: session.remote == nil ? "laptopcomputer" : "globe") {
+                  shortcut: session.sessionID == ws.sessionID ? "Current" : nil) {
                 ws.selectSession(session.sessionID)
             }
         } + [
-            .init(id: "Rename Tab", detail: ws.tab.label, shortcut: "›", symbol: nil) { ws.editor = .renameTab },
-            .init(id: "Rename Session", detail: ws.name, shortcut: "⇧⌘E", symbol: nil) { ws.editor = .renameSession },
-            .init(id: "Add Remote Host…", detail: nil, shortcut: "›", symbol: "globe") { ws.editor = .addHost },
-            .init(id: "New Session", detail: nil, shortcut: "⇧⌘N", symbol: nil) { ws.editor = .newSession },
-            .init(id: "New Tab", detail: nil, shortcut: "⌘T", symbol: nil) { ws.newTab() },
-            .init(id: "Go to Directory…", detail: ws.meta(ws.tab.focus).cwd, shortcut: "⇧⌘G", symbol: "folder") { ws.editor = .goDirectory },
-            .init(id: "Close Tab", detail: nil, shortcut: "⌥⌘W", symbol: nil) { ws.closeTab() },
-            .init(id: "Refresh Sessions", detail: nil, shortcut: "⌘R", symbol: nil) { ws.refreshSessions() },
-            .init(id: "Delete Workspace", detail: ws.name, shortcut: "⌥⇧⌘W", symbol: "trash") { ws.confirmCloseSession = true },
-            .init(id: "Appearance: Follow System", detail: ws.appearance == .system ? "Current" : nil, shortcut: nil, symbol: "desktopcomputer") { ws.setAppearance(.system) },
-            .init(id: "Appearance: Light", detail: ws.appearance == .light ? "Current" : nil, shortcut: nil, symbol: "sun.max") { ws.setAppearance(.light) },
-            .init(id: "Appearance: Dark", detail: ws.appearance == .dark ? "Current" : nil, shortcut: nil, symbol: "moon") { ws.setAppearance(.dark) },
-            .init(id: "Toggle Tab Layout", detail: ws.tabStripLayout == .horizontal ? "Vertical tabs" : "Horizontal tabs", shortcut: "⌥⌘T", symbol: ws.tabStripLayout == .horizontal ? "sidebar.left" : "rectangle.topthird.inset.filled") { ws.toggleTabStripLayout() },
-            .init(id: "Tabs: Horizontal", detail: ws.tabStripLayout == .horizontal ? "Current" : nil, shortcut: nil, symbol: "rectangle.topthird.inset.filled") { ws.setTabStripLayout(.horizontal) },
-            .init(id: "Tabs: Vertical", detail: ws.tabStripLayout == .vertical ? "Current" : nil, shortcut: nil, symbol: "sidebar.left") { ws.setTabStripLayout(.vertical) },
-            .init(id: "Import Ghostty Settings", detail: nil, shortcut: nil, symbol: "square.and.arrow.down") { ws.importGhosttySettings() },
-            .init(id: "Use Zurafa Terminal Defaults", detail: nil, shortcut: nil, symbol: "arrow.uturn.backward") { ws.clearGhosttySettings() },
-            .init(id: "Set Background Image…", detail: "Dithered", shortcut: nil, symbol: "photo") { ws.chooseBackgroundImage() },
+            .init(id: "Rename Tab", detail: ws.tab.label, shortcut: "›") { ws.editor = .renameTab },
+            .init(id: "Rename Session", detail: ws.name, shortcut: "⇧⌘E") { ws.editor = .renameSession },
+            .init(id: "Add Remote Host…", detail: nil, shortcut: "›") { ws.editor = .addHost },
+            .init(id: "New Session", detail: nil, shortcut: "⇧⌘N") { ws.editor = .newSession },
+            .init(id: "New Tab", detail: nil, shortcut: "⌘T") { ws.newTab() },
+            .init(id: "Go to Directory…", detail: ws.meta(ws.tab.focus).cwd, shortcut: "⇧⌘G") { ws.editor = .goDirectory },
+            .init(id: "Close Tab", detail: nil, shortcut: "⌥⌘W") { ws.closeTab() },
+            .init(id: "Refresh Sessions", detail: nil, shortcut: "⌘R") { ws.refreshSessions() },
+            .init(id: "Delete Workspace", detail: ws.name, shortcut: "⌥⇧⌘W") { ws.confirmCloseSession = true },
+            .init(id: "Appearance: Follow System", detail: ws.appearance == .system ? "Current" : nil, shortcut: nil) { ws.setAppearance(.system) },
+            .init(id: "Appearance: Light", detail: ws.appearance == .light ? "Current" : nil, shortcut: nil) { ws.setAppearance(.light) },
+            .init(id: "Appearance: Dark", detail: ws.appearance == .dark ? "Current" : nil, shortcut: nil) { ws.setAppearance(.dark) },
+            .init(id: "Toggle Tab Layout", title: ws.tabStripLayout == .horizontal ? "Switch to Vertical Tabs" : "Switch to Horizontal Tabs",
+                  detail: nil, shortcut: "⌥⌘T") { ws.toggleTabStripLayout() },
+            .init(id: "Open Config File", detail: nil, shortcut: "⌘,") { ws.openConfig() },
+            .init(id: "Import Ghostty Settings", detail: nil, shortcut: nil) { ws.importGhosttySettings() },
+            .init(id: "Use Zurafa Terminal Defaults", detail: nil, shortcut: nil) { ws.clearGhosttySettings() },
+            .init(id: "Set Background Image…", detail: "Dithered", shortcut: nil) { ws.chooseBackgroundImage() },
             .init(id: ws.backgroundImageEnabled ? "Hide Background Image" : "Show Background Image",
-                  detail: ws.backgroundImage == nil ? "Choose an image" : nil, shortcut: nil,
-                  symbol: "photo.on.rectangle") { ws.toggleBackgroundImage() },
-            .init(id: "Split Pane Right", detail: nil, shortcut: "⌘D", symbol: nil) { ws.split(.horizontal) },
-            .init(id: "Split Pane Down", detail: nil, shortcut: "⇧⌘D", symbol: nil) { ws.split(.vertical) },
-            .init(id: "Toggle Pane Zoom", detail: nil, shortcut: "⇧⌘↩", symbol: nil) { ws.toggleZoom() },
+                  detail: ws.backgroundImage == nil ? "Choose an image" : nil, shortcut: nil) { ws.toggleBackgroundImage() },
+            .init(id: "Split Pane Right", detail: nil, shortcut: "⌘D") { ws.split(.horizontal) },
+            .init(id: "Split Pane Down", detail: nil, shortcut: "⇧⌘D") { ws.split(.vertical) },
+            .init(id: "Toggle Pane Zoom", detail: nil, shortcut: "⇧⌘↩") { ws.toggleZoom() },
         ]
     }
     private var filtered: [PaletteEntry] {
         entries.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)
             || ($0.detail?.localizedCaseInsensitiveContains(query) ?? false)
             || ($0.id == "Add Remote Host…" && "ssh".localizedCaseInsensitiveContains(query)) }
+    }
+    private func sectionTitle(_ entry: PaletteEntry, index: Int) -> String? {
+        if entry.id.hasPrefix("session:") && index == 1 { return "Workspaces" }
+        if entry.id == "Rename Tab" { return "Commands" }
+        if entry.id == "Split Pane Right" { return "Pane" }
+        return nil
     }
     private func run(_ entry: PaletteEntry) {
         ws.paletteOpen = false
@@ -641,46 +663,26 @@ struct CommandPicker: View {
                     ScrollView {
                         LazyVStack(spacing: 2) {
                             ForEach(Array(filtered.enumerated()), id: \.element.id) { index, entry in
-                                if entry.id.hasPrefix("session:") && index == 1 && query.isEmpty {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "rectangle.stack")
-                                        Text("Workspaces")
-                                    }
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(PickerStyle.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.leading, 10).padding(.top, 6)
-                                }
-                                if entry.id == "Rename Tab" && query.isEmpty {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "rectangle.stack")
-                                        Text("Commands")
-                                    }
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(PickerStyle.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.leading, 10).padding(.top, 6)
-                                }
-                                if entry.id == "Split Pane Right" && query.isEmpty {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "rectangle.split.2x1")
-                                        Text("Pane")
-                                    }
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(PickerStyle.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.leading, 10).padding(.top, 6)
+                                if query.isEmpty, let section = sectionTitle(entry, index: index) {
+                                    Text(section)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(PickerStyle.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.leading, 10).padding(.top, 6)
                                 }
                                 Button { run(entry) } label: {
                                     HStack(spacing: 9) {
-                                        if let symbol = entry.symbol { Image(systemName: symbol).frame(width: 16) }
                                         Text(entry.title)
                                         Spacer(minLength: 4)
-                                        if let detail = entry.detail { Text(detail).lineLimit(1).frame(maxWidth: 110, alignment: .trailing) }
-                                        if let shortcut = entry.shortcut { Text(shortcut) }
+                                        Group {
+                                            if let detail = entry.detail { Text(detail).lineLimit(1).frame(maxWidth: 110, alignment: .trailing) }
+                                            if let shortcut = entry.shortcut { Text(shortcut) }
+                                        }
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(index == selection ? Theme.onAccent.opacity(0.65) : PickerStyle.secondary)
                                     }
                                     .font(.system(size: 13))
-                                    .foregroundStyle(index == selection ? Color.black : Theme.ink)
+                                    .foregroundStyle(index == selection ? Theme.onAccent : Theme.ink)
                                     .padding(.horizontal, 10).frame(height: 30)
                                     .background(index == selection ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
                                     .contentShape(Rectangle())
@@ -696,7 +698,7 @@ struct CommandPicker: View {
                 .frame(maxHeight: min(420, max(120, bounds.size.height - topInset - 80)))
             }
             .padding(8).frame(width: 420)
-            .pickerGlass(in: RoundedRectangle(cornerRadius: 15))
+            .background(Theme.paneTint, in: RoundedRectangle(cornerRadius: 15))
             .overlay(RoundedRectangle(cornerRadius: 15).strokeBorder(PickerStyle.outline, lineWidth: 1))
             .shadow(color: .black.opacity(0.3), radius: 20, y: 8)
             .padding(.top, topInset)

@@ -52,4 +52,45 @@ final class ZurafaConfigTests: XCTestCase {
         XCTAssertEqual(merged.light.palette[1], 0x222222)
         XCTAssertEqual(merged.light.palette[2], 0x333333)
     }
+
+    func testParsesThemeAndStyleAndIgnoresOutOfRangeValues() {
+        let config = ZurafaConfigLoader.parse("""
+        theme = light:Day,dark:Night
+        accent-color = #3a69cc
+        window-opacity = 0.85
+        pane-gap = 12
+        pane-padding = 6
+        pane-corner-radius = 0
+        unfocused-pane-opacity = 2
+        sidebar-width = 10
+        """)
+
+        XCTAssertEqual(config.theme, "light:Day,dark:Night")
+        XCTAssertEqual(config.style.accent, 0x3a69cc)
+        XCTAssertEqual(config.style.windowOpacity, 0.85)
+        XCTAssertEqual(config.style.paneGap, 12)
+        XCTAssertEqual(config.style.panePadding, 6)
+        XCTAssertEqual(config.style.paneCornerRadius, 0)
+        XCTAssertEqual(config.style.unfocusedPaneOpacity, ZurafaStyle().unfocusedPaneOpacity)
+        XCTAssertEqual(config.style.sidebarWidth, ZurafaStyle().sidebarWidth)
+    }
+
+    func testTemplateIsAllCommentsSoItChangesNothing() {
+        XCTAssertEqual(ZurafaConfigLoader.parse(ZurafaConfigLoader.template), ZurafaConfig())
+    }
+
+    func testResolvesGhosttyThemeByNameAndReportsMissingOnes() throws {
+        let themes = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: themes) }
+        try FileManager.default.createDirectory(at: themes, withIntermediateDirectories: true)
+        try "background = #fafafa\nforeground = #111111\n".write(to: themes.appendingPathComponent("Day"), atomically: true, encoding: .utf8)
+        let loader = GhosttyConfigLoader(xdgConfigHome: themes, bundledThemes: themes)
+
+        let colors = try loader.themeColors("light:Day,dark:Missing")
+        XCTAssertEqual(colors.light.background, 0xfafafa)
+        XCTAssertEqual(colors.light.foreground, 0x111111)
+        XCTAssertNil(colors.dark.background)
+        XCTAssertEqual(colors.unresolved, ["Missing"])
+        XCTAssertEqual(try loader.themeColors("Day").dark.background, 0xfafafa)
+    }
 }

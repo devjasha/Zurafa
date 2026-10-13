@@ -80,20 +80,32 @@ struct GhosttyConfigLoader {
         var unresolved: [String] = []
         for dark in [false, true] {
             var themed: [String: String] = [:]
-            if let name = themeName(values["theme"], dark: dark) {
-                if let file = themeFile(name), fm.fileExists(atPath: file.path) {
-                    var themeFiles: [URL] = []
-                    try read(file, into: &themed, files: &themeFiles, stack: [])
-                } else {
-                    unresolved.append(name)
-                }
-            }
+            try readTheme(values["theme"], dark: dark, into: &themed, unresolved: &unresolved)
             // Ghostty's explicit colors override the selected theme.
             themed.merge(values.filter { $0.key != "theme" }) { _, explicit in explicit }
             let colors = colors(from: themed)
             if dark { settings.dark = colors } else { settings.light = colors }
         }
         return GhosttyImport(settings: settings, files: files, unresolvedThemes: Array(Set(unresolved)).sorted())
+    }
+
+    /// Colors of a Ghostty `theme` value (`Name` or `light:A,dark:B`) and the names that were not found.
+    func themeColors(_ value: String) throws -> (light: GhosttyColors, dark: GhosttyColors, unresolved: [String]) {
+        var unresolved: [String] = []
+        var light: [String: String] = [:], dark: [String: String] = [:]
+        try readTheme(value, dark: false, into: &light, unresolved: &unresolved)
+        try readTheme(value, dark: true, into: &dark, unresolved: &unresolved)
+        return (colors(from: light), colors(from: dark), Array(Set(unresolved)).sorted())
+    }
+
+    private func readTheme(_ value: String?, dark: Bool, into values: inout [String: String], unresolved: inout [String]) throws {
+        guard let name = themeName(value, dark: dark) else { return }
+        guard let file = themeFile(name), FileManager.default.fileExists(atPath: file.path) else {
+            unresolved.append(name)
+            return
+        }
+        var files: [URL] = []
+        try read(file, into: &values, files: &files, stack: [])
     }
 
     private func read(_ url: URL, into values: inout [String: String], files: inout [URL], stack: Set<URL>) throws {

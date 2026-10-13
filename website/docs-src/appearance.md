@@ -1,6 +1,23 @@
 # Appearance & Ghostty settings
 
-Zurafa offers Follow System, Light, and Dark modes. Open `⌘K` and choose an appearance directly; the change takes effect immediately. `⇧⌘A` cycles through the three modes. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.
+Zurafa offers Follow System, Light, and Dark modes. Open `⌘K` and choose an appearance directly; the change takes effect immediately. `⇧⌘A` switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.
+
+## Configuration file
+
+Press `⌘,` to open `~/.config/config.zurafa` (or `$XDG_CONFIG_HOME/config.zurafa`) in your default text editor. The first time, Zurafa writes a commented template that lists every setting; remove the `#` in front of a line to use it. Changes apply a moment after you save, and deleting a line returns that setting to its default.
+
+```
+theme = light:Catppuccin Latte,dark:Catppuccin Mocha
+accent-color = #3a69cc
+window-opacity = 0.9
+pane-gap = 8
+pane-padding = 12
+pane-corner-radius = 14
+unfocused-pane-opacity = 0.7
+sidebar-width = 194
+```
+
+`theme` accepts any Ghostty theme name from `~/.config/ghostty/themes` or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (`foreground`, `background`, `cursor-color`, `palette`, `font-family`, `font-size`) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored.
 
 ## Import Ghostty settings
 

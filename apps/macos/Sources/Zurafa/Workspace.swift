@@ -7,8 +7,9 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     var colorScheme: ColorScheme? {
         switch self { case .system: nil; case .light: .light; case .dark: .dark }
     }
-    var next: AppearanceMode {
-        switch self { case .system: .light; case .light: .dark; case .dark: .system }
+    /// Flips what is on screen, so one press always switches; `.system` resolves through the OS appearance.
+    func toggled(systemDark: Bool) -> AppearanceMode {
+        self == .dark || (self == .system && systemDark) ? .light : .dark
     }
 }
 
@@ -134,6 +135,7 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var commandError: String?
     @Published private(set) var notice: String?
     @Published private(set) var workspaceBackground: Color?
+    @Published private(set) var style = ZurafaStyle()
     @Published var preview: FilePreview?
     @Published private(set) var backgroundImage = BackgroundImageStore.load()
     @Published private(set) var backgroundImageEnabled = UserDefaults.standard.object(forKey: "backgroundImageEnabled") as? Bool ?? true
@@ -143,8 +145,14 @@ enum EditorKind: String, Identifiable {
     private var refreshTask: Task<Void, Never>?
     private var creatingInitialTab = false
     private var requiredRevision: UInt64 = 0
+    private var configModified: Date?
     private var latestEventSequence: UInt64 = 0
     var sessions: [SessionSnapshot] { (snapshot?.sessions.values ?? Dictionary<String, SessionSnapshot>().values).sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending } }
+    /// Workspace picker order: this Mac first, then remote sessions grouped by host. ⌘1–9 follow it while the picker is open.
+    var orderedSessions: [SessionSnapshot] {
+        sessions.filter { $0.remote == nil }
+            + sessions.filter { $0.remote != nil }.sorted { ($0.remote?.hostname ?? "", $0.label) < ($1.remote?.hostname ?? "", $1.label) }
+    }
     var currentSession: SessionSnapshot? { snapshot?.sessions[sessionID] }
     var name: String { currentSession?.label ?? "Workspace" }
     var hostLabel: String { currentSession?.remote?.hostname ?? "This Mac" }
@@ -156,6 +164,10 @@ enum EditorKind: String, Identifiable {
         TerminalStore.shared.onOpenLink = { [weak self] id, link in self?.openPreview(link, from: id) ?? false }
         loadZurafaConfig()
         syncTerminalAppearance()
+        // shortcut: polls the config's modification date once a second; catches every editor's save style. Switch to FSEvents if it ever shows up in profiles.
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reloadConfigIfChanged() }
+        }
         daemon.onSnapshot = { [weak self] snapshot in self?.apply(snapshot) }
         daemon.onEvent = { [weak self] event in self?.apply(event) }
         daemon.onDisconnect = { [weak self] in self?.commandError = "Reconnecting to daemon…" }
@@ -344,7 +356,10 @@ enum EditorKind: String, Identifiable {
         syncTerminalAppearance()
     }
 
-    func cycleAppearance() { setAppearance(appearance.next) }
+    func toggleAppearance() {
+        let systemDark = NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        setAppearance(appearance.toggled(systemDark: systemDark))
+    }
 
     func setTabStripLayout(_ layout: TabStripLayout) {
         tabStripLayout = layout
@@ -359,16 +374,62 @@ enum EditorKind: String, Identifiable {
         let systemDark = systemScheme.map { $0 == .dark } ??
             (NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
         TerminalStore.shared.setDark(appearance == .dark || (appearance == .system && systemDark))
-        workspaceBackground = TerminalStore.shared.workspaceBackground.map(Color.init(nsColor:))
+        refreshTheme()
+    }
+
+    /// Publishing the background re-renders the views that read `Theme`.
+    private func refreshTheme() {
+        let colors = TerminalStore.shared.currentColors
+        Theme.imported = colors.background == nil && colors.foreground == nil ? nil : colors
+        workspaceBackground = colors.background.map { Color(nsColor: TerminalStore.ns($0)) }
     }
 
     private func loadZurafaConfig() {
+        let loader = ZurafaConfigLoader()
+        configModified = Self.modified(loader.fileURL)
         do {
-            guard let config = try ZurafaConfigLoader().load() else { return }
-            TerminalStore.shared.applyZurafaConfig(config.terminal.count > 0 ? config.terminal : nil)
+            // A missing file resets to defaults, so deleting a setting undoes it.
+            let config = try loader.load() ?? ZurafaConfig()
+            var terminal = config.terminal
+            if let theme = config.theme {
+                let colors = try GhosttyConfigLoader().themeColors(theme)
+                var themed = GhosttyTerminalSettings()
+                themed.light = colors.light
+                themed.dark = colors.dark
+                terminal = themed.applying(terminal)
+                if !colors.unresolved.isEmpty { showNotice("Theme not found: \(colors.unresolved.joined(separator: ", "))") }
+            }
+            TerminalStore.shared.applyZurafaConfig(terminal.count > 0 ? terminal : nil)
+            style = config.style
+            Theme.customAccent = config.style.accent
             if let path = config.backgroundImage { backgroundImage = NSImage(contentsOfFile: path) ?? backgroundImage }
             if let enabled = config.backgroundImageEnabled { backgroundImageEnabled = enabled }
+            refreshTheme()
         } catch { commandError = error.localizedDescription }
+    }
+
+    private static func modified(_ url: URL) -> Date? {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
+
+    private func reloadConfigIfChanged() {
+        guard Self.modified(ZurafaConfigLoader().fileURL) != configModified else { return }
+        commandError = nil
+        loadZurafaConfig()
+    }
+
+    /// ⌘, opens the config in the user's text editor, writing the commented template first.
+    func openConfig() {
+        let url = ZurafaConfigLoader().fileURL
+        do {
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try ZurafaConfigLoader.template.write(to: url, atomically: true, encoding: .utf8)
+            }
+        } catch { commandError = error.localizedDescription; return }
+        // .zurafa has no registered app, so hand it to the default plain-text editor.
+        guard let editor = NSWorkspace.shared.urlForApplication(toOpen: .plainText) else { NSWorkspace.shared.open(url); return }
+        NSWorkspace.shared.open([url], withApplicationAt: editor, configuration: NSWorkspace.OpenConfiguration())
     }
 
     func importGhosttySettings() {
@@ -382,7 +443,7 @@ enum EditorKind: String, Identifiable {
                     return
                 }
                 TerminalStore.shared.applyGhostty(imported.settings)
-                workspaceBackground = TerminalStore.shared.workspaceBackground.map(Color.init(nsColor:))
+                refreshTheme()
                 let suffix = imported.unresolvedThemes.isEmpty ? "" : " · Theme not found: \(imported.unresolvedThemes.joined(separator: ", "))"
                 showNotice("Imported \(imported.settings.count) Ghostty terminal settings\(suffix)")
             } catch { commandError = error.localizedDescription }
@@ -391,7 +452,7 @@ enum EditorKind: String, Identifiable {
 
     func clearGhosttySettings() {
         TerminalStore.shared.clearGhostty()
-        workspaceBackground = nil
+        refreshTheme()
         showNotice("Using Zurafa terminal defaults")
     }
 
@@ -536,7 +597,7 @@ struct Command: Identifiable {
             + (key == .return ? "↩" : String(key.character).uppercased())
     }
     static let all: [Command] = [
-        Command(title: "Cycle Appearance", key: "a", mods: [.command, .shift]) { $0.cycleAppearance() },
+        Command(title: "Toggle Light/Dark", key: "a", mods: [.command, .shift]) { $0.toggleAppearance() },
         Command(title: "New Session", key: "n", mods: [.command, .shift]) { $0.editor = .newSession },
         Command(title: "Rename Session", key: "e", mods: [.command, .shift]) { $0.editor = .renameSession },
         Command(title: "Delete Workspace", key: "w", mods: [.command, .option, .shift]) { $0.confirmCloseSession = true },
@@ -553,6 +614,12 @@ struct Command: Identifiable {
         Command(title: "Previous Pane", key: "[") { $0.focusStep(-1) },
         Command(title: "Command Palette", key: "k") { $0.paletteOpen = true },
     ] + (1...9).map { n in
-        Command(title: "Select Tab \(n)", key: KeyEquivalent(Character("\(n)"))) { $0.selectTab(n - 1) }
+        Command(title: "Select Tab \(n)", key: KeyEquivalent(Character("\(n)"))) { ws in
+            if ws.sessionPickerOpen {
+                if ws.orderedSessions.indices.contains(n - 1) { ws.selectSession(ws.orderedSessions[n - 1].sessionID) }
+            } else {
+                ws.selectTab(n - 1)
+            }
+        }
     }
 }

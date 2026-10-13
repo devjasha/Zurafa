@@ -2,11 +2,12 @@ import XCTest
 @testable import Zurafa
 
 final class LayoutTests: XCTestCase {
-    func testAppearanceCanFollowSystemAndCycleWithoutPrompt() {
+    func testAppearanceCanFollowSystemAndToggleInOnePress() {
         XCTAssertNil(AppearanceMode.system.colorScheme)
-        XCTAssertEqual(AppearanceMode.system.next, .light)
-        XCTAssertEqual(AppearanceMode.light.next, .dark)
-        XCTAssertEqual(AppearanceMode.dark.next, .system)
+        XCTAssertEqual(AppearanceMode.system.toggled(systemDark: false), .dark)
+        XCTAssertEqual(AppearanceMode.system.toggled(systemDark: true), .light)
+        XCTAssertEqual(AppearanceMode.light.toggled(systemDark: true), .dark)
+        XCTAssertEqual(AppearanceMode.dark.toggled(systemDark: false), .light)
     }
     func testForegroundProcessSelectsReportedProgramIcon() throws {
         let process = try JSONDecoder().decode(ForegroundProcess.self,

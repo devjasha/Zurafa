@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Free Cmd-W and Cmd-T from the stock Close and Show Fonts items.
                 CommandGroup(replacing: .saveItem) {}
                 CommandGroup(replacing: .textFormatting) {}
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings…") { ws.openConfig() }.keyboardShortcut(",")
+                }
                 CommandGroup(after: .appInfo) {
                     Button("Check for Updates…") { delegate.checkForUpdates() }
                 }

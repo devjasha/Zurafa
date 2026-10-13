@@ -81,7 +81,7 @@ Remote tabs run the system SSH client using saved host details; SSH keys and hos
 your normal macOS SSH configuration. Saved hosts persist on disk, while open
 sessions and their PTYs live only for the current daemon process.
 Use ⌘K to choose Follow System, Light, or Dark appearance immediately; ⇧⌘A
-cycles through them. Zurafa remembers the choice across launches. In Follow
+switches between light and dark. Zurafa remembers the choice across launches. In Follow
 System mode, the window and terminals update when macOS changes appearance.
 
 Use ⌘K → Import Ghostty Settings to copy terminal font, font size, foreground,
@@ -90,6 +90,14 @@ standard XDG and macOS configuration paths. Includes and named light/dark themes
 are supported. Zurafa keeps its own glass window design and does not import
 Ghostty keybindings, shell commands, or window layout. Reimport after changing
 Ghostty's files, or choose Use Zurafa Terminal Defaults to undo the import.
+Press ⌘, to open `~/.config/config.zurafa` (or `$XDG_CONFIG_HOME/config.zurafa`)
+in your default text editor. The first time, Zurafa writes a commented template
+listing every setting. Changes apply as soon as you save. Settings include
+`theme` (any Ghostty theme name, or `light:A,dark:B`), terminal colors and font,
+`accent-color`, `window-opacity`, `pane-gap`, `pane-padding`,
+`pane-corner-radius`, `unfocused-pane-opacity`, `sidebar-width`, and the
+background image. Values in this file override imported Ghostty settings.
+
 Terminal panes bundle Symbols Nerd Font Mono as an icon fallback. The chosen
 terminal font still renders ordinary text and any icons it already contains;
 only missing Nerd Font symbols use the bundled face.

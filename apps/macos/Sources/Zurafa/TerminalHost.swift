@@ -64,7 +64,7 @@ final class PaneTerminal: TerminalView {
         0x202831, 0xf07178, 0x9ad07f, 0xe5c07b, 0x80aaff, 0xc79bf0, 0x70c8d8, 0xd7dce2,
         0x66737e, 0xff8a8e, 0xb7e396, 0xf2d693, 0xa4beff, 0xdab4ff, 0x94e0e9, 0xf5f7fa,
     ]
-    private static func ns(_ hex: UInt32) -> NSColor {
+    nonisolated static func ns(_ hex: UInt32) -> NSColor {
         NSColor(srgbRed: CGFloat(hex >> 16 & 255) / 255, green: CGFloat(hex >> 8 & 255) / 255, blue: CGFloat(hex & 255) / 255, alpha: 1)
     }
     private static func dim(_ text: String) -> String { "\r\n\u{1b}[2m\(text)\u{1b}[0m\r\n" }
@@ -102,10 +102,10 @@ final class PaneTerminal: TerminalView {
         (ghosttySettings ?? GhosttyTerminalSettings()).applying(zurafaSettings)
     }
 
-    var workspaceBackground: NSColor? {
+    /// Imported colors for the current appearance; the app chrome follows them too.
+    var currentColors: GhosttyColors {
         let settings = effectiveSettings
-        let hex = (isDark ? settings.dark : settings.light).background
-        return hex.map(Self.ns)
+        return isDark ? settings.dark : settings.light
     }
 
     private func configure(_ view: PaneTerminal) {

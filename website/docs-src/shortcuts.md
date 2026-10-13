@@ -16,13 +16,14 @@ The command picker is the quickest way to discover an action. Press `⌘K`, type
 | Go to directory | `⇧⌘G` |
 | Refresh sessions | `⌘R` |
 | Toggle tab layout | `⌥⌘T` |
+| Open config file | `⌘,` |
 | Split pane right | `⌘D` |
 | Split pane down | `⇧⌘D` |
 | Zoom or unzoom pane | `⇧⌘↩` |
 | Next pane | `⌘]` |
 | Previous pane | `⌘[` |
-| Select tab 1–9 | `⌘1`–`⌘9` |
-| Cycle appearance | `⇧⌘A` |
+| Select tab 1–9 (workspace 1–9 while the workspace picker is open) | `⌘1`–`⌘9` |
+| Switch light / dark | `⇧⌘A` |
 
 ## Command picker actions
 
