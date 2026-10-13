@@ -169,6 +169,7 @@ create_appcast
 create_dmg "$dmg"
 if notarize "$dmg"; then
   xcrun stapler staple "$dmg"
+  shasum -a 256 "$dmg" > "$dmg.sha256" # stapling rewrites the dmg
 fi
 cp "$dmg" "$root/website/dist/releases/$(basename "$dmg")"
 

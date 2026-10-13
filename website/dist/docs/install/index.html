@@ -65,15 +65,15 @@
     <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Start here</div><h1>Install on macOS</h1><div class="prose"><p>The current release supports <strong>Apple Silicon</strong> Macs with <strong>macOS 14 or newer</strong>. An Intel build is not available yet.</p>
 <h2 id="download-and-install">Download and install</h2>
 <ol>
-<li>Download <a href="/releases/Zurafa-0.1.4-macos-arm64.dmg">Zurafa 0.1.4 for macOS</a>.</li>
+<li>Download <a href="/releases/Zurafa-0.1.5-macos-arm64.dmg">Zurafa 0.1.5 for macOS</a>.</li>
 <li>Open the DMG.</li>
 <li>Drag <code>Zurafa.app</code> into your Applications folder and open it.</li>
 </ol>
 <p>Zurafa is signed with Developer ID and notarized by Apple.</p>
 <h2 id="verify-the-download">Verify the download</h2>
 <p>To check the DMG in Terminal, run:</p>
-<pre><code>shasum -a 256 Zurafa-0.1.4-macos-arm64.dmg</code></pre>
-<p>The expected SHA-256 is <code>ff7271aefc0e0d9c9bb4009cd7e49b8afe140abbeb1572e37306eb766bfac5d2</code>.</p>
+<pre><code>shasum -a 256 Zurafa-0.1.5-macos-arm64.dmg</code></pre>
+<p>The expected SHA-256 is <code>4a2e092708802b7ec3089bd8ff488d72182d373354b2faa61ce94ff79bc0ae8b</code>.</p>
 <h2 id="what-starts-with-the-app">What starts with the app</h2>
 <p>Zurafa connects to a per-user Rust daemon over a Unix socket. If no daemon is running, the app starts the bundled one. Closing the app does not immediately stop that daemon or its terminal processes. Sessions and PTYs remain available while that daemon is alive; they are not restored after it exits.</p>
 <h2 id="updating-from-an-older-build">Updating from an older build</h2>
