@@ -6,7 +6,35 @@ final class PaneTerminal: TerminalView {
     var onFocus: (() -> Void)?
     var onSized: (() -> Void)?
     var terminal: String?
+    var openedLink = false
     override func mouseDown(with event: NSEvent) { onFocus?(); super.mouseDown(with: event) }
+    // SwiftTerm only links text containing "/" or a URL scheme, so ⌘-click on a bare name like README.md falls through.
+    override func mouseUp(with event: NSEvent) {
+        openedLink = false
+        super.mouseUp(with: event)
+        guard event.modifierFlags.contains(.command), !openedLink, !selectionActive, let terminal,
+              let word = word(at: event) else { return }
+        _ = TerminalStore.shared.onOpenLink(terminal, word)
+    }
+    private func word(at event: NSEvent) -> String? {
+        // shortcut: SwiftTerm keeps its Terminal internal, so read it by reflection; returns nil if SwiftTerm renames it.
+        guard let t = Mirror(reflecting: self).superclassMirror?.descendant("terminal") as? Terminal else { return nil }
+        let index = characterIndex(for: event.locationInWindow)
+        return t.terminalLock.withLock {
+            guard t.cols > 0 else { return nil }
+            let cells = (0..<t.cols).map { t.getText(col: $0, row: index / t.cols) ?? " " }
+            return Self.word(in: cells, at: index % t.cols)
+        }
+    }
+    /// The run of non-blank cells around `col`; empty cells read as NUL.
+    static func word(in cells: [String], at col: Int) -> String? {
+        let blank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: "\0"))).isEmpty }
+        guard cells.indices.contains(col), !blank(cells[col]) else { return nil }
+        var (lo, hi) = (col, col)
+        while lo > 0, !blank(cells[lo - 1]) { lo -= 1 }
+        while hi + 1 < cells.count, !blank(cells[hi + 1]) { hi += 1 }
+        return cells[lo...hi].joined()
+    }
     override func paste(_ sender: Any) {
         if let text = ImagePaste.promptText() { pasteText(text); return }
         super.paste(sender)
@@ -207,6 +235,7 @@ final class PaneTerminal: TerminalView {
         if let id = (source as? PaneTerminal)?.terminal { daemon.send(Msg(type: "resize", cols: newCols, rows: newRows, terminal: id)) }
     }
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+        (source as? PaneTerminal)?.openedLink = true
         guard let id = (source as? PaneTerminal)?.terminal, onOpenLink(id, link) else {
             TerminalView.openDefaultLink(link)
             return
