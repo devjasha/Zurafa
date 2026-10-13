@@ -7,6 +7,10 @@ final class PaneTerminal: TerminalView {
     var onSized: (() -> Void)?
     var terminal: String?
     override func mouseDown(with event: NSEvent) { onFocus?(); super.mouseDown(with: event) }
+    override func paste(_ sender: Any) {
+        if let text = ImagePaste.promptText() { pasteText(text); return }
+        super.paste(sender)
+    }
     override func setFrameSize(_ size: NSSize) {
         super.setFrameSize(size)
         if size.width > 0, size.height > 0, let callback = onSized { onSized = nil; callback() }
