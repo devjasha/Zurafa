@@ -485,8 +485,8 @@ enum EditorKind: String, Identifiable {
         command(["op": .string("label"), "session": .string(sessionID), "window": .string(tab.id), "label": .string(label)])
     }
 
-    func closeTab() {
-        let ids = tab.layout.panes
+    func closeTab(_ target: Tab? = nil) {
+        let ids = (target ?? tab).layout.panes
         let target = sessionID
         Task {
             do {

@@ -103,23 +103,24 @@ struct Tile: View {
     static let size: CGFloat = 30
 
     let program: Program
+    var size: CGFloat = Tile.size
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
         if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
             Image(nsImage: icon)
                 .resizable()
                 .scaledToFill()
-                .frame(width: Self.size, height: Self.size)
+                .frame(width: size, height: size)
                 .clipShape(shape)
                 .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
         } else {
             shape.fill(.ultraThinMaterial)
                 .overlay(shape.fill(program.tile[0].opacity(0.16)))
                 .overlay(shape.strokeBorder(.white.opacity(0.45), lineWidth: 0.5))
-                .overlay(ProgramGlyph(program: program).foregroundStyle(Theme.ink).frame(width: 18, height: 18))
-                .frame(width: Self.size, height: Self.size)
+                .overlay(ProgramGlyph(program: program).foregroundStyle(Theme.ink).frame(width: size * 0.6, height: size * 0.6))
+                .frame(width: size, height: size)
                 .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
         }
     }
@@ -413,14 +414,21 @@ struct VerticalTabSidebar: View {
                     ForEach(Array(ws.tabs.enumerated()), id: \.element.id) { index, tab in
                         Button { ws.selectTab(index) } label: {
                             let meta = ws.meta(tab.focus)
+                            let state = ws.taskState(for: tab)
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack(spacing: 9) {
                                     Tile(program: meta.program)
+                                        .overlay(alignment: .topTrailing) {
+                                            if state.done && index != ws.selected { TaskDoneDot().offset(x: 3, y: -3) }
+                                        }
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(meta.label ?? meta.title)
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundStyle(Theme.ink)
-                                            .lineLimit(1)
+                                        HStack(spacing: 5) {
+                                            Text(meta.label ?? meta.title)
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundStyle(Theme.ink)
+                                                .lineLimit(1)
+                                            if state.working { WorkingDots() }
+                                        }
                                         Text(meta.cwd)
                                             .font(.system(size: 10))
                                             .foregroundStyle(Theme.inkSoft)
@@ -473,34 +481,77 @@ struct VerticalTabSidebar: View {
     }
 }
 
+struct TabTaskState {
+    var working: Bool
+    var done: Bool
+}
+
+struct TaskDoneDot: View {
+    var body: some View {
+        Circle()
+            .fill(Theme.accent)
+            .frame(width: 8, height: 8)
+            .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 0.75))
+            .shadow(color: Theme.accent.opacity(0.45), radius: 2)
+    }
+}
+
+struct WorkingDots: View {
+    @State private var blink = false
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(StatusDot.colors["working"] ?? Theme.accent)
+                    .frame(width: 4, height: 4)
+                    .opacity(blink ? 1 : 0.25)
+                    .animation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true).delay(Double(i) * 0.12), value: blink)
+            }
+        }
+        .onAppear { blink = true }
+    }
+}
+
+extension Workspace {
+    func taskState(for tab: Tab) -> TabTaskState {
+        let states = tab.layout.panes.flatMap { meta($0).statuses.values.map(\.state) }
+        return TabTaskState(working: states.contains("working"), done: states.contains("done"))
+    }
+}
+
 struct TabItem: View {
     let tab: Tab, on: Bool
     @EnvironmentObject var ws: Workspace
+    @State private var hovering = false
 
     var body: some View {
         let m = ws.meta(tab.focus)
-        let behind = tab.layout.panes.filter { $0 != tab.focus }.prefix(2).map { ws.meta($0).program }
-        HStack(spacing: 9) {
-            ZStack(alignment: .leading) { // the other panes' tiles peek out to the right
-                ForEach(Array(behind.enumerated()).reversed(), id: \.offset) { k, p in
-                    Tile(program: p).scaleEffect(1 - 0.12 * CGFloat(k + 1), anchor: .trailing).offset(x: 4 * CGFloat(k + 1))
+        let state = ws.taskState(for: tab)
+        HStack(spacing: 8) {
+            Tile(program: m.program, size: 22)
+                .overlay(alignment: .topTrailing) {
+                    if state.done && !on { TaskDoneDot().offset(x: 3, y: -3) }
                 }
-                Tile(program: m.program)
-            }
-            .frame(width: Tile.size + 4 * CGFloat(behind.count), alignment: .leading)
             HStack(spacing: 5) {
                 Text(m.label ?? m.title).font(.system(size: 13, weight: .medium)).foregroundStyle(on ? Theme.ink : Theme.inkSoft)
-                Text(m.cwd).font(.system(size: 13)).foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if state.working { WorkingDots() }
             }
-            .fixedSize()
-            .frame(minWidth: 30, maxWidth: 150, alignment: .leading)
-            .mask(LinearGradient(stops: [.init(color: .black, location: 0.8), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
+            .frame(maxWidth: 150, alignment: .leading)
+            Button { ws.closeTab(tab) } label: {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .medium))
+                    .frame(width: 18, height: 18).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.inkSoft).help("Close Tab")
+            .opacity(on || hovering ? 1 : 0)
         }
-        .padding(.leading, 5).padding(.trailing, 10).frame(height: 30)
+        .padding(.leading, 5).padding(.trailing, 8).frame(height: 30)
         .background {
             if on { Capsule().fill(Theme.activeTab.opacity(0.55)).shadow(color: .black.opacity(0.10), radius: 3, y: 1) }
         }
         .contentShape(Capsule())
+        .onHover { hovering = $0 }
     }
 }
 
@@ -564,6 +615,15 @@ struct LayoutView: View {
 struct PaneView: View {
     let id: String
     @EnvironmentObject var ws: Workspace
+    @State private var shown: Bool
+    /// Pane ids already on screen, so tab switches and re-splits don't replay the entrance animation.
+    private static var seen = Set<String>()
+
+    init(id: String) {
+        self.id = id
+        _shown = State(initialValue: Self.seen.contains(id))
+    }
+
     var body: some View {
         let m = ws.meta(id), focused = ws.tab.focus == id
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -598,10 +658,19 @@ struct PaneView: View {
             TerminalHost(id: id, program: m.program,
                          focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
                 .padding(.leading, 14).padding(.trailing, 8).padding(.bottom, 10)
+                .opacity(focused ? 1 : 0.7)
         }
-        .background(Theme.paneTint, in: shape)
-        .overlay(shape.strokeBorder(Theme.paneStroke, lineWidth: 1))
-        .shadow(color: .black.opacity(focused ? 0.10 : 0.06), radius: focused ? 12 : 8, y: 3)
+        // Inactive panes recede into the backdrop: faint fill, faint stroke, no lift.
+        .background(Theme.paneTint.opacity(focused ? 1 : 0.35), in: shape)
+        .overlay(shape.strokeBorder(Theme.paneStroke.opacity(focused ? 1 : 0.5), lineWidth: 1))
+        .shadow(color: .black.opacity(focused ? 0.10 : 0), radius: 12, y: 3)
+        .animation(.easeInOut(duration: 0.2), value: focused)
         .padding(4)
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.97)
+        .onAppear {
+            guard Self.seen.insert(id).inserted else { return }
+            withAnimation(.easeInOut(duration: 0.22)) { shown = true }
+        }
     }
 }
