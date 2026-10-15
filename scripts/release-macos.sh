@@ -98,6 +98,10 @@ create_appcast() {
   [[ -x "$generate_appcast" ]] || { echo "missing Sparkle generate_appcast: $generate_appcast" >&2; return 0; }
 
   mkdir -p "$sparkle_dir"
+  # generate_appcast reuses existing deltas by name, so a rebuilt release would ship deltas of the old build.
+  local build
+  build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")"
+  rm -f "$sparkle_dir/Zurafa$build-"*.delta "$root/website/dist/releases/Zurafa$build-"*.delta
   cp "$zip" "$sparkle_dir/$(basename "$zip")"
   local notes="$root/build/release-notes-v$version.md"
   if [[ -f "$notes" ]]; then
