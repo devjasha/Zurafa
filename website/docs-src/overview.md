@@ -1,6 +1,6 @@
 # Welcome to Zurafa
 
-Zurafa is a terminal workspace for macOS. The SwiftUI app renders terminals and workspace controls; a Rust daemon owns processes, session layouts, events, and authoritative snapshots. The current public build is **0.1.11** for Apple Silicon Macs running macOS 14 or later.
+Zurafa is a terminal workspace for macOS. The SwiftUI app renders terminals and workspace controls; a Rust daemon owns processes, session layouts, events, and authoritative snapshots. The current public build is **0.1.12** for Apple Silicon Macs running macOS 14 or later.
 
 ## Find your way around
 
