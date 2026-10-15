@@ -150,7 +150,7 @@ struct Tile: View {
 
 /// Bundled: Contents/Resources/AppIcon.icns. `swift run`: the SwiftPM resource bundle, which a signed .app cannot hold at its root.
 let appIcon: NSImage = Bundle.main.image(forResource: "AppIcon")
-    ?? ZurafaResources.image(named: "Zurafa-iOS-Default-512@1x")
+    ?? ZurafaResources.image(named: "Zurafa-iOS-Default-1024@1x")
     ?? NSImage()
 
 /// One visible indicator per OSC 7501 record, including nested records.

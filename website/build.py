@@ -101,7 +101,7 @@ def markdown(source):
 def main():
     DIST.mkdir(exist_ok=True)
     (DIST / 'assets').mkdir(exist_ok=True)
-    for name in ('style.css', 'site.js', 'zurafa-icon.png', 'zurafa-workspace.png', 'zurafa-interactive-preview.png'):
+    for name in ('style.css', 'site.js', 'zurafa-icon.png', 'zurafa-mascot.png', 'zurafa-star.png', 'zurafa-workspace.png', 'zurafa-interactive-preview.png'):
         shutil.copy2(ROOT / 'assets' / name, DIST / 'assets' / name)
     (DIST / 'index.html').write_text((ROOT / 'home.html').read_text(), encoding='utf-8')
     template = (ROOT / 'docs-template.html').read_text()

@@ -57,7 +57,7 @@ cp "$root/rust/target/release/zurafa" "$app/Contents/Resources/zurafa"
 icon_work="$(mktemp -d)"
 trap 'rm -rf "$icon_work"' EXIT
 icon_source="$icon_work/AppIcon.png"
-swift "$root/scripts/make-icon.swift" "$root/apps/macos/Sources/Zurafa/Resources/Zurafa-iOS-Default-512@1x.png" "$icon_source"
+swift "$root/scripts/make-icon.swift" "$root/apps/macos/Sources/Zurafa/Resources/Zurafa-iOS-Default-1024@1x.png" "$icon_source"
 iconset="$icon_work/AppIcon.iconset"
 mkdir "$iconset"
 for s in 16 32 128 256 512; do
