@@ -9,10 +9,13 @@ struct FilePreview: Identifiable {
     let url: URL
     let kind: Kind
     var git: GitStatus?
+    /// The pane that opened this preview; HTML pages paste follow-up questions into it.
+    var pane: String?
 
     enum Kind {
         case image(NSImage)
         case markdown(String, formulas: [String])
+        case html
         case text(String)
         case unsupported(String)
     }
@@ -26,6 +29,9 @@ struct FilePreview: Identifiable {
 
         let ext = url.pathExtension.lowercased()
         let git = GitStatus.load(for: url)
+        if ["html", "htm"].contains(ext) {
+            return FilePreview(url: url, kind: .html, git: git)
+        }
         if let image = NSImage(contentsOf: url) {
             return FilePreview(url: url, kind: .image(image), git: git)
         }
@@ -120,6 +126,9 @@ struct FilePreviewPane: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 6)
             }
+        case .html:
+            HTMLPreview(url: preview.url, pane: preview.pane)
+                .id(preview.id)
         case .text(let text):
             ScrollView([.vertical, .horizontal]) {
                 HighlightrCode(colorScheme: colorScheme).highlightCode(text, language: preview.url.pathExtension.lowercased())

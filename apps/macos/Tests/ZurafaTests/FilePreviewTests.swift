@@ -28,6 +28,21 @@ final class FilePreviewTests: XCTestCase {
         }
     }
 
+    @MainActor func testLoadsHTMLAsWebPreview() throws {
+        let dir = try temporaryDirectory()
+        try "<h1>Hi</h1>".write(to: dir.appendingPathComponent("page.html"), atomically: true, encoding: .utf8)
+
+        guard case .html? = FilePreview.load(link: "page.html", currentDirectory: dir.path)?.kind else {
+            return XCTFail("expected html preview")
+        }
+    }
+
+    func testPromptTextIsOneSafeLine() {
+        XCTAssertEqual(HTMLPreview.promptText("Explain\n the \u{1b}[201~ solver\r"), "Explain the [201~ solver")
+        XCTAssertNil(HTMLPreview.promptText("\n\t "))
+        XCTAssertEqual(HTMLPreview.promptText(String(repeating: "a", count: 900))?.count, 500)
+    }
+
     func testConvertsOrgToMarkdown() {
         let org = """
         #+TITLE: Notes

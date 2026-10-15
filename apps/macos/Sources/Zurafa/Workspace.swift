@@ -321,7 +321,8 @@ enum EditorKind: String, Identifiable {
     func close(_ id: String) { command(["op": .string("close"), "session": .string(sessionID), "block": .string(id)]) }
     func closeFocused() { if !tab.focus.isEmpty { close(tab.focus) } }
     func openPreview(_ link: String, from pane: String) -> Bool {
-        guard let file = FilePreview.load(link: link, currentDirectory: metas[pane]?.pwd) else { return false }
+        guard var file = FilePreview.load(link: link, currentDirectory: metas[pane]?.pwd) else { return false }
+        file.pane = pane
         previews[snapshot?.sessions.first(where: { $0.value.blocks[pane] != nil })?.key ?? sessionID] = file
         return true
     }
