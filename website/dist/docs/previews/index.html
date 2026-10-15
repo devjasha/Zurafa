@@ -11,7 +11,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases" target="_blank" rel="noopener">Releases ↗</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.8-macos-arm64.dmg" download>Download for Mac</a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.9-macos-arm64.dmg" download>Download for Mac</a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -71,11 +71,12 @@
 <li><strong>Images</strong> show at their full aspect ratio.</li>
 <li><strong>Markdown</strong> renders with headings, lists, tables, and syntax-highlighted code blocks.</li>
 <li><strong>Org</strong> files (<code>.org</code>) render the same way: headings, lists, tables, links, emphasis, and <code>#+BEGIN_SRC</code> blocks. Property drawers, comments, and <code>#+</code> keywords other than <code>#+TITLE</code> are hidden.</li>
+<li><strong>Math</strong> in Markdown and Org renders as typeset LaTeX: <code>$…$</code> and <code>\(…\)</code> inline, <code>$$…$$</code>, <code>\[…\]</code>, and <code>equation</code>/<code>align</code>/<code>gather</code> environments as blocks. Custom macros (<code>\newcommand</code>) are not supported.</li>
 <li><strong>Code and plain text</strong> are syntax highlighted in a monospaced view you can select and copy; long lines scroll horizontally.</li>
 </ul>
 <p>When the file is inside a git repository, the preview header shows its status (Modified, Untracked, Added, …) and how many lines were added and removed compared with the last commit.</p>
 <p>Other programs can open the preview too: <code>zurafa preview PATH</code> shows the file beside the current pane, or beside the focused pane of the active tab when run outside Zurafa. Pass <code>-s</code> and <code>-b</code> to choose another session or pane.</p>
-<p>Other file types show a short &quot;no preview available&quot; note. Directories, and paths that do not exist, open with the system default handler instead. Close the preview with its close button.</p>
+<p>Other file types show a short &quot;no preview available&quot; note. Directories, and paths that do not exist, open with the system default handler instead. Each workspace keeps its own preview, so switching workspaces leaves it behind. Close the preview with its close button.</p>
 <h2 id="paste-an-image">Paste an image</h2>
 <p>Paste (<code>⌘V</code>) while an image is on the clipboard, such as a screenshot or an image file copied in Finder. Zurafa saves it as a PNG in the system temporary folder and types the file path into the focused pane, followed by a space. Programs that accept image paths, such as Claude Code, can then read it.</p>
 <p>Pasting text works as usual.</p>
