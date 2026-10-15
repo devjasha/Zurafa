@@ -23,7 +23,7 @@ final class FilePreviewTests: XCTestCase {
 
         let preview = FilePreview.load(link: "README.md", currentDirectory: dir.path)
 
-        guard case .markdown("# Hello")? = preview?.kind else {
+        guard case .markdown("# Hello", _)? = preview?.kind else {
             return XCTFail("expected markdown preview")
         }
     }
@@ -69,7 +69,7 @@ final class FilePreviewTests: XCTestCase {
     @MainActor func testLoadsOrgAsMarkdownPreview() throws {
         let dir = try temporaryDirectory()
         try "* Hello".write(to: dir.appendingPathComponent("notes.org"), atomically: true, encoding: .utf8)
-        guard case .markdown("# Hello")? = FilePreview.load(link: "notes.org", currentDirectory: dir.path)?.kind else {
+        guard case .markdown("# Hello", _)? = FilePreview.load(link: "notes.org", currentDirectory: dir.path)?.kind else {
             return XCTFail("expected org rendered as markdown")
         }
     }
@@ -111,5 +111,25 @@ final class FilePreviewTests: XCTestCase {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         return url
+    }
+}
+
+final class MathMarkdownTests: XCTestCase {
+    func testExtractsDisplayAndInlineMathButNotCodeOrPrices() {
+        let (markdown, formulas) = MathMarkdown.extract("""
+        Rate \\(f(z)\\) and $x^2$ cost $5 and $10.
+        \\[ \\frac{dz}{dt} = f(z, t) \\]
+        `$not$`
+        ```
+        $$code$$
+        ```
+        \\begin{align}a &= b\\end{align}
+        """)
+        XCTAssertEqual(formulas, ["f(z)", "x^2", "\\frac{dz}{dt} = f(z, t)", "\\begin{aligned}a &= b\\end{aligned}"])
+        XCTAssertTrue(markdown.contains("Rate ![](zurafa-math:inline/0) and ![](zurafa-math:inline/1) cost $5 and $10."))
+        XCTAssertTrue(markdown.contains("\n\n![](zurafa-math:display/2)\n\n"))
+        XCTAssertTrue(markdown.contains("`$not$`") && markdown.contains("$$code$$"))
+        XCTAssertEqual(MathMarkdown.formula(URL(string: "zurafa-math:display/2"), in: formulas)?.display, true)
+        XCTAssertNotNil(MathMarkdown.image((formulas[2], true), fontSize: 14, color: .white))
     }
 }

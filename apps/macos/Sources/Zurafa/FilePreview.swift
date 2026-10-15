@@ -12,7 +12,7 @@ struct FilePreview: Identifiable {
 
     enum Kind {
         case image(NSImage)
-        case markdown(String)
+        case markdown(String, formulas: [String])
         case text(String)
         case unsupported(String)
     }
@@ -30,15 +30,20 @@ struct FilePreview: Identifiable {
             return FilePreview(url: url, kind: .image(image), git: git)
         }
         if ["md", "markdown"].contains(ext), let text = try? String(contentsOf: url, encoding: .utf8) {
-            return FilePreview(url: url, kind: .markdown(text), git: git)
+            return markdown(url, text, git)
         }
         if ext == "org", let text = try? String(contentsOf: url, encoding: .utf8) {
-            return FilePreview(url: url, kind: .markdown(OrgMarkdown.convert(text)), git: git)
+            return markdown(url, OrgMarkdown.convert(text), git)
         }
         if isReadableText(url), let text = try? String(contentsOf: url, encoding: .utf8) {
             return FilePreview(url: url, kind: .text(text), git: git)
         }
         return FilePreview(url: url, kind: .unsupported("No preview available for .\(ext.isEmpty ? "file" : ext) files yet."), git: git)
+    }
+
+    private static func markdown(_ url: URL, _ text: String, _ git: GitStatus?) -> FilePreview {
+        let (markdown, formulas) = MathMarkdown.extract(text)
+        return FilePreview(url: url, kind: .markdown(markdown, formulas: formulas), git: git)
     }
 
     static func resolve(link: String, currentDirectory: String?) -> URL? {
@@ -103,13 +108,17 @@ struct FilePreviewPane: View {
                     .scaledToFit()
                     .frame(width: geometry.size.width, height: geometry.size.height)
             }
-        case .markdown(let text):
+        case .markdown(let text, let formulas):
             ScrollView {
                 Markdown(text, baseURL: preview.url.deletingLastPathComponent())
-                    .markdownTheme(.gitHub)
+                    // GitHub's theme paints its own page color; let the pane's tint show through instead.
+                    .markdownTheme(.gitHub.text { ForegroundColor(Theme.ink); FontSize(14) })
+                    .markdownImageProvider(MathImageProvider(formulas: formulas, fontSize: 14, color: NSColor(Theme.ink)))
+                    .markdownInlineImageProvider(MathInlineImageProvider(formulas: formulas, fontSize: 14, color: NSColor(Theme.ink)))
                     .markdownCodeSyntaxHighlighter(HighlightrCode(colorScheme: colorScheme))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 6)
             }
         case .text(let text):
             ScrollView([.vertical, .horizontal]) {

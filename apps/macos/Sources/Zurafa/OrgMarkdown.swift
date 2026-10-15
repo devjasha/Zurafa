@@ -1,7 +1,7 @@
 import Foundation
 
 /// Converts Emacs Org markup to Markdown so the preview can reuse its Markdown renderer.
-/// shortcut: covers headings, blocks, lists, tables, links and emphasis; no footnotes, macros or LaTeX.
+/// shortcut: covers headings, blocks, lists, tables, links and emphasis; no footnotes or macros; LaTeX math is handled later by MathMarkdown.
 enum OrgMarkdown {
     static func convert(_ org: String) -> String {
         var out: [String] = []

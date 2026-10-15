@@ -136,7 +136,9 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var notice: String?
     @Published private(set) var workspaceBackground: Color?
     @Published private(set) var style = ZurafaStyle()
-    @Published var preview: FilePreview?
+    /// Open preview per workspace, so it stays behind when switching workspaces.
+    @Published private var previews: [String: FilePreview] = [:]
+    var preview: FilePreview? { previews[sessionID] }
     @Published private(set) var backgroundImage = BackgroundImageStore.load()
     @Published private(set) var backgroundImageEnabled = UserDefaults.standard.object(forKey: "backgroundImageEnabled") as? Bool ?? true
 
@@ -320,10 +322,10 @@ enum EditorKind: String, Identifiable {
     func closeFocused() { if !tab.focus.isEmpty { close(tab.focus) } }
     func openPreview(_ link: String, from pane: String) -> Bool {
         guard let file = FilePreview.load(link: link, currentDirectory: metas[pane]?.pwd) else { return false }
-        preview = file
+        previews[snapshot?.sessions.first(where: { $0.value.blocks[pane] != nil })?.key ?? sessionID] = file
         return true
     }
-    func closePreview() { preview = nil }
+    func closePreview() { previews[sessionID] = nil }
     func toggleZoom() {
         guard !tab.focus.isEmpty else { return }
         command(["op": .string("zoom"), "session": .string(sessionID), "block": .string(tab.focus), "enabled": .bool(!tab.zoomed)])
