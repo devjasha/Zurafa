@@ -1,6 +1,6 @@
 # Troubleshooting & beta limits
 
-Zurafa 0.1.10 is an early macOS release. These checks cover the current implementation and its known boundaries.
+Zurafa 0.1.11 is an early macOS release. These checks cover the current implementation and its known boundaries.
 
 ## macOS blocks the app
 

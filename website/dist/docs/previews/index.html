@@ -11,7 +11,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases" target="_blank" rel="noopener">Releases ↗</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.9-macos-arm64.dmg" download>Download for Mac</a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.11-macos-arm64.dmg" download>Download for Mac</a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -72,9 +72,14 @@
 <li><strong>Markdown</strong> renders with headings, lists, tables, and syntax-highlighted code blocks.</li>
 <li><strong>Org</strong> files (<code>.org</code>) render the same way: headings, lists, tables, links, emphasis, and <code>#+BEGIN_SRC</code> blocks. Property drawers, comments, and <code>#+</code> keywords other than <code>#+TITLE</code> are hidden.</li>
 <li><strong>Math</strong> in Markdown and Org renders as typeset LaTeX: <code>$…$</code> and <code>\(…\)</code> inline, <code>$$…$$</code>, <code>\[…\]</code>, and <code>equation</code>/<code>align</code>/<code>gather</code> environments as blocks. Custom macros (<code>\newcommand</code>) are not supported.</li>
+<li><strong>HTML</strong> pages render live and can be interactive; see <a href="/docs/previews/#interactive-pages">Interactive pages</a>.</li>
 <li><strong>Code and plain text</strong> are syntax highlighted in a monospaced view you can select and copy; long lines scroll horizontally.</li>
 </ul>
 <p>When the file is inside a git repository, the preview header shows its status (Modified, Untracked, Added, …) and how many lines were added and removed compared with the last commit.</p>
+<h2 id="interactive-pages">Interactive pages</h2>
+<p>HTML files (<code>.html</code>, <code>.htm</code>) render as live pages, so a coding agent can show an explanation you can interact with: an animation you step through, a chart that updates, or Mermaid diagrams drawn in the page.</p>
+<p>Elements can hand you a follow-up question. When a page calls <code>window.webkit.messageHandlers.zurafa.postMessage(text)</code>, for example from a click on a diagram node, Zurafa pastes <code>text</code> into the prompt of the pane that opened the preview. It is not submitted: edit it or press Enter yourself. Line breaks and control characters are stripped, and the text is capped at 500 characters.</p>
+<p>Pages are sandboxed for this: requests to the network are blocked, links do not navigate away, and the page can only read files in its own folder. Put scripts and images it needs beside it. Pages that load scripts or fonts from the web will render without them.</p>
 <p>Other programs can open the preview too: <code>zurafa preview PATH</code> shows the file beside the current pane, or beside the focused pane of the active tab when run outside Zurafa. Pass <code>-s</code> and <code>-b</code> to choose another session or pane.</p>
 <p>Other file types show a short &quot;no preview available&quot; note. Directories, and paths that do not exist, open with the system default handler instead. Each workspace keeps its own preview, so switching workspaces leaves it behind. Close the preview with its close button.</p>
 <h2 id="paste-an-image">Paste an image</h2>
@@ -82,7 +87,7 @@
 <p>Pasting text works as usual.</p>
 <h2 id="program-icons">Program icons</h2>
 <p>Tabs show an icon for each program running in their panes. Zurafa recognizes Claude Code, Codex, and Pi, including Pi launched through Node or the <code>pi-coding-agent</code> package; everything else shows a terminal icon.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/shortcuts/"><small>← Previous</small><strong>Commands &amp; shortcuts</strong></a><a href="/docs/ssh/"><small>Next →</small><strong>Remote SSH</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#preview-a-file">Preview a file</a><a href="#paste-an-image">Paste an image</a><a href="#program-icons">Program icons</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#preview-a-file">Preview a file</a><a href="#interactive-pages">Interactive pages</a><a href="#paste-an-image">Paste an image</a><a href="#program-icons">Program icons</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>

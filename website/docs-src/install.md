@@ -4,7 +4,7 @@ The current release supports **Apple Silicon** Macs with **macOS 14 or newer**. 
 
 ## Download and install
 
-1. Download [Zurafa 0.1.10 for macOS](/releases/Zurafa-0.1.10-macos-arm64.dmg).
+1. Download [Zurafa 0.1.11 for macOS](/releases/Zurafa-0.1.11-macos-arm64.dmg).
 2. Open the DMG.
 3. Drag `Zurafa.app` into your Applications folder and open it.
 
@@ -15,7 +15,7 @@ Zurafa is signed with Developer ID and notarized by Apple.
 To check the DMG in Terminal, run:
 
 ```sh
-shasum -a 256 Zurafa-0.1.10-macos-arm64.dmg
+shasum -a 256 Zurafa-0.1.11-macos-arm64.dmg
 ```
 
 The expected SHA-256 is `28808296335ca2b3196915e0c50c05f257cccb317af41c3de86c5b11a93ff220`.
