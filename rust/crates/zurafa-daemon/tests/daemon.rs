@@ -458,3 +458,174 @@ fn real_pty_slow_subscriber_reports_gap_without_stalling_output() {
     assert_eq!(recovered["type"], "events.subscribed");
     assert!(recovered["snapshot"]["sequence"].as_u64().unwrap() > 6000);
 }
+
+#[test]
+fn bridge_starts_detached_daemon_and_attach_replays_raw_output() {
+    static SCRATCH: std::sync::Once = std::sync::Once::new();
+    SCRATCH.call_once(|| env::set_current_dir(env::temp_dir()).unwrap());
+    let path = format!("zurafa-bridge-{}.sock", std::process::id());
+    let mut bridge = Command::new(env!("CARGO_BIN_EXE_zurafa-daemon"))
+        .args(["bridge", "--socket", &path])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let (mut to, mut from) = (bridge.stdin.take().unwrap(), bridge.stdout.take().unwrap());
+    let mut send = |v: Value| {
+        let body = v.to_string();
+        to.write_all(&(body.len() as u32).to_be_bytes()).unwrap();
+        to.write_all(body.as_bytes()).unwrap();
+    };
+    let mut recv_until = |done: &dyn Fn(&Value) -> bool| loop {
+        let mut len = [0; 4];
+        from.read_exact(&mut len).unwrap();
+        let mut body = vec![0; u32::from_be_bytes(len) as usize];
+        from.read_exact(&mut body).unwrap();
+        let v: Value = serde_json::from_slice(&body).unwrap();
+        if done(&v) {
+            break v;
+        }
+    };
+    send(json!({"id":1,"type":"hello","protocol":2}));
+    recv_until(&|v| v["type"] == "hello_ok");
+
+    send(json!({"id":2,"type":"spawn","cols":80,"rows":24,"raw":true,
+        "command":["/bin/sh","-c",r"printf 'one\033]7501;state=done\007'; read x; printf two; sleep 5"]}));
+    let terminal = recv_until(&|v| v["id"] == 2)["terminal"].as_str().unwrap().to_string();
+    let first = recv_until(&|v| v["type"] == "output");
+    let first_end = first["end"].as_u64().unwrap();
+    // Raw terminals keep OSC 7501 for the remote client to parse.
+    let first_data = B64.decode(first["data"].as_str().unwrap()).unwrap();
+    assert!(String::from_utf8_lossy(&first_data).contains("7501"));
+
+    send(json!({"type":"input","terminal":terminal,"data":B64.encode("\n")}));
+    let full = recv_until(&|v| v["type"] == "output" && B64.decode(v["data"].as_str().unwrap()).unwrap().ends_with(b"two"));
+    let end = full["end"].as_u64().unwrap();
+
+    send(json!({"id":3,"type":"attach","terminal":terminal,"since":first_end}));
+    let caught_up = recv_until(&|v| v["id"] == 3);
+    assert_eq!((caught_up["end"].as_u64(), caught_up["gap"].as_bool()), (Some(end), Some(false)));
+    let missed = B64.decode(caught_up["data"].as_str().unwrap()).unwrap();
+    assert!(missed.ends_with(b"two") && !String::from_utf8_lossy(&missed).contains("one"));
+
+    send(json!({"id":4,"type":"attach","terminal":terminal,"since":end + 1}));
+    let everything = recv_until(&|v| v["id"] == 4);
+    assert_eq!(everything["gap"], true);
+    assert!(B64.decode(everything["data"].as_str().unwrap()).unwrap().starts_with(b"one"));
+
+    // The daemon must outlive its bridge (an SSH login ending).
+    bridge.kill().unwrap();
+    bridge.wait().unwrap();
+    let mut c = Client(UnixStream::connect(&path).expect("detached daemon still running"));
+    c.hello();
+    // Stop the detached daemon: a PTY child's parent is the daemon.
+    c.request(json!({"id":5,"type":"spawn","cols":80,"rows":24,"command":["/bin/sh","-c","kill -TERM $PPID"]}));
+    let start = Instant::now();
+    while UnixStream::connect(&path).is_ok() && start.elapsed() < Duration::from_secs(5) {
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(UnixStream::connect(&path).is_err(), "daemon should have stopped");
+}
+
+/// End to end without a network: a fake `ssh` runs the remote command locally under a fake HOME.
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[test]
+fn remote_helper_uploads_daemon_survives_a_dropped_connection_and_returns_exit_code() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::mpsc;
+    // Short: macOS caps Unix socket paths at 104 bytes and TMPDIR alone is ~50.
+    let home = std::path::PathBuf::from(format!("/tmp/zr-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&home);
+    fs::create_dir_all(&home).unwrap();
+    /// Stops the helper and the detached remote daemon even when an assertion fails.
+    struct Cleanup(std::path::PathBuf, Option<Child>);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            if let Some(helper) = self.1.as_mut() {
+                let _ = helper.kill();
+            }
+            let _ = Command::new("pkill").args(["-f", &self.0.display().to_string()]).status();
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    let mut cleanup = Cleanup(home.clone(), None);
+    let fake_ssh = home.join("ssh");
+    fs::write(&fake_ssh, "#!/bin/sh\nwhile [ \"$1\" != -- ]; do shift; done; shift 2\nexec sh -c \"$*\"\n").unwrap();
+    fs::set_permissions(&fake_ssh, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let mut helper = Command::new(env!("CARGO_BIN_EXE_zurafa-daemon"))
+        .args(["remote", "--", "fakehost"])
+        .env("ZURAFA_SSH", &fake_ssh)
+        .env("HOME", &home)
+        .env_remove("ZURAFA_SOCKET")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let keys = std::sync::Arc::new(std::sync::Mutex::new(helper.stdin.take().unwrap()));
+    let mut screen = helper.stdout.take().unwrap();
+    let helper = cleanup.1.insert(helper);
+    let (tx, rx) = mpsc::channel();
+    let answer = keys.clone();
+    thread::spawn(move || {
+        let mut buf = [0; 4096];
+        while let Ok(n @ 1..) = screen.read(&mut buf) {
+            // Play the terminal: shells such as fish wait for these queries to be answered.
+            let chunk = String::from_utf8_lossy(&buf[..n]);
+            let mut keys = answer.lock().unwrap();
+            for _ in chunk.matches("\x1b[6n") {
+                let _ = keys.write_all(b"\x1b[1;1R");
+            }
+            for _ in chunk.matches("\x1b[0c").chain(chunk.matches("\x1b[c")) {
+                let _ = keys.write_all(b"\x1b[?62c");
+            }
+            drop(keys);
+            let _ = tx.send(buf[..n].to_vec());
+        }
+    });
+    let type_keys = |text: &[u8]| keys.lock().unwrap().write_all(text).unwrap();
+    let mut seen = String::new();
+    let mut saw = |text: &str, within: Duration| {
+        let start = Instant::now();
+        while !seen.contains(text) {
+            match rx.recv_timeout(within.saturating_sub(start.elapsed())) {
+                Ok(chunk) => seen.push_str(&String::from_utf8_lossy(&chunk)),
+                Err(_) => {
+                    eprintln!("received instead: {seen:?}");
+                    return false;
+                }
+            }
+        }
+        seen = seen.split_off(seen.find(text).unwrap() + text.len());
+        true
+    };
+    let mut wait_for = |text: &str| assert!(saw(text, Duration::from_secs(15)), "never saw {text:?}");
+    wait_for("Installing the Zurafa daemon");
+    thread::sleep(Duration::from_secs(2)); // fish discards keys typed while its startup queries are pending
+    type_keys(b"printf '%s\\n' ab'cd'\n");
+    wait_for("abcd");
+
+    // Drop the connection: kill the bridge, not the remote daemon.
+    let bridge = format!("{}/.zurafa/.*/zurafa-daemon bridge", home.display());
+    assert!(Command::new("pkill").args(["-f", &bridge]).status().unwrap().success());
+    wait_for("reconnecting");
+    wait_for("Reconnected.");
+    type_keys(b"printf '%s\\n' ef'gh'\n");
+    wait_for("efgh");
+
+    type_keys(b"exit 3\n");
+    assert_eq!(helper.wait().unwrap().code(), Some(3));
+
+    let socket = fs::read_dir(home.join(".zurafa")).unwrap().next().unwrap().unwrap().path().join("daemon.sock");
+    let mut c = Client(UnixStream::connect(&socket).expect("remote daemon still running"));
+    c.hello();
+    let state = c.request(json!({"id":2,"type":"events.snapshot"}));
+    assert!(state["snapshot"]["sessions"]["default"]["blocks"].as_object().unwrap().is_empty(),
+        "the helper closes its remote block: {state}");
+    c.send(json!({"id":3,"type":"spawn","cols":80,"rows":24,"command":["/bin/sh","-c","kill -TERM $PPID"]}));
+    let start = Instant::now();
+    while UnixStream::connect(&socket).is_ok() && start.elapsed() < Duration::from_secs(5) {
+        thread::sleep(Duration::from_millis(20));
+    }
+    let _ = fs::remove_dir_all(&home);
+}

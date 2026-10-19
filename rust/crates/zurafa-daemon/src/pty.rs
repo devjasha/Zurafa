@@ -3,7 +3,7 @@ use crate::osc7501::{Action, Filter};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ffi::CStr;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -20,6 +20,17 @@ struct Term {
     input: mpsc::SyncSender<Vec<u8>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     running: AtomicBool,
+    replay: Mutex<Replay>,
+}
+
+/// Recent output kept so a client that reconnects can catch up on what it missed.
+const REPLAY_BYTES: usize = 256 * 1024;
+
+#[derive(Default)]
+struct Replay {
+    buf: VecDeque<u8>,
+    /// Total bytes ever output; `buf` holds the last `buf.len()` of them.
+    end: u64,
 }
 
 /// Read the foreground process from the PTY's process group. This comes from
@@ -79,7 +90,26 @@ fn process_args(pid: libc::pid_t) -> Option<Vec<String>> {
     (!args.is_empty()).then_some(args)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
+fn foreground_process(pid: libc::pid_t) -> Option<zurafa_events::Process> {
+    if pid <= 0 { return None; }
+    let dir = format!("/proc/{pid}");
+    let name = std::fs::read_to_string(format!("{dir}/comm")).ok()?.trim_end().to_owned();
+    let cwd = std::fs::read_link(format!("{dir}/cwd")).ok()?.to_str()?.to_owned();
+    let mut extra = BTreeMap::new();
+    if let Some(exe) = std::fs::read_link(format!("{dir}/exe")).ok().and_then(|p| p.to_str().map(str::to_owned)) {
+        extra.insert("executable".to_owned(), serde_json::Value::String(exe));
+    }
+    let argv: Vec<serde_json::Value> = std::fs::read(format!("{dir}/cmdline")).unwrap_or_default()
+        .split(|b| *b == 0).filter(|a| !a.is_empty())
+        .map(|a| serde_json::Value::String(String::from_utf8_lossy(a).into_owned())).collect();
+    if !argv.is_empty() {
+        extra.insert("argv".to_owned(), serde_json::Value::Array(argv));
+    }
+    Some(zurafa_events::Process { name, cwd, pid: pid as u32, extra })
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn foreground_process(_pid: libc::pid_t) -> Option<zurafa_events::Process> { None }
 
 pub struct SpawnOptions {
@@ -91,6 +121,8 @@ pub struct SpawnOptions {
     pub split: Option<String>,
     pub axis: Axis,
     pub label: String,
+    /// Pass bytes through untouched (no OSC filtering): a remote client parses them itself.
+    pub raw: bool,
 }
 
 pub struct Terminals {
@@ -173,10 +205,28 @@ impl Terminals {
         let _ = self.events.send(event.to_string());
     }
 
-    fn output(&self, terminal: &str, data: &[u8]) {
-        if !data.is_empty() {
-            self.emit(json!({"type": "output", "terminal": terminal, "data": B64.encode(data)}));
+    fn output(&self, terminal: &str, term: &Term, data: &[u8]) {
+        if data.is_empty() {
+            return;
         }
+        let mut replay = term.replay.lock().unwrap();
+        replay.end += data.len() as u64;
+        replay.buf.extend(data);
+        let excess = replay.buf.len().saturating_sub(REPLAY_BYTES);
+        replay.buf.drain(..excess);
+        // Emitted under the lock, so `attach` sees each chunk either in its copy or after its `end`.
+        self.emit(json!({"type": "output", "terminal": terminal, "data": B64.encode(data), "end": replay.end}));
+    }
+
+    /// Output after byte offset `since`, plus the current end offset. If `since` already
+    /// fell out of the buffer, returns the whole buffer and `gap = true`.
+    pub fn attach(&self, id: &str, since: u64) -> Result<(u64, Vec<u8>, bool), String> {
+        let t = self.get(id).ok_or("unknown terminal")?;
+        let replay = t.replay.lock().unwrap();
+        let start = replay.end - replay.buf.len() as u64;
+        let gap = since < start || since > replay.end;
+        let skip = if gap { 0 } else { (since - start) as usize };
+        Ok((replay.end, replay.buf.iter().skip(skip).copied().collect(), gap))
     }
 
     fn action(&self, terminal: &str, action: Action) {
@@ -219,6 +269,11 @@ impl Terminals {
         Ok(())
     }
 
+    /// No terminals running and no clients connected.
+    pub fn idle(&self) -> bool {
+        self.map.lock().unwrap().is_empty() && self.dispatcher.snapshot().clients.is_empty()
+    }
+
     pub fn hosts(&self) -> Vec<RemoteHost> {
         self.hosts.lock().unwrap().list()
     }
@@ -252,6 +307,7 @@ impl Terminals {
         rows: u16,
         cwd: Option<String>,
         command: Option<Vec<String>>,
+        raw: bool,
     ) -> Result<String, String> {
         self.spawn_at(SpawnOptions {
             cols,
@@ -262,6 +318,7 @@ impl Terminals {
             split: None,
             axis: Axis::Horizontal,
             label: "Terminal".into(),
+            raw,
         })
     }
 
@@ -275,6 +332,7 @@ impl Terminals {
             split,
             axis,
             label,
+            raw,
         } = options;
         let session = session.as_str();
         let split = split.as_deref();
@@ -307,9 +365,10 @@ impl Terminals {
             }
             Some([]) => return Err("command must not be empty".into()),
             None if remote.is_some() => {
-                let args = hosts::ssh_command(remote.as_ref().unwrap());
-                let mut c = CommandBuilder::new(&args[0]);
-                c.args(&args[1..]);
+                // Keeps the shell in a daemon on the remote host; falls back to `ssh -tt` itself.
+                let mut c = CommandBuilder::new(env::current_exe().map_err(err)?);
+                c.arg("remote");
+                c.args(hosts::ssh_destination(remote.as_ref().unwrap()));
                 c
             }
             None => {
@@ -349,12 +408,14 @@ impl Terminals {
             input,
             killer: Mutex::new(child.clone_killer()),
             running: AtomicBool::new(true),
+            replay: Mutex::default(),
         };
         let term = Arc::new(term);
         self.map.lock().unwrap().insert(id.clone(), term.clone());
 
-        let (this, tid) = (self.clone(), id.clone());
+        let (this, tid, sampled) = (self.clone(), id.clone(), term.clone());
         thread::spawn(move || {
+            let term = sampled;
             let mut previous = None;
             let mut generation = 0;
             while term.running.load(Ordering::Relaxed) {
@@ -380,13 +441,19 @@ impl Terminals {
             let (mut filter, mut buf) = (Filter::default(), [0u8; 8192]);
             // a read error (EIO once the child side closes) ends the stream like EOF
             while let Ok(n @ 1..) = reader.read(&mut buf) {
+                if raw {
+                    this.output(&tid, &term, &buf[..n]);
+                    continue;
+                }
                 let (data, statuses) = filter.feed(&buf[..n]);
-                this.output(&tid, &data);
+                this.output(&tid, &term, &data);
                 for s in statuses {
                     this.action(&tid, s);
                 }
             }
-            this.output(&tid, &filter.finish());
+            if !raw {
+                this.output(&tid, &term, &filter.finish());
+            }
             let _ = done_tx.send(());
         });
         let (this, tid) = (self.clone(), id.clone());

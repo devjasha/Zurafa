@@ -26,6 +26,9 @@ esac
 app="$root/build/$app_name.app"
 
 (cd "$root/rust" && cargo build --release)
+remote_targets=(x86_64-unknown-linux-musl aarch64-unknown-linux-musl)
+(cd "$root/rust" && rustup target add "${remote_targets[@]}" >/dev/null &&
+  cargo build --release -p zurafa-daemon $(printf -- '--target %s ' "${remote_targets[@]}"))
 (cd "$root/apps/macos" && swift build -c release)
 bin="$(cd "$root/apps/macos" && swift build -c release --show-bin-path)"
 
@@ -52,6 +55,12 @@ cp "$root/rust/target/release/zurafa-daemon" "$app/Contents/MacOS/zurafa-daemon"
 # Resources, not MacOS: a "zurafa" file there would collide with the "Zurafa" app
 # executable on the case-insensitive APFS volumes macOS ships by default.
 cp "$root/rust/target/release/zurafa" "$app/Contents/Resources/zurafa"
+# Daemons uploaded to Linux hosts for remote sessions. Not executable here: the release
+# script signs every executable in Resources, and xattr signatures on ELF files break Sparkle deltas.
+for target in "${remote_targets[@]}"; do
+  mkdir -p "$app/Contents/Resources/remote/$target"
+  install -m 644 "$root/rust/target/$target/release/zurafa-daemon" "$app/Contents/Resources/remote/$target/zurafa-daemon"
+done
 
 # The app loads AppIcon via Bundle.main, so the SwiftPM resource bundle is not needed (codesign rejects it at the .app root).
 icon_work="$(mktemp -d)"

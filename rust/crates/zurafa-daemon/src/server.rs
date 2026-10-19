@@ -3,7 +3,10 @@ use crate::pty::{SpawnOptions, Terminals};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tokio::{
     io::AsyncRead,
     net::UnixStream,
@@ -32,8 +35,14 @@ fn reply(msg: Msg, t: &Arc<Terminals>) -> Option<Value> {
             rows,
             cwd,
             command,
-        } => match t.spawn(cols, rows, cwd, command) {
+            raw,
+        } => match t.spawn(cols, rows, cwd, command, raw) {
             Ok(terminal) => json!({"id":id,"type":"spawned","terminal":terminal}),
+            Err(e) => error(id, e),
+        },
+        Msg::Attach { id, terminal, since } => match t.attach(&terminal, since) {
+            Ok((end, data, gap)) => json!({"id":id,"type":"attached","terminal":terminal,
+                "end":end,"data":B64.encode(data),"gap":gap}),
             Err(e) => error(id, e),
         },
         Msg::Kill { id, terminal } => match t.kill(&terminal) {
@@ -310,6 +319,7 @@ async fn request(
                         split: None,
                         axis: Axis::Horizontal,
                         label,
+                        raw: false,
                     })
                 })
                 .await,
@@ -338,6 +348,7 @@ async fn request(
                         split: Some(block),
                         axis,
                         label: label(),
+                        raw: false,
                     })
                 })
                 .await,
@@ -461,6 +472,8 @@ pub async fn handle(stream: UnixStream, terms: Arc<Terminals>) {
     let (tx, mut deliveries) = mpsc::channel::<Delivery>(128);
     let mut subs = HashMap::new();
     let mut generation = 0;
+    // A remote helper only wants its own terminal's bytes, not every terminal on the host.
+    let mut own: HashSet<String> = HashSet::new();
     loop {
         let frame = tokio::select! {
             v=incoming.recv()=>match v {
@@ -468,7 +481,14 @@ pub async fn handle(stream: UnixStream, terms: Arc<Terminals>) {
                 Some(v)=>{
                     if version==1 && v["type"].as_str().is_some_and(|s|s.starts_with("events.")||s.starts_with("layout.")||s.starts_with("hosts.")) {
                         Some(error(v.get("id"),"requires protocol 2").to_string())
-                    }else{request(v,&terms,&mut subs,&tx,&mut generation).await.map(|v|v.to_string())}
+                    }else{
+                        let narrows = v["type"]=="attach" || (v["type"]=="spawn" && v["raw"]==true);
+                        let r = request(v,&terms,&mut subs,&tx,&mut generation).await;
+                        if let Some(t) = r.as_ref().filter(|_|narrows).and_then(|r|r["terminal"].as_str()) {
+                            own.insert(t.to_owned());
+                        }
+                        r.map(|v|v.to_string())
+                    }
                 }
             },
             d=deliveries.recv()=>match d {
@@ -476,7 +496,9 @@ pub async fn handle(stream: UnixStream, terms: Arc<Terminals>) {
             },
             event=output.recv()=>match event {
                 Ok(frame)=>{
-                    if version==1 || serde_json::from_str::<Value>(&frame).is_ok_and(|v|v["type"]=="output"){Some(frame)}else{None}
+                    let v = serde_json::from_str::<Value>(&frame).unwrap_or_default();
+                    let mine = own.is_empty() || v["terminal"].as_str().is_some_and(|t|own.contains(t));
+                    if mine && (version==1 || v["type"]=="output"){Some(frame)}else{None}
                 },
                 Err(RecvError::Lagged(missed))=>Some(json!({"type":"output.gap","missed":missed}).to_string()),
                 Err(RecvError::Closed)=>break,

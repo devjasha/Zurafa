@@ -37,6 +37,7 @@ Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon adm
 | `{id,type:"ping"}` | `{id,type:"pong"}` |
 | `{id,type:"spawn",cols,rows,cwd?,command?}` | `{id,type:"spawned",terminal}` |
 | `{id,type:"kill",terminal}` | `{id,type:"ok"}` |
+| `{id,type:"attach",terminal,since?}` | `{id,type:"attached",terminal,end,data,gap}` |
 
 `spawn` creates a new window and block in `default`. Positive `cols`/`rows` are
 u16 values. `command` is a nonempty string array; omission runs `$SHELL` (fallback
@@ -44,6 +45,17 @@ u16 values. `command` is a nonempty string array; omission runs `$SHELL` (fallba
 `TERM=xterm-256color`, `COLORTERM=truecolor`, and `TERM_PROGRAM=Zurafa`.
 A failed spawn makes no layout change. `kill` terminates the attached child;
 the retained block is marked stopped when the child is reaped.
+
+`spawn` also accepts `raw:true`: the terminal's bytes are passed through without
+OSC parsing, for a client that parses them itself (the remote helper below).
+Each `output` event carries `end`, the terminal's total output byte count so far.
+The daemon keeps each terminal's last 256 KiB of output. `attach` returns the
+bytes after `since` (an earlier `end`, default 0) and the current `end`; if
+`since` is no longer buffered, `gap` is true and `data` is the whole buffer.
+Chunks are published under the same lock `attach` copies under, so a client can
+skip any later `output` whose `end` is not past the attach `end`. Once a
+connection makes a raw spawn or an attach, it only receives output for those
+terminals.
 
 Fire-and-forget messages have no reply; malformed ones are ignored:
 
@@ -115,12 +127,39 @@ its saved definition, and refreshes matching remote sessions before emitting
 SSH processes are not restarted. Removing a saved host does not break an open
 session. Host changes emit server `hosts_changed` with an opaque hash.
 The daemon validates host fields and only accepts a saved host when creating a
-remote session. Each tab or split in that session runs `/usr/bin/ssh -tt -p
-<port> -- <user@hostname>` in a PTY, using the system SSH configuration, keys,
-known hosts, and authentication prompts. Tailscale DNS names work when the
-machine can resolve and reach them. There is no separate Tailscale or mosh
-transport. Sessions are kept in daemon memory; saved host definitions persist
-across daemon restarts.
+remote session. Each tab or split in that session runs `zurafa-daemon remote [-p
+<port>] -- <user@hostname>` in a local PTY. That helper keeps the shell in a
+daemon on the remote host so it survives dropped connections:
+
+1. It runs `ssh -T -o BatchMode=yes … <dest> "sh -c '…'"`, which execs
+   `~/.zurafa/<build>/zurafa-daemon bridge --socket ~/.zurafa/<build>/daemon.sock`.
+   `<build>` is a hash of the local daemon binary, so each app build installs and
+   talks to its own remote daemon. `bridge` pipes stdin/stdout to that socket,
+   first starting a detached daemon (`setsid`) that exits after a minute with no
+   terminals and no clients.
+2. If the binary is missing, the script prints `zurafa-need <uname -sm>`. The
+   helper uploads the matching static build from
+   `Zurafa.app/Contents/Resources/remote/<target>/` (Linux x86_64/arm64; an
+   Apple silicon Mac gets the local binary) over the same SSH, then retries.
+   `ZURAFA_REMOTE_BINARIES` overrides that directory.
+3. It spawns a raw remote terminal and pipes bytes between it and the local PTY,
+   which is in raw mode. The local daemon still parses titles, cwd and OSC 7501.
+   Remote foreground-process changes are not forwarded, so remote tabs show no
+   process icon unless a program reports OSC 7501 `app`.
+4. When SSH drops (ServerAlive detects a dead link in about 45 s), it prints a
+   notice and reconnects with backoff (1 s doubling to 10 s), then `attach`es
+   from the last `end` it wrote. A `gap` resets the screen before replaying.
+5. When the remote shell exits, the helper closes the remote block and exits
+   with its code. When the tab closes (SIGHUP or EOF), it closes the remote
+   terminal first.
+
+If the bridge cannot be reached (password or interactive authentication, an
+unknown host key, an unsupported platform, or a shell that prints on
+non-interactive start), the helper prints a notice and `exec`s `/usr/bin/ssh -tt
+[-p <port>] -- <user@hostname>` instead, as before. It uses the system SSH
+configuration, keys, and known hosts. `ZURAFA_SSH` overrides the ssh program.
+Tailscale DNS names work when the machine can resolve and reach them. Sessions
+are kept in daemon memory; saved host definitions persist across daemon restarts.
 
 A resize path walks a binary split tree (`0` = first, `1` = second); `[]` means
 the root split. Ratios must be finite and within 0.05–0.95. Focusing a block

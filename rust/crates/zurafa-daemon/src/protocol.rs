@@ -21,6 +21,15 @@ pub enum Msg {
         rows: u16,
         cwd: Option<String>,
         command: Option<Vec<String>>,
+        #[serde(default)]
+        raw: bool,
+    },
+    /// Output after byte offset `since` (from an `output` event's `end`), for catching up after a reconnect.
+    Attach {
+        id: u64,
+        terminal: String,
+        #[serde(default)]
+        since: u64,
     },
     Kill {
         id: u64,

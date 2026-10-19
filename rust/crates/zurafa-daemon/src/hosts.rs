@@ -128,12 +128,13 @@ pub fn validate(host: &RemoteHost) -> Result<(), String> {
     Ok(())
 }
 
-pub fn ssh_command(host: &RemoteHost) -> Vec<String> {
+/// The ssh arguments naming `host`: `[-p port] -- user@hostname`.
+pub fn ssh_destination(host: &RemoteHost) -> Vec<String> {
     let destination = match &host.user {
         Some(user) => format!("{user}@{}", host.hostname),
         None => host.hostname.clone(),
     };
-    let mut args = vec!["/usr/bin/ssh".into(), "-tt".into()];
+    let mut args = Vec::new();
     // Leave the default port to OpenSSH so a Host alias can supply Port in
     // ~/.ssh/config. An explicit non-default port still takes precedence.
     if host.port != 22 {
@@ -158,10 +159,8 @@ mod tests {
         };
         validate(&host).unwrap();
         assert_eq!(
-            ssh_command(&host),
+            ssh_destination(&host),
             [
-                "/usr/bin/ssh",
-                "-tt",
                 "-p",
                 "2222",
                 "--",
@@ -178,7 +177,7 @@ mod tests {
             hostname: "workbox".into(),
             ..host.clone()
         };
-        assert_eq!(ssh_command(&default_port), ["/usr/bin/ssh", "-tt", "--", "alice@workbox"]);
+        assert_eq!(ssh_destination(&default_port), ["--", "alice@workbox"]);
         assert!(validate(&RemoteHost {
             user: Some("a b".into()),
             ..host

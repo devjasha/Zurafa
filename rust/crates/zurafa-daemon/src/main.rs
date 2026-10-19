@@ -2,10 +2,14 @@ mod hosts;
 mod osc7501;
 mod protocol;
 mod pty;
+mod remote;
 mod server;
 
 use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
+use std::os::unix::process::CommandExt;
+use std::process::Stdio;
 use std::{env, fs, io, path::PathBuf};
+use tokio::io::AsyncWriteExt;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::signal::unix::{signal, SignalKind};
 
@@ -22,13 +26,54 @@ fn socket_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             let home = env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
-            home.join("Library/Application Support/Zurafa/daemon.sock")
+            if cfg!(target_os = "macos") {
+                home.join("Library/Application Support/Zurafa/daemon.sock")
+            } else {
+                // Not $XDG_RUNTIME_DIR: logind deletes it when the last login ends, orphaning the daemon.
+                home.join(".zurafa/daemon.sock")
+            }
         })
+}
+
+/// `zurafa-daemon bridge`: what `ssh host -- zurafa-daemon bridge` runs. Pipes stdin/stdout to
+/// this machine's daemon socket, first starting a detached daemon that outlives the SSH login.
+async fn bridge(path: PathBuf) -> io::Result<()> {
+    let stream = match UnixStream::connect(&path).await {
+        Ok(stream) => stream,
+        Err(_) => {
+            let mut daemon = std::process::Command::new(env::current_exe()?);
+            daemon.args(["--exit-when-idle", "--socket"]).arg(&path).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+            // SAFETY: setsid is async-signal-safe; a new session keeps SSH's hangup away from the daemon.
+            unsafe { daemon.pre_exec(|| { libc::setsid(); Ok(()) }) };
+            daemon.spawn()?;
+            let mut tries = 0;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                match UnixStream::connect(&path).await {
+                    Ok(stream) => break stream,
+                    Err(e) if tries == 100 => return Err(e),
+                    Err(_) => tries += 1,
+                }
+            }
+        }
+    };
+    let (mut from_daemon, mut to_daemon) = stream.into_split();
+    let (mut stdin, mut stdout) = (tokio::io::stdin(), tokio::io::stdout());
+    tokio::select! {
+        r = tokio::io::copy(&mut stdin, &mut to_daemon) => r.map(drop),
+        r = async { tokio::io::copy(&mut from_daemon, &mut stdout).await?; stdout.flush().await } => r,
+    }
 }
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    if env::args().nth(1).as_deref() == Some("remote") {
+        remote::run(env::args().skip(2).collect());
+    }
     let path = socket_path();
+    if env::args().nth(1).as_deref() == Some("bridge") {
+        return bridge(path).await;
+    }
     env::set_var("ZURAFA_SOCKET", &path);
     if let Some(dir) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::DirBuilder::new()
@@ -54,8 +99,13 @@ async fn main() -> io::Result<()> {
         signal(SignalKind::interrupt())?,
     );
     let terms = pty::Terminals::new();
+    // Daemons a bridge starts on a remote host stop once nothing uses them, so old builds don't pile up.
+    let exit_when_idle = env::args().any(|a| a == "--exit-when-idle");
+    let mut idle_check = tokio::time::interval(std::time::Duration::from_secs(60));
+    idle_check.tick().await;
     loop {
         tokio::select! {
+            _ = idle_check.tick(), if exit_when_idle => if terms.idle() { break },
             r = listener.accept() => {
                 if let Ok((stream, _)) = r {
                     tokio::spawn(server::handle(stream, terms.clone()));
