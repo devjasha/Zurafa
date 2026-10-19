@@ -93,4 +93,24 @@ final class ZurafaConfigTests: XCTestCase {
         XCTAssertEqual(colors.unresolved, ["Missing"])
         XCTAssertEqual(try loader.themeColors("Day").dark.background, 0xfafafa)
     }
+
+    func testSettingThemeReplacesActiveLinesAndKeepsComments() {
+        XCTAssertEqual(ZurafaConfigLoader.settingTheme("Nord", in: "# theme = Old\ntheme = A\nfont-size = 13\nTheme=B\n"),
+                       "# theme = Old\ntheme = Nord\nfont-size = 13\n")
+        XCTAssertEqual(ZurafaConfigLoader.settingTheme("Nord", in: "font-size = 13\n"), "font-size = 13\ntheme = Nord\n")
+        XCTAssertEqual(ZurafaConfigLoader.settingTheme("Nord", in: ""), "theme = Nord\n")
+    }
+
+    func testListsThemesInLookupOrderWithoutDuplicates() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let user = root.appendingPathComponent("ghostty/themes"), zurafa = root.appendingPathComponent("zurafa"), ghostty = root.appendingPathComponent("app")
+        for (dir, names) in [(user, ["Mine", "Nord"]), (zurafa, ["Nord", "Dracula"]), (ghostty, ["Dracula", "Abyss", ".DS_Store"])] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            for name in names { try "background = #000000\n".write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8) }
+        }
+        let themes = GhosttyConfigLoader(xdgConfigHome: root, bundledThemes: ghostty, zurafaThemes: zurafa).themes()
+        XCTAssertEqual(themes, [.init(name: "Mine", source: .user), .init(name: "Nord", source: .user),
+                                .init(name: "Dracula", source: .zurafa), .init(name: "Abyss", source: .ghostty)])
+    }
 }

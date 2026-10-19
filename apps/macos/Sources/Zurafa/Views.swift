@@ -339,6 +339,8 @@ struct TopBar: View {
     var body: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78) // traffic lights
+            SidebarToggleButton()
+                .padding(.trailing, 10)
             WorkspacePickerButton()
                 .padding(.trailing, 14)
             HStack(spacing: 0) {
@@ -355,6 +357,7 @@ struct TopBar: View {
             .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
             Spacer(minLength: 8)
             BarStatus()
+            PaletteButton()
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
         }
         .padding(.leading, 12)
@@ -400,15 +403,15 @@ struct WorkspacePickerButton: View {
 
     var body: some View {
         Button { ws.paletteOpen = false; ws.sessionPickerOpen.toggle() } label: {
-            HStack(spacing: 9) {
+            HStack(spacing: 7) {
                 Image(systemName: ws.currentSession?.remote == nil ? "laptopcomputer" : "globe")
-                    .font(.system(size: 15))
+                    .font(.system(size: 12))
                 VStack(alignment: .leading, spacing: 0) {
                     Text(ws.name)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.ink)
                     Text(ws.hostLabel)
-                        .font(.system(size: 11))
+                        .font(.system(size: 10))
                 }
                 .lineLimit(1)
                 if inSidebar { Spacer(minLength: 0) }
@@ -431,7 +434,9 @@ struct VerticalTabSidebar: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
                 Color.clear.frame(width: 78) // traffic lights
+                SidebarToggleButton()
                 Spacer(minLength: 0)
+                PaletteButton()
                 BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
             }
             .padding(.leading, 12).padding(.trailing, 4).padding(.top, 4)
@@ -601,10 +606,27 @@ struct BarButton: View {
     let symbol: String, help: String, action: () -> Void
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 15)).foregroundStyle(Theme.ink)
-                .frame(width: 32, height: 32).contentShape(Rectangle())
+            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(Theme.inkSoft)
+                .frame(width: 28, height: 28).contentShape(Rectangle())
         }
         .buttonStyle(.plain).help(help)
+    }
+}
+
+/// Same spot in both tab layouts, so a second click switches back.
+struct SidebarToggleButton: View {
+    @EnvironmentObject var ws: Workspace
+    var body: some View {
+        BarButton(symbol: "sidebar.left", help: ws.tabStripLayout == .horizontal ? "Show Sidebar (⌥⌘T)" : "Hide Sidebar (⌥⌘T)") {
+            ws.toggleTabStripLayout()
+        }
+    }
+}
+
+struct PaletteButton: View {
+    @EnvironmentObject var ws: Workspace
+    var body: some View {
+        BarButton(symbol: "command", help: "Command Palette (⌘K)") { ws.sessionPickerOpen = false; ws.paletteOpen.toggle() }
     }
 }
 
@@ -623,11 +645,13 @@ struct LayoutView: View {
     let layout: Layout
     let window: String
     var path: [Int] = []
+    /// Edge a new pane slides in from; the daemon puts a split's new pane in `second`.
+    var entrance: Edge?
     @EnvironmentObject var ws: Workspace
 
     var body: some View {
         switch layout {
-        case .pane(let id): PaneView(id: id)
+        case .pane(let id): PaneView(id: id, entrance: entrance)
         case .split(let axis, let ratio, let a, let b):
             GeometryReader { g in
                 let h = axis == .horizontal
@@ -635,7 +659,7 @@ struct LayoutView: View {
                 let first = total * ratio
                 ZStack(alignment: .topLeading) {
                     LayoutView(layout: a, window: window, path: path + [0]).frame(width: h ? first : g.size.width, height: h ? g.size.height : first)
-                    LayoutView(layout: b, window: window, path: path + [1]).frame(width: h ? total - first : g.size.width, height: h ? g.size.height : total - first)
+                    LayoutView(layout: b, window: window, path: path + [1], entrance: h ? .trailing : .bottom).frame(width: h ? total - first : g.size.width, height: h ? g.size.height : total - first)
                         .offset(x: h ? first : 0, y: h ? 0 : first)
                     Color.clear // wide invisible hit area over the gap between panes
                         .frame(width: h ? 12 : g.size.width, height: h ? g.size.height : 12)
@@ -656,13 +680,15 @@ struct LayoutView: View {
 
 struct PaneView: View {
     let id: String
+    var entrance: Edge?
     @EnvironmentObject var ws: Workspace
     @State private var shown: Bool
     /// Pane ids already on screen, so tab switches and re-splits don't replay the entrance animation.
     private static var seen = Set<String>()
 
-    init(id: String) {
+    init(id: String, entrance: Edge? = nil) {
         self.id = id
+        self.entrance = entrance
         _shown = State(initialValue: Self.seen.contains(id))
     }
 
@@ -711,10 +737,12 @@ struct PaneView: View {
         .animation(.easeInOut(duration: 0.2), value: focused)
         .padding(style.paneGap / 2)
         .opacity(shown ? 1 : 0)
-        .scaleEffect(shown ? 1 : 0.97)
+        // A split's new pane slides in from its side; a pane with no split (a new tab) just settles in.
+        .offset(x: shown || entrance != .trailing ? 0 : 36, y: shown || entrance != .bottom ? 0 : 36)
+        .scaleEffect(shown || entrance != nil ? 1 : 0.97)
         .onAppear {
             guard Self.seen.insert(id).inserted else { return }
-            withAnimation(.easeInOut(duration: 0.22)) { shown = true }
+            withAnimation(.smooth(duration: 0.3)) { shown = true }
         }
     }
 }

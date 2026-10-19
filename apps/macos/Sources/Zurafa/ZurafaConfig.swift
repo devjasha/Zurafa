@@ -107,6 +107,23 @@ struct ZurafaConfigLoader {
     }
 
     /// Out-of-range values are ignored, like `font-size`, so a typo keeps the default.
+    /// `content` with its active `theme =` lines replaced by one for `name`; every other line stays as written.
+    static func settingTheme(_ name: String, in content: String) -> String {
+        var replaced = false
+        var lines = content.components(separatedBy: "\n").compactMap { line -> String? in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("#"), let equals = trimmed.firstIndex(of: "="),
+                  trimmed[..<equals].trimmingCharacters(in: .whitespaces).lowercased() == "theme" else { return line }
+            defer { replaced = true }
+            return replaced ? nil : "theme = \(name)"
+        }
+        if !replaced {
+            if lines.last == "" { lines.removeLast() }
+            lines += ["theme = \(name)", ""]
+        }
+        return lines.joined(separator: "\n")
+    }
+
     private static func number(_ value: String, in range: ClosedRange<Double>) -> Double? {
         Double(value).flatMap { range.contains($0) ? $0 : nil }
     }
@@ -117,7 +134,8 @@ struct ZurafaConfigLoader {
     # Lines starting with # are comments. Remove the # to use a setting.
 
     # Theme: any Ghostty theme name, or different ones per appearance.
-    # Themes are read from ~/.config/ghostty/themes and Ghostty.app.
+    # Themes are read from ~/.config/ghostty/themes, Zurafa's built-in themes and Ghostty.app.
+    # Command Palette > Change Theme… previews them live and writes this line.
     # theme = Catppuccin Mocha
     # theme = light:Catppuccin Latte,dark:Catppuccin Mocha
 

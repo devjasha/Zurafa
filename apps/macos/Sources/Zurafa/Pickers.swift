@@ -552,13 +552,15 @@ private struct PaletteEntry: Identifiable {
     let title: String
     let detail: String?
     let shortcut: String?
+    var section: String?
     let action: @MainActor () -> Void
 
-    init(id: String, title: String? = nil, detail: String?, shortcut: String?, action: @escaping @MainActor () -> Void) {
+    init(id: String, title: String? = nil, detail: String?, shortcut: String?, section: String? = nil, action: @escaping @MainActor () -> Void) {
         self.id = id
         self.title = title ?? id
         self.detail = detail
         self.shortcut = shortcut
+        self.section = section
         self.action = action
     }
 }
@@ -567,10 +569,21 @@ struct CommandPicker: View {
     @EnvironmentObject var ws: Workspace
     @State private var query = ""
     @State private var selection = 0
+    @State private var themeMode = false
+    @State private var themeList: [ThemeListing] = []
     @FocusState private var searchFocused: Bool
 
+    private var themeEntries: [PaletteEntry] {
+        themeList.map { theme in
+            let section = switch theme.source { case .user: "Your Themes"; case .zurafa: "Zurafa"; case .ghostty: "Ghostty" }
+            return PaletteEntry(id: "theme:\(theme.name)", title: theme.name, detail: nil,
+                                shortcut: theme.name == ws.themeName ? "✓" : nil, section: section) { ws.setTheme(theme.name) }
+        }
+    }
+
     private var entries: [PaletteEntry] {
-        [
+        if themeMode { return themeEntries }
+        return [
             .init(id: "Change Session", detail: ws.name, shortcut: "›") {
                 DispatchQueue.main.async { ws.sessionPickerOpen = true }
             },
@@ -590,6 +603,7 @@ struct CommandPicker: View {
             .init(id: "Close Tab", detail: nil, shortcut: "⌥⌘W") { ws.closeTab() },
             .init(id: "Refresh Sessions", detail: nil, shortcut: "⌘R") { ws.refreshSessions() },
             .init(id: "Delete Workspace", detail: ws.name, shortcut: "⌥⇧⌘W") { ws.confirmCloseSession = true },
+            .init(id: "Change Theme…", detail: ws.themeName ?? "Default", shortcut: "›") {},
             .init(id: "Appearance: Follow System", detail: ws.appearance == .system ? "Current" : nil, shortcut: nil) { ws.setAppearance(.system) },
             .init(id: "Appearance: Light", detail: ws.appearance == .light ? "Current" : nil, shortcut: nil) { ws.setAppearance(.light) },
             .init(id: "Appearance: Dark", detail: ws.appearance == .dark ? "Current" : nil, shortcut: nil) { ws.setAppearance(.dark) },
@@ -611,15 +625,29 @@ struct CommandPicker: View {
             || ($0.detail?.localizedCaseInsensitiveContains(query) ?? false)
             || ($0.id == "Add Remote Host…" && "ssh".localizedCaseInsensitiveContains(query)) }
     }
-    private func sectionTitle(_ entry: PaletteEntry, index: Int) -> String? {
+    private func sectionTitle(_ entry: PaletteEntry, index: Int, previous: PaletteEntry?) -> String? {
+        if themeMode { return entry.section == previous?.section ? nil : entry.section }
         if entry.id.hasPrefix("session:") && index == 1 { return "Workspaces" }
         if entry.id == "Rename Tab" { return "Commands" }
         if entry.id == "Split Pane Right" { return "Pane" }
         return nil
     }
     private func run(_ entry: PaletteEntry) {
+        if entry.id == "Change Theme…" { enterThemeMode(); return }
         ws.paletteOpen = false
         entry.action()
+    }
+    private func enterThemeMode() {
+        themeList = ws.themes()
+        themeMode = true
+        query = ""
+        // After the query reset, which selects the first row.
+        DispatchQueue.main.async { selection = themeList.firstIndex { $0.name == ws.themeName } ?? 0 }
+    }
+    private func previewSelection() {
+        let rows = filtered
+        guard themeMode, rows.indices.contains(selection), let name = rows[selection].id.split(separator: ":", maxSplits: 1).last else { return }
+        ws.previewTheme(String(name))
     }
     private func moveSelection(_ delta: Int) {
         guard !filtered.isEmpty else { selection = 0; return }
@@ -639,9 +667,15 @@ struct CommandPicker: View {
             Color.black.opacity(0.2).ignoresSafeArea().onTapGesture { ws.paletteOpen = false }
             VStack(spacing: 6) {
                 HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(PickerStyle.secondary)
+                    if themeMode {
+                        Text("Theme").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 7).frame(height: 22)
+                            .background(Theme.ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        Image(systemName: "magnifyingglass").foregroundStyle(PickerStyle.secondary)
+                    }
                     ZStack(alignment: .leading) {
-                        if query.isEmpty { Text("Search commands…").foregroundStyle(PickerStyle.secondary).allowsHitTesting(false) }
+                        if query.isEmpty { Text(themeMode ? "Select Theme…" : "Search commands…").foregroundStyle(PickerStyle.secondary).allowsHitTesting(false) }
                         TextField("", text: $query)
                             .textFieldStyle(.plain).foregroundStyle(Theme.ink).tint(PickerStyle.accent).focused($searchFocused)
                         .onSubmit { if filtered.indices.contains(selection) { run(filtered[selection]) } }
@@ -662,8 +696,9 @@ struct CommandPicker: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 2) {
-                            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, entry in
-                                if query.isEmpty, let section = sectionTitle(entry, index: index) {
+                            let rows = filtered
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { index, entry in
+                                if query.isEmpty, let section = sectionTitle(entry, index: index, previous: index > 0 ? rows[index - 1] : nil) {
                                     Text(section)
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundStyle(PickerStyle.secondary)
@@ -692,8 +727,9 @@ struct CommandPicker: View {
                             }
                         }
                     }
-                    .onChange(of: selection) { scrollSelection(selection, proxy: proxy) }
-                    .onChange(of: filtered.map(\.id)) { scrollSelection(selection, proxy: proxy) }
+                    .scrollIndicators(.never) // the legacy always-on scroller looks heavy in a popup
+                    .onChange(of: selection) { scrollSelection(selection, proxy: proxy); previewSelection() }
+                    .onChange(of: filtered.map(\.id)) { scrollSelection(selection, proxy: proxy); previewSelection() }
                 }
                 .frame(maxHeight: min(420, max(120, bounds.size.height - topInset - 80)))
             }
@@ -705,5 +741,7 @@ struct CommandPicker: View {
         }
         }
         .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { searchFocused = true } }
+        // Closing without choosing puts the saved theme back.
+        .onDisappear { ws.endThemePreview() }
     }
 }

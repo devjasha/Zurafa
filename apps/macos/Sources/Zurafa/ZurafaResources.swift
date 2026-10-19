@@ -28,7 +28,7 @@ enum ZurafaResources {
         return bundles
     }
 
-    static func url(forResource name: String, withExtension ext: String, subdirectory: String? = nil) -> URL? {
+    static func url(forResource name: String, withExtension ext: String?, subdirectory: String? = nil) -> URL? {
         for bundle in candidateBundles {
             if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: subdirectory) { return url }
             if let subdirectory {

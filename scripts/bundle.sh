@@ -44,6 +44,8 @@ cp -R "$root/apps/macos/Sources/Zurafa/Resources/dark-icons" "$app/Contents/Reso
 cp "$root/apps/macos/Sources/Zurafa/Resources"/Lobe*.png "$app/Contents/Resources/"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFontMono-Regular.ttf" "$app/Contents/Resources/SymbolsNerdFontMono-Regular.ttf"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app/Contents/Resources/SymbolsNerdFont-LICENSE.txt"
+cp -R "$root/apps/macos/Sources/Zurafa/Resources/themes" "$app/Contents/Resources/themes"
+cp "$root/apps/macos/Sources/Zurafa/Resources/Themes-LICENSE.txt" "$app/Contents/Resources/Themes-LICENSE.txt"
 cp "$root/apps/macos/.build/checkouts/SwiftTerm/LICENSE" "$app/Contents/Resources/SwiftTerm-LICENSE.txt"
 # Highlightr's Bundle.module looks in Contents/Resources and fatalErrors if its bundle is missing.
 cp -R "$bin/Highlightr_Highlightr.bundle" "$app/Contents/Resources/Highlightr_Highlightr.bundle"

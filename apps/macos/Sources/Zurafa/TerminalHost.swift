@@ -122,8 +122,12 @@ final class PaneTerminal: TerminalView {
     }
 
     func applyZurafaConfig(_ settings: GhosttyTerminalSettings?) {
+        let before = effectiveSettings
         zurafaSettings = settings
-        for view in views.values { configure(view) }
+        let after = effectiveSettings
+        // Theme previews change colors only; resetting the font would reflow every terminal.
+        let fontChanged = before.fontFamily != after.fontFamily || before.fontSize != after.fontSize
+        for view in views.values { fontChanged ? configure(view) : configureColors(view) }
     }
 
     private var effectiveSettings: GhosttyTerminalSettings {

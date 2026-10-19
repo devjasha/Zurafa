@@ -136,6 +136,11 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var notice: String?
     @Published private(set) var workspaceBackground: Color?
     @Published private(set) var style = ZurafaStyle()
+    /// `theme =` from config.zurafa.
+    @Published private(set) var themeName: String?
+    private var config = ZurafaConfig()
+    /// Shown while the theme picker's selection moves; config.zurafa is untouched until one is chosen.
+    private var previewedTheme: String?
     /// Open preview per workspace, so it stays behind when switching workspaces.
     @Published private var previews: [String: FilePreview] = [:]
     var preview: FilePreview? { previews[sessionID] }
@@ -388,17 +393,42 @@ enum EditorKind: String, Identifiable {
     private func refreshTheme() {
         let colors = TerminalStore.shared.currentColors
         Theme.imported = colors.background == nil && colors.foreground == nil ? nil : colors
-        workspaceBackground = colors.background.map { Color(nsColor: TerminalStore.ns($0)) }
+        withAnimation(.easeOut(duration: 0.15)) {
+            workspaceBackground = colors.background.map { Color(nsColor: TerminalStore.ns($0)) }
+        }
     }
 
-    private func loadZurafaConfig() {
+    func themes() -> [ThemeListing] { GhosttyConfigLoader().themes() }
+
+    func previewTheme(_ name: String) {
+        previewedTheme = name
+        applyTerminalConfig()
+    }
+
+    func endThemePreview() {
+        guard previewedTheme != nil else { return }
+        previewedTheme = nil
+        applyTerminalConfig()
+    }
+
+    /// Writes `theme = name` into config.zurafa, creating it from the template if needed.
+    func setTheme(_ name: String) {
         let loader = ZurafaConfigLoader()
-        configModified = Self.modified(loader.fileURL)
+        let url = loader.fileURL
         do {
-            // A missing file resets to defaults, so deleting a setting undoes it.
-            let config = try loader.load() ?? ZurafaConfig()
-            var terminal = config.terminal
-            if let theme = config.theme {
+            let content = FileManager.default.fileExists(atPath: url.path)
+                ? try String(contentsOf: url, encoding: .utf8) : ZurafaConfigLoader.template
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try ZurafaConfigLoader.settingTheme(name, in: content).write(to: url, atomically: true, encoding: .utf8)
+        } catch { commandError = error.localizedDescription; return }
+        previewedTheme = nil
+        loadZurafaConfig()
+    }
+
+    private func applyTerminalConfig() {
+        var terminal = config.terminal
+        do {
+            if let theme = previewedTheme ?? config.theme {
                 let colors = try GhosttyConfigLoader().themeColors(theme)
                 var themed = GhosttyTerminalSettings()
                 themed.light = colors.light
@@ -406,7 +436,19 @@ enum EditorKind: String, Identifiable {
                 terminal = themed.applying(terminal)
                 if !colors.unresolved.isEmpty { showNotice("Theme not found: \(colors.unresolved.joined(separator: ", "))") }
             }
-            TerminalStore.shared.applyZurafaConfig(terminal.count > 0 ? terminal : nil)
+        } catch { commandError = error.localizedDescription }
+        TerminalStore.shared.applyZurafaConfig(terminal.count > 0 ? terminal : nil)
+        refreshTheme()
+    }
+
+    private func loadZurafaConfig() {
+        let loader = ZurafaConfigLoader()
+        configModified = Self.modified(loader.fileURL)
+        do {
+            // A missing file resets to defaults, so deleting a setting undoes it.
+            config = try loader.load() ?? ZurafaConfig()
+            themeName = config.theme
+            applyTerminalConfig()
             style = config.style
             Theme.customAccent = config.style.accent
             if let path = config.backgroundImage { backgroundImage = NSImage(contentsOfFile: path) ?? backgroundImage }

@@ -22,6 +22,12 @@ struct GhosttyTerminalSettings: Codable, Equatable {
     var count: Int { (fontFamily == nil ? 0 : 1) + (fontSize == nil ? 0 : 1) + max(light.count, dark.count) }
 }
 
+struct ThemeListing: Equatable {
+    enum Source: Equatable { case user, zurafa, ghostty }
+    let name: String
+    let source: Source
+}
+
 struct GhosttyImport {
     let settings: GhosttyTerminalSettings
     let files: [URL]
@@ -45,11 +51,14 @@ struct GhosttyConfigLoader {
     private let home: URL
     private let xdg: URL
     private let bundledThemes: URL?
+    private let zurafaThemes: URL?
 
     init(home: URL = FileManager.default.homeDirectoryForCurrentUser,
          xdgConfigHome: URL? = nil,
-         bundledThemes: URL? = URL(fileURLWithPath: "/Applications/Ghostty.app/Contents/Resources/ghostty/themes")) {
+         bundledThemes: URL? = URL(fileURLWithPath: "/Applications/Ghostty.app/Contents/Resources/ghostty/themes"),
+         zurafaThemes: URL? = ZurafaResources.url(forResource: "themes", withExtension: nil)) {
         self.home = home
+        self.zurafaThemes = zurafaThemes
         let environmentXDG = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"]
             .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
         xdg = xdgConfigHome ?? environmentXDG ?? home.appendingPathComponent(".config")
@@ -96,6 +105,18 @@ struct GhosttyConfigLoader {
         try readTheme(value, dark: false, into: &light, unresolved: &unresolved)
         try readTheme(value, dark: true, into: &dark, unresolved: &unresolved)
         return (colors(from: light), colors(from: dark), Array(Set(unresolved)).sorted())
+    }
+
+    /// Every theme `theme =` can name, in lookup order; a name shadowed by an earlier folder is listed once.
+    func themes() -> [ThemeListing] {
+        var seen = Set<String>()
+        let folders: [(URL?, ThemeListing.Source)] = [(xdg.appendingPathComponent("ghostty/themes"), .user), (zurafaThemes, .zurafa), (bundledThemes, .ghostty)]
+        return folders.flatMap { folder, source -> [ThemeListing] in
+            guard let folder, let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return [] }
+            return names.filter { !$0.hasPrefix(".") && seen.insert($0).inserted }
+                .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+                .map { ThemeListing(name: $0, source: source) }
+        }
     }
 
     private func readTheme(_ value: String?, dark: Bool, into values: inout [String: String], unresolved: inout [String]) throws {
@@ -158,6 +179,7 @@ struct GhosttyConfigLoader {
         guard !name.contains("/") else { return nil }
         let custom = xdg.appendingPathComponent("ghostty/themes").appendingPathComponent(name)
         if FileManager.default.fileExists(atPath: custom.path) { return custom }
+        if let zurafa = zurafaThemes?.appendingPathComponent(name), FileManager.default.fileExists(atPath: zurafa.path) { return zurafa }
         return bundledThemes?.appendingPathComponent(name)
     }
 
