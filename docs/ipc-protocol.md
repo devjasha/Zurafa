@@ -118,7 +118,11 @@ a session with that saved host copied into `remote`:
 ```
 
 `hosts.list` replies with `{id,type:"hosts.list",hosts:[...]}`; add/update/remove reply
-with `ok` or `error`. Saved hosts live in
+with `ok` or `error`. `{id,type:"hosts.tailnet"}` replies with
+`{id,type:"hosts.tailnet",hosts:[...]}`: online Linux and macOS peers from
+`tailscale status --json`, as unsaved hosts whose `id` and `hostname` are the
+MagicDNS name, with port 22 and no user. The list is empty when the Tailscale CLI
+is missing or fails. Add Host offers these machines; saving one uses `hosts.add`. Saved hosts live in
 `~/Library/Application Support/Zurafa/hosts.json`, written with owner-only
 permissions. Set `ZURAFA_HOSTS_FILE` to override the path. A remote session
 keeps a copy of its host. `hosts.update` requires an existing host ID, replaces

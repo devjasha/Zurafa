@@ -128,6 +128,55 @@ pub fn validate(host: &RemoteHost) -> Result<(), String> {
     Ok(())
 }
 
+/// Online Linux and macOS machines on the user's tailnet, as unsaved hosts (ID = MagicDNS name).
+/// Empty when Tailscale is not installed or not running.
+pub fn tailnet() -> Vec<RemoteHost> {
+    // The daemon starts from the app with launchd's PATH, so look in the usual install spots.
+    const CLIS: [&str; 4] = [
+        "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+        "/opt/homebrew/bin/tailscale",
+        "/usr/local/bin/tailscale",
+        "/usr/bin/tailscale",
+    ];
+    CLIS.iter()
+        .filter(|cli| std::path::Path::new(cli).is_file())
+        .find_map(|cli| std::process::Command::new(cli).args(["status", "--json"]).output().ok())
+        .filter(|out| out.status.success())
+        .map(|out| tailnet_hosts(&out.stdout, resolves))
+        .unwrap_or_default()
+}
+
+fn resolves(name: &str) -> bool {
+    use std::net::ToSocketAddrs;
+    (name, 22).to_socket_addrs().is_ok_and(|mut a| a.next().is_some())
+}
+
+/// Uses the MagicDNS name when it resolves here, else the Tailscale IPv4: with "Use Tailscale
+/// DNS" off on this Mac, `*.ts.net` names do not resolve but the 100.x addresses still route.
+fn tailnet_hosts(status: &[u8], resolves: impl Fn(&str) -> bool) -> Vec<RemoteHost> {
+    let Ok(status) = serde_json::from_slice::<serde_json::Value>(status) else { return Vec::new() };
+    let mut hosts: Vec<RemoteHost> = status["Peer"]
+        .as_object()
+        .into_iter()
+        .flat_map(|peers| peers.values())
+        .filter(|p| p["Online"] == true && matches!(p["OS"].as_str(), Some("linux" | "macOS")))
+        .filter_map(|p| {
+            let name = p["DNSName"].as_str()?.trim_end_matches('.').to_owned();
+            let ipv4 = p["TailscaleIPs"].as_array()?.iter().filter_map(|ip| ip.as_str()).find(|ip| ip.contains('.'));
+            let hostname = match ipv4 {
+                Some(ip) if !resolves(&name) => ip.to_owned(),
+                _ => name.clone(),
+            };
+            let label = p["HostName"].as_str().filter(|l| !l.is_empty()).unwrap_or(&name).to_owned();
+            let named = RemoteHost { id: name.clone(), label, hostname: name, user: None, port: 22 };
+            let host = RemoteHost { hostname, ..named.clone() };
+            (validate(&named).is_ok() && validate(&host).is_ok()).then_some(host)
+        })
+        .collect();
+    hosts.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+    hosts
+}
+
 /// The ssh arguments naming `host`: `[-p port] -- user@hostname`.
 pub fn ssh_destination(host: &RemoteHost) -> Vec<String> {
     let destination = match &host.user {
@@ -147,6 +196,25 @@ pub fn ssh_destination(host: &RemoteHost) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tailnet_lists_online_ssh_capable_peers() {
+        let status = br#"{"Peer":{
+            "a":{"HostName":"stuart","DNSName":"stuart.tail1.ts.net.","OS":"linux","Online":true,"TailscaleIPs":["100.86.111.84","fd7a::1"]},
+            "b":{"HostName":"Chec's MacBook","DNSName":"checs-mb.tail1.ts.net.","OS":"macOS","Online":true,"TailscaleIPs":["100.1.2.3"]},
+            "c":{"HostName":"localhost","DNSName":"iphone.tail1.ts.net.","OS":"iOS","Online":true,"TailscaleIPs":["100.1.2.4"]},
+            "d":{"HostName":"old","DNSName":"old.tail1.ts.net.","OS":"linux","Online":false,"TailscaleIPs":["100.1.2.5"]},
+            "e":{"HostName":"","DNSName":"-oProxyCommand=x.","OS":"linux","Online":true,"TailscaleIPs":["100.1.2.6"]}}}"#;
+        let hosts = tailnet_hosts(status, |_| true);
+        let names: Vec<_> = hosts.iter().map(|h| (h.label.as_str(), h.hostname.as_str())).collect();
+        assert_eq!(names, [("Chec's MacBook", "checs-mb.tail1.ts.net"), ("stuart", "stuart.tail1.ts.net")]);
+        assert!(hosts.iter().all(|h| h.port == 22 && h.user.is_none()));
+        assert!(tailnet_hosts(b"not json", |_| true).is_empty());
+        // MagicDNS off on this machine: fall back to the Tailscale IPv4, keep the name as label.
+        let by_ip = tailnet_hosts(status, |name| name.starts_with("checs"));
+        let names: Vec<_> = by_ip.iter().map(|h| (h.label.as_str(), h.hostname.as_str())).collect();
+        assert_eq!(names, [("Chec's MacBook", "checs-mb.tail1.ts.net"), ("stuart", "100.86.111.84")]);
+    }
 
     #[test]
     fn ssh_arguments_are_separate_and_host_input_is_checked() {

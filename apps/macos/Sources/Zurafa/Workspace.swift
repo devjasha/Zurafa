@@ -125,6 +125,8 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var metas: [String: PaneMeta] = [:]
     @Published private(set) var sessionID = "default"
     @Published private(set) var hosts: [RemoteHost] = []
+    /// Online tailnet machines not saved yet, offered by Add Host.
+    @Published private(set) var tailnetHosts: [RemoteHost] = []
     @Published var paletteOpen = false
     @Published var sessionPickerOpen = false
     @Published var editor: EditorKind?
@@ -546,6 +548,14 @@ enum EditorKind: String, Identifiable {
         Task {
             do { hosts = try await daemon.request(["type": .string("hosts.list")]).hosts ?? [] }
             catch { commandError = error.localizedDescription }
+        }
+    }
+
+    func refreshTailnet() {
+        Task {
+            // An older daemon rejects the request; offering no machines is the right fallback.
+            let found = (try? await daemon.request(["type": .string("hosts.tailnet")]).hosts) ?? []
+            tailnetHosts = found.filter { machine in !hosts.contains { $0.hostname == machine.hostname } }
         }
     }
 

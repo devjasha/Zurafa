@@ -76,7 +76,9 @@ snapshot. Terminal screen output produced while the app is disconnected is not r
 
 Click the workspace name to switch sessions. Use ⌘K for the command picker,
 including session rename, new session, and Add Remote Host. The Add Host picker
-accepts a host name, SSH alias, `user@host:port`, or `ssh://user@host:port`.
+accepts a host name, SSH alias, `user@host:port`, or `ssh://user@host:port`. If
+Tailscale is running, it also lists your online Linux and Mac tailnet machines;
+pick one to save it and connect.
 Remote tabs keep their shells in a Zurafa daemon on the remote host, installed
 over SSH on first use (Linux x86_64/arm64 and Apple silicon Macs), so they survive
 dropped connections and sleep. The SSH connection uses saved host details and your

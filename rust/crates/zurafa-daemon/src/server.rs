@@ -74,6 +74,8 @@ enum Request {
     HostsAdd { id: u64, host: RemoteHost },
     #[serde(rename = "hosts.update")]
     HostsUpdate { id: u64, host: RemoteHost },
+    #[serde(rename = "hosts.tailnet")]
+    HostsTailnet { id: u64 },
     #[serde(rename = "hosts.remove")]
     HostsRemove { id: u64, host_id: String },
     #[serde(rename = "events.subscribe")]
@@ -232,6 +234,10 @@ async fn request(
             Ok(()) => json!({"id":id,"type":"ok"}),
             Err(e) => error(id, e),
         },
+        Request::HostsTailnet { id } => {
+            let hosts = tokio::task::spawn_blocking(crate::hosts::tailnet).await.unwrap_or_default();
+            json!({"id":id,"type":"hosts.tailnet","hosts":hosts})
+        }
         Request::HostsRemove { id, host_id } => match terms.remove_host(&host_id) {
             Ok(()) => json!({"id":id,"type":"ok"}),
             Err(e) => error(id, e),

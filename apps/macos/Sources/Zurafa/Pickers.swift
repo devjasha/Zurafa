@@ -250,6 +250,7 @@ struct EditorSheet: View {
     @State private var savingHost = false
     @State private var directoryCandidates: [DirectoryCandidate] = []
     @State private var directorySelection = 0
+    @State private var tailnetSelection: Int?
     @FocusState private var focusedField: FieldFocus?
 
     private var heading: String {
@@ -269,14 +270,17 @@ struct EditorSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 if kind == .addHost {
                     hostAddressField
+                    if !matchingTailnetHosts.isEmpty { tailnetList }
                     Button(action: save) {
-                        Text(hostError ?? (address.isEmpty ? "Type the address of an SSH host" : "Press Return to save and connect with SSH"))
+                        Text(hostError ?? (tailnetSelection != nil ? "Press Return to save and connect to this machine"
+                            : address.isEmpty ? (matchingTailnetHosts.isEmpty ? "Type the address of an SSH host" : "Type the address of an SSH host, or pick a tailnet machine")
+                            : "Press Return to save and connect with SSH"))
                             .font(.system(size: 12))
                             .foregroundStyle(hostError == nil ? PickerStyle.secondary : Color.red)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
-                    .disabled(address.isEmpty)
+                    .disabled(address.isEmpty && tailnetSelection == nil)
                 } else if kind == .editHost {
                     HStack {
                         Text(heading).font(.system(size: 15, weight: .semibold))
@@ -355,6 +359,7 @@ struct EditorSheet: View {
             default: break
             }
             if kind == .goDirectory { refreshDirectoryCandidates() }
+            if kind == .addHost { ws.refreshTailnet() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 focusedField = kind == .addHost || kind == .editHost ? .hostname : .label
             }
@@ -371,7 +376,17 @@ struct EditorSheet: View {
                 .textFieldStyle(.plain)
                 .focused($focusedField, equals: .hostname)
                 .onSubmit(save)
-                .onChange(of: address) { _, _ in hostError = nil }
+                .onChange(of: address) { _, _ in hostError = nil; tailnetSelection = nil }
+                .onKeyPress(.downArrow) {
+                    guard !matchingTailnetHosts.isEmpty else { return .ignored }
+                    tailnetSelection = min((tailnetSelection ?? -1) + 1, matchingTailnetHosts.count - 1)
+                    return .handled
+                }
+                .onKeyPress(.upArrow) {
+                    guard let selected = tailnetSelection else { return .ignored }
+                    tailnetSelection = selected == 0 ? nil : selected - 1
+                    return .handled
+                }
             if !address.isEmpty {
                 Button { address = ""; focusedField = .hostname } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(PickerStyle.secondary)
@@ -381,6 +396,48 @@ struct EditorSheet: View {
         .padding(.horizontal, 7).frame(height: 36)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 11))
         .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(PickerStyle.outline, lineWidth: 1))
+    }
+
+    private var matchingTailnetHosts: [RemoteHost] {
+        let query = address.trimmingCharacters(in: .whitespaces)
+        return ws.tailnetHosts.filter { query.isEmpty || $0.label.localizedCaseInsensitiveContains(query)
+            || $0.hostname.localizedCaseInsensitiveContains(query) }
+    }
+
+    private var tailnetList: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("TAILNET").font(.system(size: 10, weight: .semibold)).foregroundStyle(PickerStyle.secondary)
+                .padding(.horizontal, 8).padding(.bottom, 2)
+            ForEach(Array(matchingTailnetHosts.enumerated()), id: \.element.id) { index, machine in
+                let selected = index == tailnetSelection
+                Button { addTailnetHost(machine) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "network").frame(width: 16)
+                        Text(machine.label).lineLimit(1)
+                        Spacer(minLength: 6)
+                        Text(machine.hostname)
+                            .font(.system(size: 11))
+                            .lineLimit(1)
+                            .foregroundStyle(selected ? Theme.onAccent.opacity(0.65) : PickerStyle.secondary)
+                    }
+                    .font(.system(size: 12))
+                    .foregroundStyle(selected ? Theme.onAccent : Theme.ink)
+                    .padding(.horizontal, 8).frame(height: 26)
+                    .background(selected ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 7))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Save \(machine.hostname) and connect with SSH")
+            }
+        }
+        .padding(5)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(PickerStyle.outline, lineWidth: 1))
+    }
+
+    private func addTailnetHost(_ machine: RemoteHost) {
+        ws.addRemoteHost(label: machine.label, hostname: machine.hostname, user: nil, port: machine.port)
+        close()
     }
 
     private var directoryField: some View {
@@ -498,6 +555,10 @@ struct EditorSheet: View {
 
     private func save() {
         if kind == .addHost {
+            if let index = tailnetSelection, matchingTailnetHosts.indices.contains(index) {
+                addTailnetHost(matchingTailnetHosts[index])
+                return
+            }
             do {
                 let host = try SSHHostAddress(address)
                 ws.addRemoteHost(label: host.label, hostname: host.hostname, user: host.user, port: host.port)
