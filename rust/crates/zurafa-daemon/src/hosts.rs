@@ -140,7 +140,8 @@ pub fn tailnet() -> Vec<RemoteHost> {
     ];
     CLIS.iter()
         .filter(|cli| std::path::Path::new(cli).is_file())
-        .find_map(|cli| std::process::Command::new(cli).args(["status", "--json"]).output().ok())
+        // Without a terminal, Tailscale.app's binary starts its GUI instead of the CLI (and exits 0).
+        .find_map(|cli| std::process::Command::new(cli).args(["status", "--json"]).env("TAILSCALE_BE_CLI", "1").output().ok())
         .filter(|out| out.status.success())
         .map(|out| tailnet_hosts(&out.stdout, resolves))
         .unwrap_or_default()
