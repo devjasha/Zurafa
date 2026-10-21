@@ -136,6 +136,8 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var notice: String?
     @Published private(set) var workspaceBackground: Color?
     @Published private(set) var style = ZurafaStyle()
+    /// Measured by `WindowConfig`; the defaults are the compact title bar's, used until the first layout.
+    @Published var windowControls = CGSize(width: 90, height: 40)
     /// `theme =` from config.zurafa.
     @Published private(set) var themeName: String?
     private var config = ZurafaConfig()

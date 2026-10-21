@@ -248,16 +248,21 @@ struct WindowDragView: NSViewRepresentable {
     func updateNSView(_ v: NSView, context: Context) {}
 }
 
-/// Hidden title bar; the empty compact toolbar makes the title bar 40 pt tall so the traffic lights centre in the top bar.
+/// Hidden title bar with an empty compact toolbar (traffic lights 14 pt in every style); the top bar is sized from where they land.
 struct WindowConfig: NSViewRepresentable {
     let appearance: AppearanceMode
     var translucent = false
+    /// Where the traffic lights end (width) and twice their centre line (height), in window points.
+    var onControls: (CGSize) -> Void = { _ in }
     func makeNSView(context: Context) -> NSView { NSView() }
     func updateNSView(_ v: NSView, context: Context) {
-        let appearance = appearance, translucent = translucent
+        let appearance = appearance, translucent = translucent, onControls = onControls
         DispatchQueue.main.async {
             guard let w = v.window else { return }
             Self.configure(w, appearance: appearance, translucent: translucent)
+            if let zoom = w.standardWindowButton(.zoomButton), let frame = zoom.superview?.convert(zoom.frame, to: nil) {
+                onControls(CGSize(width: frame.maxX + 14, height: 2 * (w.frame.height - frame.midY)))
+            }
         }
     }
 
@@ -305,7 +310,9 @@ struct RootView: View {
             if let kind = ws.editor { EditorSheet(kind: kind) }
         }
         .ignoresSafeArea()
-        .background(WindowConfig(appearance: ws.appearance, translucent: ws.style.windowOpacity < 1))
+        .background(WindowConfig(appearance: ws.appearance, translucent: ws.style.windowOpacity < 1) { controls in
+            if ws.windowControls != controls { ws.windowControls = controls } // unguarded, every publish would re-run this
+        })
         .preferredColorScheme(ws.appearance.colorScheme)
         .onAppear { ws.syncTerminalAppearance(systemScheme) }
         .onChange(of: systemScheme) { _, newScheme in ws.syncTerminalAppearance(newScheme) }
@@ -338,7 +345,7 @@ struct TopBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: 78) // traffic lights
+            Color.clear.frame(width: ws.windowControls.width) // traffic lights
             SidebarToggleButton()
                 .padding(.trailing, 10)
             WorkspacePickerButton()
@@ -360,10 +367,8 @@ struct TopBar: View {
             PaletteButton()
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
         }
-        .padding(.leading, 12)
         .padding(.trailing, 6)
-        .padding(.top, 4)
-        .frame(height: 44)
+        .frame(height: ws.windowControls.height)
         .background(WindowDragView())
     }
 }
@@ -433,14 +438,14 @@ struct VerticalTabSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
-                Color.clear.frame(width: 78) // traffic lights
+                Color.clear.frame(width: ws.windowControls.width) // traffic lights
                 SidebarToggleButton()
                 Spacer(minLength: 0)
                 PaletteButton()
                 BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
             }
-            .padding(.leading, 12).padding(.trailing, 4).padding(.top, 4)
-            .frame(height: 44)
+            .padding(.trailing, 4)
+            .frame(height: ws.windowControls.height)
             .background(WindowDragView())
             WorkspacePickerButton(inSidebar: true)
                 .padding(.horizontal, 12)
