@@ -353,6 +353,12 @@ enum EditorKind: String, Identifiable {
         focus(panes[(i + step + panes.count) % panes.count])
     }
 
+    func workspaceStep(_ step: Int) {
+        let ids = orderedSessions.map(\.sessionID)
+        guard let i = ids.firstIndex(of: sessionID) else { return }
+        selectSession(ids[(i + step + ids.count) % ids.count])
+    }
+
     func selectSession(_ id: String) {
         guard let snapshot, snapshot.sessions[id] != nil else { return }
         sessionID = id
@@ -663,6 +669,9 @@ struct Command: Identifiable {
         Command(title: "Toggle Zoom", key: .return, mods: [.command, .shift]) { $0.toggleZoom() },
         Command(title: "Next Pane", key: "]") { $0.focusStep(1) },
         Command(title: "Previous Pane", key: "[") { $0.focusStep(-1) },
+        // Shift turns ] into } before menus match, so a "]" + Shift item never fires.
+        Command(title: "Next Workspace", key: "}", mods: [.command, .shift]) { $0.workspaceStep(1) },
+        Command(title: "Previous Workspace", key: "{", mods: [.command, .shift]) { $0.workspaceStep(-1) },
         Command(title: "Command Palette", key: "k") { $0.paletteOpen = true },
     ] + (1...9).map { n in
         Command(title: "Select Tab \(n)", key: KeyEquivalent(Character("\(n)"))) { ws in
