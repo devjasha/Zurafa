@@ -48,6 +48,7 @@ final class PaneTerminal: TerminalView {
 /// Keeps the persistent terminal view attached when SwiftUI collapses a split.
 @MainActor final class TerminalContainer: NSView {
     var terminalID: String?
+    var focused = false
     private var restoring = false
 
     override func layout() {
@@ -58,6 +59,17 @@ final class PaneTerminal: TerminalView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         restoreTerminal()
+        claimFocus()
+    }
+
+    /// A new pane is often updated before it joins the window, so focus is retried once it does.
+    func claimFocus() {
+        guard focused else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.focused, let window = self.window, let view = self.subviews.first,
+                  window.firstResponder !== view else { return }
+            window.makeFirstResponder(view)
+        }
     }
 
     private func restoreTerminal() {
@@ -263,7 +275,8 @@ struct TerminalHost: NSViewRepresentable {
     func makeNSView(context: Context) -> TerminalContainer { TerminalContainer() }
     func updateNSView(_ box: TerminalContainer, context: Context) {
         box.terminalID = id
-        let view = TerminalStore.shared.attach(id, program: program, to: box)
-        if focused { DispatchQueue.main.async { if view.window?.firstResponder !== view { view.window?.makeFirstResponder(view) } } }
+        box.focused = focused
+        TerminalStore.shared.attach(id, program: program, to: box)
+        box.claimFocus()
     }
 }

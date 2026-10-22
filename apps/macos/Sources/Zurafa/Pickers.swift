@@ -24,6 +24,7 @@ struct SessionPicker: View {
     @State private var selection = 0
     @State private var hovered: String?
     @State private var deletingSession: SessionSnapshot?
+    @State private var deletingHost: RemoteHost?
     @FocusState private var searchFocused: Bool
 
     private var shownSessions: [SessionSnapshot] {
@@ -54,6 +55,12 @@ struct SessionPicker: View {
                         .onKeyPress(.downArrow) { selection = min(selection + 1, max(0, selectableCount - 1)); return .handled }
                         .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
                         .onKeyPress(.escape) { ws.sessionPickerOpen = false; return .handled }
+                        .onKeyPress(keys: [.delete]) { press in
+                            let index = selection - shownSessions.count
+                            guard press.modifiers.contains(.command), matchingHosts.indices.contains(index) else { return .ignored }
+                            deletingHost = matchingHosts[index]
+                            return .handled
+                        }
                         .onChange(of: query) { selection = 0 }
                         .onChange(of: selectableCount) { selection = min(selection, max(0, selectableCount - 1)) }
                 }
@@ -85,11 +92,14 @@ struct SessionPicker: View {
                             }
                             .overlay(alignment: .trailing) {
                                 if hovered == host.id {
-                                    iconButton("gearshape", help: "Edit \(host.label) connection") { ws.beginEditingHost(host) }
-                                        .foregroundStyle(PickerStyle.secondary).padding(.trailing, 4)
+                                    HStack(spacing: 0) {
+                                        iconButton("gearshape", help: "Edit \(host.label) connection") { ws.beginEditingHost(host) }
+                                        iconButton("trash", help: "Delete \(host.label) host (⌘⌫)") { deletingHost = host }
+                                    }
+                                    .foregroundStyle(PickerStyle.secondary).padding(.trailing, 4)
                                 }
                             }
-                            .onHover { hover(host.id, $0) }
+                            .onContinuousHover { hover(host.id, $0) }
                         }
                     }
                     let actionOffset = sessions.count + matchingHosts.count
@@ -127,6 +137,18 @@ struct SessionPicker: View {
         } message: {
             Text("This closes every terminal in the workspace.")
         }
+        .confirmationDialog("Delete \(deletingHost?.label ?? "host")?", isPresented: Binding(
+            get: { deletingHost != nil },
+            set: { if !$0 { deletingHost = nil } }
+        )) {
+            Button("Delete Host", role: .destructive) {
+                if let host = deletingHost { ws.removeRemoteHost(host) }
+                deletingHost = nil
+            }
+            Button("Cancel", role: .cancel) { deletingHost = nil }
+        } message: {
+            Text("This removes the saved connection. Open terminals stay connected.")
+        }
     }
 
     private var divider: some View {
@@ -163,10 +185,11 @@ struct SessionPicker: View {
                 .padding(.trailing, 4)
             }
         }
-        .onHover { hover(session.sessionID, $0) }
+        .onContinuousHover { hover(session.sessionID, $0) }
     }
 
-    private func hover(_ id: String, _ inside: Bool) {
+    private func hover(_ id: String, _ phase: HoverPhase) {
+        let inside = if case .active = phase { true } else { false }
         if inside { hovered = id } else if hovered == id { hovered = nil }
     }
 

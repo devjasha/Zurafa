@@ -596,6 +596,15 @@ enum EditorKind: String, Identifiable {
         apply(try await daemon.snapshot())
     }
 
+    func removeRemoteHost(_ host: RemoteHost) {
+        Task {
+            do {
+                _ = try await daemon.request(["type": .string("hosts.remove"), "host_id": .string(host.id)])
+                refreshHosts()
+            } catch { commandError = error.localizedDescription }
+        }
+    }
+
     func openHost(_ host: RemoteHost) {
         if let existing = sessions.first(where: { $0.remote?.id == host.id }) {
             selectSession(existing.sessionID)

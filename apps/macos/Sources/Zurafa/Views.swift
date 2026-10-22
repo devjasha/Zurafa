@@ -51,11 +51,11 @@ struct WindowMaterial: NSViewRepresentable {
 }
 
 extension View {
-    @ViewBuilder func zurafaGlass<S: Shape>(in shape: S) -> some View {
+    @ViewBuilder func zurafaGlass<S: Shape>(in shape: S, clear: Bool = false) -> some View {
         if #available(macOS 26.0, *) {
-            self.glassEffect(.regular, in: shape)
+            self.glassEffect(clear ? .clear : .regular, in: shape)
         } else {
-            self.background(.regularMaterial, in: shape)
+            self.background(clear ? .ultraThinMaterial : .regularMaterial, in: shape)
         }
     }
 }
@@ -346,10 +346,8 @@ struct TopBar: View {
     var body: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: ws.windowControls.width) // traffic lights
-            SidebarToggleButton()
-                .padding(.trailing, 10)
             WorkspacePickerButton()
-                .padding(.trailing, 14)
+                .padding(.trailing, 20)
             HStack(spacing: 0) {
                 ForEach(Array(ws.tabs.enumerated()), id: \.element.id) { i, t in
                     if i > 0 { // hairline between two inactive tabs only
@@ -358,7 +356,7 @@ struct TopBar: View {
                     TabItem(tab: t, on: i == ws.selected).onTapGesture { ws.selectTab(i) }
                 }
             }
-            .padding(2)
+            .padding(1)
             .zurafaGlass(in: Capsule())
             .background(Color.black.opacity(0.035), in: Capsule())
             .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
@@ -439,7 +437,6 @@ struct VerticalTabSidebar: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
                 Color.clear.frame(width: ws.windowControls.width) // traffic lights
-                SidebarToggleButton()
                 Spacer(minLength: 0)
                 PaletteButton()
                 BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
@@ -580,17 +577,26 @@ struct TabItem: View {
     var body: some View {
         let m = ws.meta(tab.focus)
         let state = ws.taskState(for: tab)
+        let title = m.label ?? m.title
         HStack(spacing: 8) {
-            TileStack(tab: tab, size: 22)
+            TileStack(tab: tab, size: 24)
                 .overlay(alignment: .topTrailing) {
                     if state.done && !on { TaskDoneDot().offset(x: 3, y: -3) }
                 }
             HStack(spacing: 5) {
-                Text(m.label ?? m.title).font(.system(size: 13, weight: .medium)).foregroundStyle(on ? Theme.ink : Theme.inkSoft)
-                    .lineLimit(1)
+                // The clear box sets the width, so the full-length text can't widen the tab.
+                Color.clear.frame(height: 18).overlay(alignment: .leading) {
+                    (Text(title).foregroundStyle(on ? Theme.ink : Theme.ink.opacity(0.8))
+                        + Text(m.cwd == title ? "" : " " + m.cwd).foregroundStyle(Theme.inkSoft))
+                        .font(.system(size: 14, weight: .medium))
+                        .lineLimit(1).fixedSize()
+                }
+                .clipped()
+                // fade the overflow instead of an ellipsis
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0.82), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
                 if state.working { WorkingDots() }
             }
-            .frame(maxWidth: 150, alignment: .leading)
+            .frame(minWidth: 50, maxWidth: 150, alignment: .leading)
             Button { ws.closeTab(tab) } label: {
                 Image(systemName: "xmark").font(.system(size: 11, weight: .medium))
                     .frame(width: 18, height: 18).contentShape(Rectangle())
@@ -598,9 +604,14 @@ struct TabItem: View {
             .buttonStyle(.plain).foregroundStyle(Theme.inkSoft).help("Close Tab")
             .opacity(on || hovering ? 1 : 0)
         }
-        .padding(.leading, 5).padding(.trailing, 8).frame(height: 30)
+        .padding(.leading, 6).padding(.trailing, 8).frame(height: 30)
         .background {
-            if on { Capsule().fill(Theme.activeTab.opacity(0.55)).shadow(color: .black.opacity(0.10), radius: 3, y: 1) }
+            if on {
+                Capsule().fill(Theme.activeTab.opacity(0.12))
+                    .zurafaGlass(in: Capsule(), clear: true)
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.75))
+                    .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
+            }
         }
         .contentShape(Capsule())
         .onHover { hovering = $0 }
@@ -615,16 +626,6 @@ struct BarButton: View {
                 .frame(width: 28, height: 28).contentShape(Rectangle())
         }
         .buttonStyle(.plain).help(help)
-    }
-}
-
-/// Same spot in both tab layouts, so a second click switches back.
-struct SidebarToggleButton: View {
-    @EnvironmentObject var ws: Workspace
-    var body: some View {
-        BarButton(symbol: "sidebar.left", help: ws.tabStripLayout == .horizontal ? "Show Sidebar (⌥⌘T)" : "Hide Sidebar (⌥⌘T)") {
-            ws.toggleTabStripLayout()
-        }
     }
 }
 
