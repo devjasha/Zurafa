@@ -214,7 +214,9 @@ fn open_direct(route: Route, host: &str, user: Option<&str>) -> Option<Conn> {
         (Box::new(stream.try_clone().ok()?), Box::new(stream))
     };
     let mut from = BufReader::new(from);
-    write!(to, "GET /zurafa HTTP/1.1\r\nHost: {host}\r\nConnection: Upgrade\r\nUpgrade: zurafa\r\n\r\n").ok()?;
+    // A login server picks this account; a personal daemon ignores it and the `user` check below decides.
+    let account = user.filter(|u| u.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))).map(|u| format!("Zurafa-Account: {u}\r\n"));
+    write!(to, "GET /zurafa HTTP/1.1\r\nHost: {host}\r\nConnection: Upgrade\r\nUpgrade: zurafa\r\n{}\r\n", account.unwrap_or_default()).ok()?;
     to.flush().ok()?;
     let mut head = (&mut from).take(8192);
     let mut line = String::new();

@@ -3,10 +3,13 @@
 //! - `tailnet://[:PORT]` binds this machine's Tailscale addresses and asks `tailscale whois`.
 //! - `tailnet-serve:///path.sock` is a Unix socket for `tailscale serve … unix:/path.sock`, which
 //!   names the caller in `Tailscale-User-Login` (never for tagged devices, which have no user).
+//! - `:PORT` or `IP:PORT` is plain TCP that cannot tell callers apart, so it needs
+//!   `--allow-anonymous`. On a personal daemon every caller gets this user's shell; the login
+//!   server gives anonymous callers only accounts that list `anonymous`, never root.
 //!
 //! An admitted caller sends an HTTP/1.1 `GET` with `Upgrade: zurafa`; after the 101 the
 //! connection carries the same length-prefixed frames as the daemon's own Unix socket.
-use crate::{hosts::tailscale, pty::Terminals, server};
+use crate::{hosts::tailscale, login, pty::Terminals, server};
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -26,10 +29,24 @@ pub const DEFAULT_PORT: u16 = 7297;
 pub enum Listen {
     Tailnet(u16),
     Serve(PathBuf),
+    Anonymous(SocketAddr),
 }
 
-/// `tailnet://:PORT` (default port 7297) or `tailnet-serve:///absolute/path.sock`.
+/// Where admitted callers go: this daemon's terminals, or the login server's accounts.
+#[derive(Clone)]
+pub enum Target {
+    Daemon(Arc<Terminals>),
+    Login(Arc<login::Config>),
+}
+
+/// `tailnet://:PORT` (default port 7297), `tailnet-serve:///absolute/path.sock`, or `[IP]:PORT`.
 pub fn parse(spec: &str) -> Result<Listen, String> {
+    if let Some(port) = spec.strip_prefix(':').and_then(|p| p.parse().ok()) {
+        return Ok(Listen::Anonymous(SocketAddr::from(([0, 0, 0, 0], port))));
+    }
+    if let Ok(addr) = spec.parse() {
+        return Ok(Listen::Anonymous(addr));
+    }
     if let Some(path) = spec.strip_prefix("tailnet-serve://") {
         return path
             .starts_with('/')
@@ -38,7 +55,7 @@ pub fn parse(spec: &str) -> Result<Listen, String> {
     }
     let rest = spec
         .strip_prefix("tailnet://")
-        .ok_or_else(|| format!("unsupported listener {spec:?}; use tailnet://:PORT or tailnet-serve:///path.sock"))?;
+        .ok_or_else(|| format!("unsupported listener {spec:?}; use tailnet://:PORT, tailnet-serve:///path.sock or :PORT"))?;
     match rest {
         "" | ":" => Ok(Listen::Tailnet(DEFAULT_PORT)),
         _ => rest
@@ -70,16 +87,67 @@ async fn whoami() -> io::Result<(Value, Option<String>)> {
     Ok((me, owner))
 }
 
-pub async fn start(listen: Listen, terms: Arc<Terminals>, allow_identified: bool) -> io::Result<()> {
+pub async fn start(listen: Listen, target: Target, allow_identified: bool, allow_anonymous: bool) -> io::Result<()> {
+    if let Listen::Anonymous(addr) = listen {
+        return start_anonymous(addr, target, allow_anonymous).await;
+    }
     let (me, owner) = whoami().await?;
     match listen {
-        Listen::Tailnet(port) => start_tailnet(port, me, terms, allow_identified).await,
-        Listen::Serve(path) => start_serve(path, owner, terms, allow_identified),
+        Listen::Tailnet(port) => start_tailnet(port, me, target, allow_identified).await,
+        Listen::Serve(path) => start_serve(path, owner, target, allow_identified),
+        Listen::Anonymous(_) => unreachable!(),
+    }
+}
+
+async fn start_anonymous(addr: SocketAddr, target: Target, allow_anonymous: bool) -> io::Result<()> {
+    if !allow_anonymous {
+        return Err(io::Error::other(format!("a plain listener on {addr} cannot tell callers apart; add --allow-anonymous if you really mean it")));
+    }
+    let listener = TcpListener::bind(addr).await?;
+    if let Target::Daemon(_) = target {
+        eprintln!("WARNING: zurafa-daemon gives a shell as this user to ANYONE who reaches {addr}; use it only on a network you fully control");
+    } else {
+        eprintln!("zurafa login server: anonymous callers on {addr} get only accounts that list \"anonymous\"");
+    }
+    tokio::spawn(async move {
+        loop {
+            match listener.accept().await {
+                Ok((stream, _)) => {
+                    let target = target.clone();
+                    tokio::spawn(async move {
+                        let mut stream = BufReader::new(stream);
+                        match read_upgrade(&mut stream).await {
+                            Ok(Some(headers)) => hand_off(stream, &target, json!({"kind": "anonymous"}), headers).await,
+                            _ => {
+                                let _ = respond(&mut stream, UPGRADE_REQUIRED).await;
+                            }
+                        }
+                    });
+                }
+                Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+            }
+        }
+    });
+    Ok(())
+}
+
+/// After admission: the daemon switches straight to frames; the login server first picks an account.
+async fn hand_off<S>(mut stream: BufReader<S>, target: &Target, principal: Value, headers: Vec<(String, String)>)
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    match target {
+        Target::Daemon(terms) => {
+            if respond(&mut stream, SWITCHING).await.is_ok() {
+                server::handle(stream, terms.clone(), principal).await;
+            }
+        }
+        Target::Login(config) => login::handle(stream, config.clone(), principal, headers).await,
     }
 }
 
 /// Binds every Tailscale address of this machine, never a wildcard address.
-async fn start_tailnet(port: u16, me: Value, terms: Arc<Terminals>, allow_identified: bool) -> io::Result<()> {
+async fn start_tailnet(port: u16, me: Value, target: Target, allow_identified: bool) -> io::Result<()> {
     let ips: Vec<IpAddr> = me["TailscaleIPs"]
         .as_array()
         .into_iter()
@@ -102,12 +170,12 @@ async fn start_tailnet(port: u16, me: Value, terms: Arc<Terminals>, allow_identi
             Err(e) => return Err(e),
         };
         eprintln!("zurafa-daemon listening on tailnet {addr}");
-        let (terms, me) = (terms.clone(), me.clone());
+        let (target, me) = (target.clone(), me.clone());
         tokio::spawn(async move {
             loop {
                 match listener.accept().await {
                     Ok((stream, peer)) => {
-                        tokio::spawn(serve_tailnet(stream, peer.ip(), terms.clone(), me.clone(), allow_identified));
+                        tokio::spawn(serve_tailnet(stream, peer.ip(), target.clone(), me.clone(), allow_identified));
                     }
                     // e.g. out of file descriptors: back off instead of spinning
                     Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
@@ -119,7 +187,7 @@ async fn start_tailnet(port: u16, me: Value, terms: Arc<Terminals>, allow_identi
 }
 
 /// The caller's identity comes from headers, so only this user (and root's tailscaled) may connect.
-fn start_serve(path: PathBuf, owner: Option<String>, terms: Arc<Terminals>, allow_identified: bool) -> io::Result<()> {
+fn start_serve(path: PathBuf, owner: Option<String>, target: Target, allow_identified: bool) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
     }
@@ -136,7 +204,7 @@ fn start_serve(path: PathBuf, owner: Option<String>, terms: Arc<Terminals>, allo
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    tokio::spawn(serve_serve(stream, terms.clone(), owner.clone(), allow_identified));
+                    tokio::spawn(serve_serve(stream, target.clone(), owner.clone(), allow_identified));
                 }
                 Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
             }
@@ -145,7 +213,7 @@ fn start_serve(path: PathBuf, owner: Option<String>, terms: Arc<Terminals>, allo
     Ok(())
 }
 
-async fn serve_tailnet<S>(stream: S, peer: IpAddr, terms: Arc<Terminals>, me: Arc<Value>, allow_identified: bool)
+async fn serve_tailnet<S>(stream: S, peer: IpAddr, target: Target, me: Arc<Value>, allow_identified: bool)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -159,22 +227,19 @@ where
     // Admit before reading anything from the caller. Any Tailscale-User-* headers are ignored here:
     // only Serve can vouch for those.
     match admit(&whois, &me, allow_identified) {
-        Ok(principal) => {
-            if let Ok(Some(_)) = read_upgrade(&mut stream).await {
-                if respond(&mut stream, SWITCHING).await.is_ok() {
-                    server::handle(stream, terms, principal).await;
-                }
-            } else {
+        Ok(principal) => match read_upgrade(&mut stream).await {
+            Ok(Some(headers)) => hand_off(stream, &target, principal, headers).await,
+            _ => {
                 let _ = respond(&mut stream, UPGRADE_REQUIRED).await;
             }
-        }
+        },
         Err(why) => {
             let _ = respond(&mut stream, &forbidden(why)).await;
         }
     }
 }
 
-async fn serve_serve<S>(stream: S, terms: Arc<Terminals>, owner: Arc<Option<String>>, allow_identified: bool)
+async fn serve_serve<S>(stream: S, target: Target, owner: Arc<Option<String>>, allow_identified: bool)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -185,11 +250,7 @@ where
     };
     let login = headers.iter().find(|(name, _)| name == "tailscale-user-login").map(|(_, v)| v.as_str());
     match admit_serve(login, owner.as_deref(), allow_identified) {
-        Ok(principal) => {
-            if respond(&mut stream, SWITCHING).await.is_ok() {
-                server::handle(stream, terms, principal).await;
-            }
-        }
+        Ok(principal) => hand_off(stream, &target, principal, headers).await,
         Err(why) => {
             let _ = respond(&mut stream, &forbidden(why)).await;
         }
@@ -229,15 +290,15 @@ fn admit_serve(login: Option<&str>, owner: Option<&str>, allow_identified: bool)
     Ok(json!({"kind": "tailscale-serve", "login": login}))
 }
 
-const SWITCHING: &str = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: zurafa\r\nConnection: Upgrade\r\n\r\n";
+pub const SWITCHING: &str = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: zurafa\r\nConnection: Upgrade\r\n\r\n";
 const UPGRADE_REQUIRED: &str = "HTTP/1.1 426 Upgrade Required\r\nUpgrade: zurafa\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
 
-fn forbidden(why: &str) -> String {
+pub fn forbidden(why: &str) -> String {
     let body = format!("{why}\n");
     format!("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())
 }
 
-async fn respond<S: AsyncWrite + Unpin>(stream: &mut S, response: &str) -> io::Result<()> {
+pub async fn respond<S: AsyncWrite + Unpin>(stream: &mut S, response: &str) -> io::Result<()> {
     stream.write_all(response.as_bytes()).await?;
     stream.flush().await
 }
@@ -321,7 +382,9 @@ mod tests {
         assert_eq!(parse("tailnet-serve:///run/z/serve.sock"), Ok(Listen::Serve("/run/z/serve.sock".into())));
         assert!(parse("tailnet-serve://serve.sock").is_err());
         assert!(parse("tailnet://:0").is_err());
-        assert!(parse(":7297").is_err());
+        assert_eq!(parse(":7297"), Ok(Listen::Anonymous("0.0.0.0:7297".parse().unwrap())));
+        assert_eq!(parse("192.168.1.5:7297"), Ok(Listen::Anonymous("192.168.1.5:7297".parse().unwrap())));
+        assert!(parse("7297").is_err());
     }
 
     #[tokio::test]

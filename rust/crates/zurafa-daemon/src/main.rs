@@ -1,5 +1,6 @@
 mod hosts;
 mod listen;
+mod login;
 mod osc7501;
 mod protocol;
 mod pty;
@@ -76,11 +77,16 @@ async fn main() -> io::Result<()> {
     let service = match env::args().nth(1).as_deref() {
         Some("install-service") => Some(service::install()),
         Some("uninstall-service") => Some(service::uninstall()),
+        Some("install-login-server") => Some(service::install_login_server()),
+        Some("uninstall-login-server") => Some(service::uninstall_login_server()),
         _ => None,
     };
     if let Some(result) = service {
         println!("{}", result.as_ref().unwrap_or_else(|e| e));
         std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
+    if env::args().nth(1).as_deref() == Some("login-server") {
+        return login::run().await;
     }
     let path = socket_path();
     if env::args().nth(1).as_deref() == Some("bridge") {
@@ -112,11 +118,12 @@ async fn main() -> io::Result<()> {
     );
     let terms = pty::Terminals::new();
     let allow_identified = env::args().any(|a| a == "--tailnet-allow-identified");
+    let allow_anonymous = env::args().any(|a| a == "--allow-anonymous");
     let mut args = env::args();
     while let Some(a) = args.next() {
         if a == "--extra-listen" {
             let spec = listen::parse(&args.next().unwrap_or_default()).map_err(io::Error::other)?;
-            listen::start(spec, terms.clone(), allow_identified).await?;
+            listen::start(spec, listen::Target::Daemon(terms.clone()), allow_identified, allow_anonymous).await?;
         }
     }
     // Daemons a bridge starts on a remote host stop once nothing uses them, so old builds don't pile up.

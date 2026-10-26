@@ -62,6 +62,48 @@ Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon adm
   exactly as on the Unix socket. The client's `principal` in snapshots is
   `{kind:"tailnet",login,node,tags}`; Unix socket clients have `null`.
   Anyone admitted can run programs as the daemon's user.
+- Plain TCP listener (as Rex's `--extra-listen :7297 --allow-anonymous`):
+  `--extra-listen :PORT` or `IP:PORT`. It cannot tell callers apart, so the
+  daemon refuses to start it without `--allow-anonymous`. On a personal daemon,
+  every caller gets a shell as that user, and startup prints a warning. The
+  principal is `{kind:"anonymous"}`. Remote tabs never use such a listener,
+  because they only connect directly to tailnet addresses.
+- Login server (as Rex's `rex-login-server`):
+  `zurafa-daemon login-server [--accounts PATH] --extra-listen SPEC…
+  [--allow-anonymous]` runs as root. It admits every caller its listeners can
+  identify, plus anonymous callers on a plain listener. Then
+  `/etc/zurafa/accounts.jsonc` (JSON with comments and trailing commas) decides
+  which local account the caller gets. The file has `accounts`, mapping an
+  account name to `{principals:[…]}`, and `defaults`, mapping a principal to an
+  account.
+  - Principals: `tailscale:<login>`, `tailscale:tag:<tag>`, `tailscale:*` (any
+    person), `tailscale:tag:*` (any tagged device), `identified` and
+    `anonymous`. A tagged device never matches a login or `tailscale:*`.
+  - The account `"*"` grants every regular account (user ID ≥ 1000) but never
+    to anonymous callers. Anonymous callers never get root.
+  - Choosing an account: a client asks for one with a `Zurafa-Account` header;
+    remote tabs send their saved host's SSH user. Otherwise the most specific
+    matching default wins (login, tag, Tailscale wildcard, `identified`, then
+    `anonymous`; ties go to the first entry in the file). Failing that, the
+    only account the caller may use. The file is read for every connection,
+    so edits apply to new connections.
+  - Accounts with a `nologin`/`false` shell are refused, and so is everyone
+    but root while `/etc/nologin` exists. Accounts come from `/etc/passwd`
+    only; the static build has no NSS, so LDAP and SSSD users are not found.
+  - The server answers `101`, then runs `runuser -l <account> -s /bin/sh -c
+    'exec /usr/local/lib/zurafa/zurafa-daemon bridge'` and splices the
+    connection to it. `runuser` opens the account's PAM session (account
+    checks, limits, environment) without a password. `bridge` starts or
+    reuses that account's own daemon (`~/.zurafa/daemon.sock`), which keeps
+    its terminals when the login server restarts or is upgraded.
+  - `sudo zurafa-daemon install-login-server` copies the binary to
+    `/usr/local/lib/zurafa/` and installs `zurafa-login-server.service`
+    (tailnet port 7297 plus Serve socket `/run/zurafa/serve.sock`,
+    `KillMode=process`). If no accounts file exists yet, it creates one that
+    gives the sudo user's account to the machine's Tailscale owner, or to
+    nobody. `uninstall-login-server` removes the service and binary but keeps
+    the accounts file. Turn off a personal direct connection on the same host
+    first, because both use port 7297.
 - A second daemon exits successfully if the socket already accepts connections.
   Disconnecting clients does not stop their PTYs.
 
