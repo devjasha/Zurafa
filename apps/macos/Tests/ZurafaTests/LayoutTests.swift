@@ -19,6 +19,8 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(Program.detect("codex", remote: false), .codex)
         XCTAssertEqual(Program.detect("gemini", remote: false), .gemini)
         XCTAssertEqual(Program.detect("pi", remote: false), .pi)
+        XCTAssertEqual(Program.detect("emacs", remote: false), .emacs)
+        XCTAssertEqual(Program.detect("emacs-31.1", remote: false), .emacs)
         XCTAssertEqual(Program.detect("fish", remote: false), .shell)
         XCTAssertEqual(Program.detect("ssh", remote: true), .ssh)
         XCTAssertEqual(Program.codex.iconAssetName, "Codex")

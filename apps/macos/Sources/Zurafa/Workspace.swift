@@ -18,7 +18,7 @@ enum TabStripLayout: String {
 }
 
 enum Program {
-    case claude, codex, gemini, pi, git, dev, ssh, shell
+    case claude, codex, gemini, pi, emacs, git, dev, ssh, shell
     static func detect(_ name: String?, executable: String? = nil, argv: [String]? = nil, remote: Bool) -> Program {
         guard let name else { return remote ? .ssh : .shell }
         let n = ([name, executable] + (argv ?? [])).compactMap { $0 }.joined(separator: " ").lowercased()
@@ -31,19 +31,21 @@ enum Program {
             return [path.lastPathComponent.lowercased(), arg.lowercased()]
         }
         if base == "pi" || argvParts.contains("pi") || argvParts.contains(where: { $0.contains("pi-coding-agent") }) { return .pi }
+        // Homebrew builds run as `emacs` or `emacs-31.1`; any Emacs gets the Doom icon.
+        if base.hasPrefix("emacs") { return .emacs }
         if base == "git" || base == "lazygit" { return .git }
         if base == "ssh" { return .ssh }
         if ["node", "npm", "pnpm", "bun", "deno", "vite"].contains(base) { return .dev }
         return remote ? .ssh : .shell
     }
     var title: String {
-        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .shell: "Shell" }
+        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .emacs: "Emacs"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .shell: "Shell" }
     }
     var icon: String {
-        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "brain.head.profile"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .shell: "terminal" }
+        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "brain.head.profile"; case .emacs: "text.cursor"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .shell: "terminal" }
     }
     var iconAssetName: String? {
-        switch self { case .claude: "Claude"; case .codex: "Codex"; case .pi: "Pi"; case .shell: "Terminal"; default: nil }
+        switch self { case .claude: "Claude"; case .codex: "Codex"; case .pi: "Pi"; case .emacs: "Doom"; case .shell: "Terminal"; default: nil }
     }
     var tile: [Color] {
         switch self {
@@ -51,6 +53,7 @@ enum Program {
         case .codex: [.black]
         case .gemini: [Color(red: 0.35, green: 0.55, blue: 0.9)]
         case .pi: [Color(red: 0.45, green: 0.58, blue: 0.92)]
+        case .emacs: [Color(red: 0.49, green: 0.34, blue: 0.76)]
         case .git: [Color(red: 0.49, green: 0.83, blue: 0.47), Color(red: 0.22, green: 0.62, blue: 0.32)]
         case .dev: [Color(red: 0.33, green: 0.34, blue: 0.38), Color(red: 0.11, green: 0.12, blue: 0.14)]
         case .ssh: [Color(red: 0.28, green: 0.47, blue: 0.57)]

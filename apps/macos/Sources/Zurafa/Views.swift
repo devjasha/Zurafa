@@ -100,6 +100,7 @@ enum AgentIcon {
         case "claude", "anthropic": return "Claude"
         case "codex": return "Codex"
         case "pi": return "Pi"
+        case "doom", "emacs", "doomemacs": return "Doom"
         case "terminal", "shell", "zsh", "bash", "fish": return "Terminal"
         case "github": return "LobeGithub"
         case "copilot", "githubcopilot": return "LobeGithubCopilot"
@@ -587,7 +588,7 @@ struct TabItem: View {
                 // The clear box sets the width, so the full-length text can't widen the tab.
                 Color.clear.frame(height: 18).overlay(alignment: .leading) {
                     (Text(title).foregroundStyle(on ? Theme.ink : Theme.ink.opacity(0.8))
-                        + Text(m.cwd == title ? "" : " " + m.cwd).foregroundStyle(Theme.inkSoft))
+                        + Text(title.hasSuffix(m.cwd) ? "" : " " + m.cwd).foregroundStyle(Theme.inkSoft))
                         .font(.system(size: 14, weight: .medium))
                         .lineLimit(1).fixedSize()
                 }
@@ -705,7 +706,7 @@ struct PaneView: View {
             HStack(spacing: 7) {
                 ProgramGlyph(program: m.program).frame(width: 13, height: 13)
                 Text(m.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                Text(m.label ?? m.cwd).font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(m.label ?? (m.title.hasSuffix(m.cwd) ? "" : m.cwd)).font(.system(size: 13)).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.head)
                 ForEach(m.statusItems) { item in
                     StatusIcon(item: item, fallback: m.program.title, size: 15)

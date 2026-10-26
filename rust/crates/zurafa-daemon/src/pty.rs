@@ -385,6 +385,10 @@ impl Terminals {
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         cmd.env("TERM_PROGRAM", "Zurafa");
+        // GUI launches inherit no locale; without UTF-8, TUIs like Emacs print `?` for every non-ASCII glyph.
+        if ["LC_ALL", "LC_CTYPE", "LANG"].iter().all(|k| env::var(k).map_or(true, |v| v.is_empty())) {
+            cmd.env("LANG", "en_US.UTF-8");
+        }
         cmd.env("ZURAFA_SESSION", session);
         cmd.env("ZURAFA_PANE", &id);
         cmd.env("ZURAFA_BLOCK", &id);
