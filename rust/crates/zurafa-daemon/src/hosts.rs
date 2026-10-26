@@ -131,6 +131,11 @@ pub fn validate(host: &RemoteHost) -> Result<(), String> {
 /// Online Linux and macOS machines on the user's tailnet, as unsaved hosts (ID = MagicDNS name).
 /// Empty when Tailscale is not installed or not running.
 pub fn tailnet() -> Vec<RemoteHost> {
+    tailscale(&["status", "--json"]).map(|out| tailnet_hosts(&out, resolves)).unwrap_or_default()
+}
+
+/// Stdout of a successful `tailscale <args>`.
+pub fn tailscale(args: &[&str]) -> Option<Vec<u8>> {
     // The daemon starts from the app with launchd's PATH, so look in the usual install spots.
     const CLIS: [&str; 4] = [
         "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
@@ -141,10 +146,9 @@ pub fn tailnet() -> Vec<RemoteHost> {
     CLIS.iter()
         .filter(|cli| std::path::Path::new(cli).is_file())
         // Without a terminal, Tailscale.app's binary starts its GUI instead of the CLI (and exits 0).
-        .find_map(|cli| std::process::Command::new(cli).args(["status", "--json"]).env("TAILSCALE_BE_CLI", "1").output().ok())
+        .find_map(|cli| std::process::Command::new(cli).args(args).env("TAILSCALE_BE_CLI", "1").output().ok())
         .filter(|out| out.status.success())
-        .map(|out| tailnet_hosts(&out.stdout, resolves))
-        .unwrap_or_default()
+        .map(|out| out.stdout)
 }
 
 fn resolves(name: &str) -> bool {

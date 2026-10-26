@@ -1,4 +1,5 @@
 mod hosts;
+mod listen;
 mod osc7501;
 mod protocol;
 mod pty;
@@ -99,6 +100,14 @@ async fn main() -> io::Result<()> {
         signal(SignalKind::interrupt())?,
     );
     let terms = pty::Terminals::new();
+    let allow_identified = env::args().any(|a| a == "--tailnet-allow-identified");
+    let mut args = env::args();
+    while let Some(a) = args.next() {
+        if a == "--extra-listen" {
+            let port = listen::tailnet_port(&args.next().unwrap_or_default()).map_err(io::Error::other)?;
+            listen::start(port, terms.clone(), allow_identified).await?;
+        }
+    }
     // Daemons a bridge starts on a remote host stop once nothing uses them, so old builds don't pile up.
     let exit_when_idle = env::args().any(|a| a == "--exit-when-idle");
     let mut idle_check = tokio::time::interval(std::time::Duration::from_secs(60));
@@ -108,7 +117,7 @@ async fn main() -> io::Result<()> {
             _ = idle_check.tick(), if exit_when_idle => if terms.idle() { break },
             r = listener.accept() => {
                 if let Ok((stream, _)) = r {
-                    tokio::spawn(server::handle(stream, terms.clone()));
+                    tokio::spawn(server::handle(stream, terms.clone(), serde_json::Value::Null));
                 }
             }
             _ = term.recv() => break,

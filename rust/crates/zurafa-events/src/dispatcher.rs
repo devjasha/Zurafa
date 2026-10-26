@@ -275,7 +275,7 @@ impl Dispatcher {
         .unwrap();
         this
     }
-    pub fn client_joined(&self) -> String {
+    pub fn client_joined(&self, principal: serde_json::Value) -> String {
         let mut i = self.inner.lock().unwrap();
         let id = format!("client-{}", i.snapshot.sequence + 1);
         let client = Client {
@@ -286,7 +286,7 @@ impl Dispatcher {
                 platform: "unknown".into(),
                 version: "unknown".into(),
             },
-            principal: serde_json::Value::Null,
+            principal,
             connected_at: serde_json::json!(now()),
         };
         i.snapshot.clients.insert(id.clone(), client.clone());
@@ -898,7 +898,7 @@ mod tests {
     fn server_lifecycle_and_noop_commands() {
         let d = Dispatcher::new(32);
         let (_, mut rx) = d.subscribe();
-        let client = d.client_joined();
+        let client = d.client_joined(serde_json::Value::Null);
         assert!(d.snapshot().clients.contains_key(&client));
         assert_eq!(rx.try_recv().unwrap().event.name(), "client_joined");
         d.client_left(&client);

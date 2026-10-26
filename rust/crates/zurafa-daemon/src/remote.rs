@@ -3,12 +3,15 @@
 //! `ssh … zurafa-daemon bridge`, so the shell survives dropped connections: it reconnects and
 //! catches up from the remote replay buffer. Bytes pass through raw, so the local daemon still
 //! parses titles, cwd and OSC 7501. Without a usable remote daemon it becomes plain `ssh -tt`.
+//! When the host is a Tailscale peer whose daemon runs `--extra-listen tailnet://`, the tab skips
+//! SSH and connects to that daemon directly, as Rex does.
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -79,13 +82,19 @@ fn ssh(dest: &[String], extra: &[&str], command: String) -> Command {
     c
 }
 
-struct Writer(Mutex<Option<ChildStdin>>);
+fn write_frame(w: &mut impl Write, v: &Value) -> io::Result<()> {
+    let body = v.to_string();
+    w.write_all(&(body.len() as u32).to_be_bytes())?;
+    w.write_all(body.as_bytes())?;
+    w.flush()
+}
+
+struct Writer(Mutex<Option<Box<dyn Write + Send>>>);
 
 impl Writer {
     fn send(&self, v: Value) {
-        let body = v.to_string();
         if let Some(w) = self.0.lock().unwrap().as_mut() {
-            let _ = w.write_all(&(body.len() as u32).to_be_bytes()).and_then(|_| w.write_all(body.as_bytes())).and_then(|_| w.flush());
+            let _ = write_frame(w, &v);
         }
     }
 }
@@ -106,8 +115,22 @@ fn read_body(r: &mut impl Read, len: [u8; 4]) -> io::Result<Value> {
     serde_json::from_slice(&body).map_err(|_| io::ErrorKind::InvalidData.into())
 }
 
+/// A connection to the remote daemon; `child` is the `ssh` process when it goes through SSH.
+struct Conn {
+    child: Option<Child>,
+    to: Box<dyn Write + Send>,
+    from: BufReader<Box<dyn Read + Send>>,
+}
+
+/// How this tab reaches its remote daemon. A reconnect must reach the same daemon to find its shell.
+#[derive(Clone, Copy)]
+enum Route {
+    Direct(SocketAddr),
+    Ssh,
+}
+
 enum Open {
-    Ready(Child, ChildStdin, BufReader<ChildStdout>),
+    Ready(Conn),
     Need(String),
     Failed,
 }
@@ -116,9 +139,9 @@ fn open(dest: &[String], build: &str) -> Open {
     let Ok(mut child) = ssh(dest, &[], bridge_script(build)).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn() else {
         return Open::Failed;
     };
-    let (mut to, mut from) = (child.stdin.take().unwrap(), BufReader::new(child.stdout.take().unwrap()));
-    let hello = json!({"id":0,"type":"hello","protocol":2}).to_string();
-    let _ = to.write_all(&(hello.len() as u32).to_be_bytes()).and_then(|_| to.write_all(hello.as_bytes())).and_then(|_| to.flush());
+    let mut to: Box<dyn Write + Send> = Box::new(child.stdin.take().unwrap());
+    let mut from = BufReader::new(Box::new(child.stdout.take().unwrap()) as Box<dyn Read + Send>);
+    let _ = write_frame(&mut to, &json!({"id":0,"type":"hello","protocol":2}));
     let mut head = [0; 4];
     let reply = match from.read_exact(&mut head) {
         Ok(()) if &head == b"zura" => {
@@ -131,11 +154,98 @@ fn open(dest: &[String], build: &str) -> Open {
         Err(_) => None,
     };
     if reply.is_some_and(|r| r["type"] == "hello_ok") {
-        Open::Ready(child, to, from)
+        Open::Ready(Conn { child: Some(child), to, from })
     } else {
         let _ = child.kill();
         let _ = child.wait();
         Open::Failed
+    }
+}
+
+/// `(user, host)` of the SSH destination, the last argument (`[user@]host`).
+fn destination(dest: &[String]) -> (Option<&str>, &str) {
+    let last = dest.last().map_or("", String::as_str);
+    match last.split_once('@') {
+        Some((user, host)) => (Some(user), host),
+        None => (None, last),
+    }
+}
+
+/// Plain HTTP is only safe inside WireGuard, so connect directly only to a Tailscale peer.
+fn is_tailnet(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.octets()[0] == 100 && (64..128).contains(&v4.octets()[1]),
+        IpAddr::V6(v6) => v6.segments()[..3] == [0xfd7a, 0x115c, 0xa1e0],
+    }
+}
+
+/// The host's daemon listener, when the host resolves to an address Tailscale knows as a peer.
+fn direct_addr(host: &str) -> Option<SocketAddr> {
+    (host, crate::listen::DEFAULT_PORT)
+        .to_socket_addrs()
+        .ok()?
+        .filter(|a| is_tailnet(a.ip()))
+        // 100.64.0.0/10 is also carrier-grade NAT space: make sure it is really our tailnet.
+        .find(|a| crate::hosts::tailscale(&["whois", &a.ip().to_string()]).is_some())
+}
+
+fn open_direct(addr: SocketAddr, user: Option<&str>) -> Option<Conn> {
+    let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3)).ok()?;
+    // run() pings every 15 s, so 45 s of silence means a dead link, like SSH's ServerAlive settings.
+    stream.set_read_timeout(Some(Duration::from_secs(45))).ok()?;
+    stream.set_write_timeout(Some(Duration::from_secs(45))).ok()?;
+    let mut to: Box<dyn Write + Send> = Box::new(stream.try_clone().ok()?);
+    let mut from = BufReader::new(Box::new(stream) as Box<dyn Read + Send>);
+    write!(to, "GET /zurafa HTTP/1.1\r\nHost: {addr}\r\nConnection: Upgrade\r\nUpgrade: zurafa\r\n\r\n").ok()?;
+    let mut head = (&mut from).take(8192);
+    let mut line = String::new();
+    head.read_line(&mut line).ok()?;
+    if !line.starts_with("HTTP/1.1 101 ") {
+        return None;
+    }
+    loop {
+        line.clear();
+        match head.read_line(&mut line).ok()? {
+            0 => return None,
+            _ if line.trim_end().is_empty() => break,
+            _ => {}
+        }
+    }
+    write_frame(&mut to, &json!({"id":0,"type":"hello","protocol":2})).ok()?;
+    let reply = read_frame(&mut from).ok()?;
+    // The daemon runs as one account; an explicit SSH user that differs must go through SSH.
+    let user_ok = user.map_or(true, |u| reply["user"] == u);
+    (reply["type"] == "hello_ok" && user_ok).then_some(Conn { child: None, to, from })
+}
+
+/// The first SSH connection, installing the remote daemon if the host lacks this build.
+fn open_ssh(dest: &[String], build: &str) -> Conn {
+    match open(dest, build) {
+        Open::Ready(conn) => conn,
+        Open::Failed => fallback(dest, "Remote daemon unavailable"),
+        Open::Need(uname) => match binary_for(&uname) {
+            None => fallback(dest, &format!("No Zurafa daemon build for {uname}")),
+            Some(bin) => {
+                notice(&format!("Installing the Zurafa daemon on this host ({uname})…"));
+                if !upload(dest, build, &bin) {
+                    fallback(dest, "Installing the remote daemon failed");
+                }
+                match open(dest, build) {
+                    Open::Ready(conn) => conn,
+                    _ => fallback(dest, "Remote daemon unavailable"),
+                }
+            }
+        },
+    }
+}
+
+fn reopen(route: Route, dest: &[String], build: &str) -> Option<Conn> {
+    match route {
+        Route::Direct(addr) => open_direct(addr, destination(dest).0),
+        Route::Ssh => match open(dest, build) {
+            Open::Ready(conn) => Some(conn),
+            _ => None,
+        },
     }
 }
 
@@ -186,23 +296,13 @@ fn finish(writer: &Writer, terminal: &str, code: i32) -> ! {
 
 pub fn run(dest: Vec<String>) -> ! {
     let build = build_id();
-    let (mut child, to, mut from) = match open(&dest, &build) {
-        Open::Ready(c, t, f) => (c, t, f),
-        Open::Failed => fallback(&dest, "Remote daemon unavailable"),
-        Open::Need(uname) => match binary_for(&uname) {
-            None => fallback(&dest, &format!("No Zurafa daemon build for {uname}")),
-            Some(bin) => {
-                notice(&format!("Installing the Zurafa daemon on this host ({uname})…"));
-                if !upload(&dest, &build, &bin) {
-                    fallback(&dest, "Installing the remote daemon failed");
-                }
-                match open(&dest, &build) {
-                    Open::Ready(c, t, f) => (c, t, f),
-                    _ => fallback(&dest, "Remote daemon unavailable"),
-                }
-            }
-        },
+    let (user, host) = destination(&dest);
+    let direct = direct_addr(host).and_then(|addr| Some((Route::Direct(addr), open_direct(addr, user)?)));
+    let (route, conn) = match direct {
+        Some(direct) => direct,
+        None => (Route::Ssh, open_ssh(&dest, &build)),
     };
+    let Conn { mut child, to, mut from } = conn;
     unsafe {
         libc::signal(libc::SIGHUP, on_hangup as extern "C" fn(libc::c_int) as libc::sighandler_t);
         libc::signal(libc::SIGTERM, on_hangup as extern "C" fn(libc::c_int) as libc::sighandler_t);
@@ -227,8 +327,12 @@ pub fn run(dest: Vec<String>) -> ! {
     let (w, t) = (writer.clone(), terminal.clone());
     thread::spawn(move || {
         let mut size = window_size();
-        loop {
+        for tick in 1u64.. {
             thread::sleep(Duration::from_millis(100));
+            // Keeps a direct connection's 45 s read timeout from firing on an idle shell.
+            if tick % 150 == 0 {
+                w.send(json!({"id":4,"type":"ping"}));
+            }
             let current = t.lock().unwrap().clone();
             if HANGUP.load(Ordering::Relaxed) {
                 match current {
@@ -328,8 +432,10 @@ pub fn run(dest: Vec<String>) -> ! {
             }
         }
         // Connection lost: reconnect until it works or the tab closes.
-        let _ = child.kill();
-        let _ = child.wait();
+        if let Some(c) = child.as_mut() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
         *writer.0.lock().unwrap() = None;
         if first {
             fallback(&dest, "Remote daemon did not start a shell");
@@ -338,9 +444,9 @@ pub fn run(dest: Vec<String>) -> ! {
         let mut delay = Duration::from_secs(1);
         (child, from) = loop {
             thread::sleep(delay);
-            if let Open::Ready(c, t, f) = open(&dest, &build) {
-                *writer.0.lock().unwrap() = Some(t);
-                break (c, f);
+            if let Some(conn) = reopen(route, &dest, &build) {
+                *writer.0.lock().unwrap() = Some(conn.to);
+                break (conn.child, conn.from);
             }
             delay = (delay * 2).min(Duration::from_secs(10));
         };
@@ -360,6 +466,46 @@ mod tests {
             assert_eq!(script.matches('\'').count(), 2, "{script}");
             assert!(script.contains(&format!("$HOME/.zurafa/{build}")));
         }
+    }
+
+    #[test]
+    fn direct_only_to_tailnet_addresses() {
+        assert_eq!(destination(&["-p".into(), "22".into(), "--".into(), "al@box.ts.net".into()]), (Some("al"), "box.ts.net"));
+        assert_eq!(destination(&["--".into(), "box".into()]), (None, "box"));
+        assert!(is_tailnet("100.86.111.84".parse().unwrap()));
+        assert!(is_tailnet("fd7a:115c:a1e0::4832:8975".parse().unwrap()));
+        assert!(!is_tailnet("100.128.0.1".parse().unwrap()));
+        assert!(!is_tailnet("192.168.1.2".parse().unwrap()));
+    }
+
+    /// A one-shot daemon stand-in: answers the upgrade with `status`, then hello as `user`.
+    fn fake_daemon(status: &'static str, user: &'static str) -> SocketAddr {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut r = BufReader::new(stream.try_clone().unwrap());
+            let mut w = stream;
+            let mut line = String::new();
+            while r.read_line(&mut line).unwrap() > 0 && line != "\r\n" {
+                line.clear();
+            }
+            write!(w, "HTTP/1.1 {status}\r\nUpgrade: zurafa\r\n\r\n").unwrap();
+            if status.starts_with("101") {
+                assert_eq!(read_frame(&mut r).unwrap()["type"], "hello");
+                write_frame(&mut w, &json!({"id":0,"type":"hello_ok","protocol":2,"user":user})).unwrap();
+                let _ = read_frame(&mut r); // hold the connection until the client drops it
+            }
+        });
+        addr
+    }
+
+    #[test]
+    fn opens_direct_connections_only_as_the_right_user() {
+        assert!(open_direct(fake_daemon("101 Switching Protocols", "al"), None).is_some());
+        assert!(open_direct(fake_daemon("101 Switching Protocols", "al"), Some("al")).is_some());
+        assert!(open_direct(fake_daemon("101 Switching Protocols", "al"), Some("root")).is_none());
+        assert!(open_direct(fake_daemon("403 Forbidden", "al"), None).is_none());
     }
 
     #[test]

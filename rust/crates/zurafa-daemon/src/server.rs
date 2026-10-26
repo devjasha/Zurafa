@@ -8,8 +8,7 @@ use std::{
     sync::Arc,
 };
 use tokio::{
-    io::AsyncRead,
-    net::UnixStream,
+    io::{AsyncRead, AsyncWrite},
     sync::{broadcast::error::RecvError, mpsc},
     task::JoinHandle,
 };
@@ -430,8 +429,11 @@ impl Drop for Connected {
         self.terms.dispatcher.client_left(&self.id);
     }
 }
-pub async fn handle(stream: UnixStream, terms: Arc<Terminals>) {
-    let (mut r, mut w) = stream.into_split();
+pub async fn handle<S>(stream: S, terms: Arc<Terminals>, principal: Value)
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    let (mut r, mut w) = tokio::io::split(stream);
     let Some(first) = recv(&mut r).await else {
         return;
     };
@@ -453,7 +455,7 @@ pub async fn handle(stream: UnixStream, terms: Arc<Terminals>) {
     let mut output = terms.events.subscribe();
     if write_frame(
         &mut w,
-        json!({"id":id,"type":"hello_ok","protocol":version,"version":env!("CARGO_PKG_VERSION")})
+        json!({"id":id,"type":"hello_ok","protocol":version,"version":env!("CARGO_PKG_VERSION"),"user":std::env::var("USER").ok()})
             .to_string()
             .as_bytes(),
     )
@@ -464,7 +466,7 @@ pub async fn handle(stream: UnixStream, terms: Arc<Terminals>) {
     }
     let _connected = Connected {
         terms: terms.clone(),
-        id: terms.dispatcher.client_joined(),
+        id: terms.dispatcher.client_joined(principal),
     };
     // Dedicated reader avoids cancelling a partially read length-prefixed frame.
     let (requests, mut incoming) = mpsc::channel(32);

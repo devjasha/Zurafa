@@ -27,6 +27,19 @@ Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon adm
   "version": "0.1.0" }`. No event precedes this reply.
 - Request IDs are unsigned integers. Each valid request gets one reply with its
   ID. Failures use `{ "id": 1, "type": "error", "message": "..." }`.
+- Tailnet listener (as Rex's `tailnet://`): `--extra-listen tailnet://[:PORT]`
+  (default port 7297) also binds each of this machine's Tailscale addresses,
+  never a wildcard address. It needs Tailscale running and signed in at start.
+  For each caller the daemon runs `tailscale whois`: by default only this
+  device and its owning Tailscale user get in. A tagged device has no owner, so
+  it is refused, and on a tagged server only the server itself gets in.
+  `--tailnet-allow-identified` admits every caller Tailscale identifies.
+  Refused callers get HTTP 403. `hello_ok` carries the daemon's `user` (`$USER`). An admitted caller sends
+  `GET /zurafa HTTP/1.1` with `Connection: Upgrade` and `Upgrade: zurafa`.
+  After `101 Switching Protocols` the connection carries the frames below,
+  exactly as on the Unix socket. The client's `principal` in snapshots is
+  `{kind:"tailnet",login,node,tags}`; Unix socket clients have `null`.
+  Anyone admitted can run programs as the daemon's user.
 - A second daemon exits successfully if the socket already accepts connections.
   Disconnecting clients does not stop their PTYs.
 
@@ -135,6 +148,15 @@ remote session. Each tab or split in that session runs `zurafa-daemon remote [-p
 <port>] -- <user@hostname>` in a local PTY. That helper keeps the shell in a
 daemon on the remote host so it survives dropped connections:
 
+0. If `<hostname>` resolves to a Tailscale address that `tailscale whois` knows
+   as a peer, it first tries that host's tailnet listener on port 7297
+   (`--extra-listen tailnet://`, see Transport). It never uses this route for
+   non-tailnet addresses, because the route is plain HTTP inside WireGuard. If
+   the daemon answers `hello_ok` and either no SSH user was given or its `user`
+   matches it, the tab uses that daemon and skips steps 1–2. Every reconnect
+   uses the same route, because the shell lives in that daemon. To detect a
+   dead direct link, the helper pings every 15 s and treats 45 s of silence as
+   a drop. Otherwise it falls back to SSH:
 1. It runs `ssh -T -o BatchMode=yes … <dest> "sh -c '…'"`, which execs
    `~/.zurafa/<build>/zurafa-daemon bridge --socket ~/.zurafa/<build>/daemon.sock`.
    `<build>` is a hash of the local daemon binary, so each app build installs and
