@@ -670,6 +670,7 @@ private struct PaletteEntry: Identifiable {
 
 struct CommandPicker: View {
     @EnvironmentObject var ws: Workspace
+    @EnvironmentObject var app: AppDelegate
     @State private var query = ""
     @State private var selection = 0
     @State private var themeMode = false
@@ -835,6 +836,17 @@ struct CommandPicker: View {
                     .onChange(of: filtered.map(\.id)) { scrollSelection(selection, proxy: proxy); previewSelection() }
                 }
                 .frame(maxHeight: min(420, max(120, bounds.size.height - topInset - 80)))
+                if let version = app.availableUpdate {
+                    HStack(spacing: 7) {
+                        if let star = zurafaStar { Image(nsImage: star).resizable().scaledToFit().frame(width: 14, height: 14) }
+                        Text("Zurafa \(version) is available").font(.system(size: 12)).foregroundStyle(PickerStyle.secondary)
+                        Spacer(minLength: 4)
+                        Button("Update") { ws.paletteOpen = false; app.checkForUpdates() }
+                            .buttonStyle(.plain).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.onAccent)
+                            .padding(.horizontal, 9).frame(height: 20).background(PickerStyle.accent, in: Capsule())
+                    }
+                    .padding(.horizontal, 10).padding(.top, 2).frame(height: 30)
+                }
             }
             .padding(8).frame(width: 420)
             .background(Theme.paneTint, in: RoundedRectangle(cornerRadius: 15))

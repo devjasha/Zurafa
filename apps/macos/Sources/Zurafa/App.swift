@@ -1,14 +1,25 @@
 import Sparkle
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+/// An `ObservableObject`, so SwiftUI puts it in every view's environment.
+final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUUpdaterDelegate {
+    private lazy var updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+    /// Version of a newer release Sparkle found; drives the update indicators.
+    @Published private(set) var availableUpdate: String?
 
     func applicationDidFinishLaunching(_ n: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.applicationIconImage = appIcon
         NSApp.activate(ignoringOtherApps: true)
         CLIInstaller.offerInstallIfNeeded()
+        // Silent probe: reports through the delegate without showing Sparkle's window.
+        updaterController.updater.checkForUpdateInformation()
+    }
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        availableUpdate = item.displayVersionString
+    }
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        availableUpdate = nil
     }
     func checkForUpdates() {
         updaterController.checkForUpdates(nil)

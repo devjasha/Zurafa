@@ -363,6 +363,7 @@ struct TopBar: View {
             .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
             Spacer(minLength: 8)
             BarStatus()
+            UpdateButton()
             PaletteButton()
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
         }
@@ -439,6 +440,7 @@ struct VerticalTabSidebar: View {
             HStack(spacing: 0) {
                 Color.clear.frame(width: ws.windowControls.width) // traffic lights
                 Spacer(minLength: 0)
+                UpdateButton()
                 PaletteButton()
                 BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
             }
@@ -627,6 +629,22 @@ struct BarButton: View {
                 .frame(width: 28, height: 28).contentShape(Rectangle())
         }
         .buttonStyle(.plain).help(help)
+    }
+}
+
+let zurafaStar: NSImage? = ZurafaResources.image(named: "zurafa-star")
+
+/// The website's star; visible only while Sparkle reports a newer release.
+struct UpdateButton: View {
+    @EnvironmentObject var app: AppDelegate
+    var body: some View {
+        if let version = app.availableUpdate, let star = zurafaStar {
+            Button { app.checkForUpdates() } label: {
+                Image(nsImage: star).resizable().scaledToFit()
+                    .frame(width: 16, height: 16).frame(width: 28, height: 28).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).help("Update to Zurafa \(version)")
+        }
     }
 }
 

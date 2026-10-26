@@ -42,6 +42,7 @@ fi
 cp -R "$root/apps/macos/Sources/Zurafa/Resources/light-icons" "$app/Contents/Resources/light-icons"
 cp -R "$root/apps/macos/Sources/Zurafa/Resources/dark-icons" "$app/Contents/Resources/dark-icons"
 cp "$root/apps/macos/Sources/Zurafa/Resources"/Lobe*.png "$app/Contents/Resources/"
+cp "$root/apps/macos/Sources/Zurafa/Resources/zurafa-star.png" "$app/Contents/Resources/zurafa-star.png"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFontMono-Regular.ttf" "$app/Contents/Resources/SymbolsNerdFontMono-Regular.ttf"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app/Contents/Resources/SymbolsNerdFont-LICENSE.txt"
 cp -R "$root/apps/macos/Sources/Zurafa/Resources/themes" "$app/Contents/Resources/themes"
