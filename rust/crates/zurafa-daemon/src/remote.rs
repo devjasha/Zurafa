@@ -249,6 +249,40 @@ fn reopen(route: Route, dest: &[String], build: &str) -> Option<Conn> {
     }
 }
 
+/// Runs `install-service` (or `uninstall-service`) on the host over SSH, uploading this build first if needed.
+pub fn service(dest: &[String], enable: bool) -> Result<String, String> {
+    let build = build_id();
+    let sub = if enable { "install-service" } else { "uninstall-service" };
+    let script = remote_command(&format!(
+        "d=\"$HOME/.zurafa/{build}\"; [ -x \"$d/zurafa-daemon\" ] && exec \"$d/zurafa-daemon\" {sub}; echo \"zurafa-need $(uname -sm)\""
+    ));
+    for _ in 0..2 {
+        let out = ssh(dest, &[], script.clone())
+            .stdin(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| format!("cannot run ssh: {e}"))?;
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+        if let Some(uname) = text.strip_prefix("zurafa-need ") {
+            let bin = binary_for(uname).ok_or_else(|| format!("No Zurafa daemon build for {uname}"))?;
+            if !upload(dest, &build, &bin) {
+                return Err("Installing the Zurafa daemon on the host failed".into());
+            }
+            continue;
+        }
+        return match (out.status.success(), text.is_empty()) {
+            (true, _) => Ok(text),
+            (false, true) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                let why = stderr.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("no error output");
+                Err(format!("SSH to the host failed ({}): {}", out.status, why.trim()))
+            }
+            (false, false) => Err(text),
+        };
+    }
+    Err("Installing the Zurafa daemon on the host failed".into())
+}
+
 fn upload(dest: &[String], build: &str, binary: &PathBuf) -> bool {
     let Ok(file) = std::fs::File::open(binary) else { return false };
     ssh(dest, &[], upload_script(build)).stdin(file).stdout(Stdio::null()).status().is_ok_and(|s| s.success())

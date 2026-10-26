@@ -605,6 +605,20 @@ enum EditorKind: String, Identifiable {
         }
     }
 
+    /// Installs (or removes) the Zurafa service on the host over SSH, so its tabs skip SSH.
+    func setDirectConnection(_ host: RemoteHost, enabled: Bool) {
+        notice = enabled ? "Setting up direct connection to \(host.label)…" : "Turning off direct connection to \(host.label)…"
+        Task {
+            do {
+                let reply = try await daemon.request(["type": .string("hosts.service"), "host_id": .string(host.id), "enable": .bool(enabled)])
+                showNotice("\(host.label): \(reply.message ?? "done")")
+            } catch {
+                notice = nil
+                commandError = error.localizedDescription
+            }
+        }
+    }
+
     func openHost(_ host: RemoteHost) {
         if let existing = sessions.first(where: { $0.remote?.id == host.id }) {
             selectSession(existing.sessionID)

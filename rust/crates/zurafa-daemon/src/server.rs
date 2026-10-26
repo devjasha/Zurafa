@@ -77,6 +77,8 @@ enum Request {
     HostsTailnet { id: u64 },
     #[serde(rename = "hosts.remove")]
     HostsRemove { id: u64, host_id: String },
+    #[serde(rename = "hosts.service")]
+    HostsService { id: u64, host_id: String, enable: bool },
     #[serde(rename = "events.subscribe")]
     Subscribe {
         id: u64,
@@ -206,6 +208,7 @@ async fn request(
     subs: &mut HashMap<String, Subscription>,
     tx: &mpsc::Sender<Delivery>,
     generation: &mut u64,
+    late: &mpsc::Sender<Value>,
 ) -> Option<Value> {
     let id = v.get("id").cloned();
     let ty = v.get("type").and_then(Value::as_str).unwrap_or("");
@@ -236,6 +239,23 @@ async fn request(
         Request::HostsTailnet { id } => {
             let hosts = tokio::task::spawn_blocking(crate::hosts::tailnet).await.unwrap_or_default();
             json!({"id":id,"type":"hosts.tailnet","hosts":hosts})
+        }
+        Request::HostsService { id, host_id, enable } => {
+            let Some(host) = terms.hosts().into_iter().find(|h| h.id == host_id) else {
+                return Some(error(id, "unknown host"));
+            };
+            // SSH setup takes seconds: reply later instead of holding up this client's output.
+            let late = late.clone();
+            tokio::spawn(async move {
+                let dest = crate::hosts::ssh_destination(&host);
+                let reply = match tokio::task::spawn_blocking(move || crate::remote::service(&dest, enable)).await {
+                    Ok(Ok(message)) => json!({"id":id,"type":"ok","message":message}),
+                    Ok(Err(e)) => error(id, e),
+                    Err(e) => error(id, e),
+                };
+                let _ = late.send(reply).await;
+            });
+            return None;
         }
         Request::HostsRemove { id, host_id } => match terms.remove_host(&host_id) {
             Ok(()) => json!({"id":id,"type":"ok"}),
@@ -478,6 +498,7 @@ where
         }
     });
     let (tx, mut deliveries) = mpsc::channel::<Delivery>(128);
+    let (late, mut late_replies) = mpsc::channel::<Value>(8);
     let mut subs = HashMap::new();
     let mut generation = 0;
     // A remote helper only wants its own terminal's bytes, not every terminal on the host.
@@ -491,7 +512,7 @@ where
                         Some(error(v.get("id"),"requires protocol 2").to_string())
                     }else{
                         let narrows = v["type"]=="attach" || (v["type"]=="spawn" && v["raw"]==true);
-                        let r = request(v,&terms,&mut subs,&tx,&mut generation).await;
+                        let r = request(v,&terms,&mut subs,&tx,&mut generation,&late).await;
                         if let Some(t) = r.as_ref().filter(|_|narrows).and_then(|r|r["terminal"].as_str()) {
                             own.insert(t.to_owned());
                         }
@@ -499,6 +520,7 @@ where
                     }
                 }
             },
+            v=late_replies.recv()=>v.map(|v|v.to_string()),
             d=deliveries.recv()=>match d {
                 Some(d) if subs.get(&d.subscription).is_some_and(|s:&Subscription|s.generation==d.generation)=>Some(d.message.to_string()),_=>None,
             },

@@ -25,6 +25,7 @@ struct SessionPicker: View {
     @State private var hovered: String?
     @State private var deletingSession: SessionSnapshot?
     @State private var deletingHost: RemoteHost?
+    @State private var directHost: RemoteHost?
     @FocusState private var searchFocused: Bool
 
     private var shownSessions: [SessionSnapshot] {
@@ -86,18 +87,19 @@ struct SessionPicker: View {
                         header("Saved Hosts", symbol: "network")
                         ForEach(Array(matchingHosts.enumerated()), id: \.element.id) { index, host in
                             row(host.label, symbol: nil, shortcut: hovered == host.id ? nil : host.addressLabel,
-                                highlighted: selection == sessions.count + index) {
+                                highlighted: selection == sessions.count + index, trailingInset: 26) {
                                 ws.openHost(host)
                                 ws.sessionPickerOpen = false
                             }
                             .overlay(alignment: .trailing) {
-                                if hovered == host.id {
-                                    HStack(spacing: 0) {
+                                HStack(spacing: 0) {
+                                    if hovered == host.id {
                                         iconButton("gearshape", help: "Edit \(host.label) connection") { ws.beginEditingHost(host) }
                                         iconButton("trash", help: "Delete \(host.label) host (⌘⌫)") { deletingHost = host }
                                     }
-                                    .foregroundStyle(PickerStyle.secondary).padding(.trailing, 4)
+                                    iconButton("bolt.horizontal", help: "Direct connection to \(host.label) over Tailscale") { directHost = host }
                                 }
+                                .foregroundStyle(PickerStyle.secondary).padding(.trailing, 4)
                             }
                             .onContinuousHover { hover(host.id, $0) }
                         }
@@ -148,6 +150,22 @@ struct SessionPicker: View {
             Button("Cancel", role: .cancel) { deletingHost = nil }
         } message: {
             Text("This removes the saved connection. Open terminals stay connected.")
+        }
+        .confirmationDialog("Direct connection to \(directHost?.label ?? "host")", isPresented: Binding(
+            get: { directHost != nil },
+            set: { if !$0 { directHost = nil } }
+        )) {
+            Button("Turn On") {
+                if let host = directHost { ws.setDirectConnection(host, enabled: true) }
+                directHost = nil
+            }
+            Button("Turn Off") {
+                if let host = directHost { ws.setDirectConnection(host, enabled: false) }
+                directHost = nil
+            }
+            Button("Cancel", role: .cancel) { directHost = nil }
+        } message: {
+            Text("Runs Zurafa as a service on this Linux host. It listens on Tailscale port 7297, and only your Tailscale account can connect. New tabs then skip SSH. Updating or turning it off ends tabs that use it.")
         }
     }
 
@@ -205,7 +223,7 @@ struct SessionPicker: View {
     }
 
     private func row(_ title: String, symbol: String?, shortcut: String?, selected: Bool = false, highlighted: Bool,
-                     action: @escaping () -> Void) -> some View {
+                     trailingInset: CGFloat = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Group {
@@ -218,6 +236,7 @@ struct SessionPicker: View {
                 if let shortcut {
                     Text(shortcut).lineLimit(1)
                         .foregroundStyle(selected ? Theme.onAccent.opacity(0.75) : PickerStyle.secondary)
+                        .padding(.trailing, trailingInset)
                 }
             }
             .font(.system(size: 13, weight: .medium))

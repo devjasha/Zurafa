@@ -5,6 +5,7 @@ mod protocol;
 mod pty;
 mod remote;
 mod server;
+mod service;
 
 use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
@@ -70,6 +71,16 @@ async fn bridge(path: PathBuf) -> io::Result<()> {
 async fn main() -> io::Result<()> {
     if env::args().nth(1).as_deref() == Some("remote") {
         remote::run(env::args().skip(2).collect());
+    }
+    // Run on a remote host over SSH: the message goes to stdout, the exit code says if it worked.
+    let service = match env::args().nth(1).as_deref() {
+        Some("install-service") => Some(service::install()),
+        Some("uninstall-service") => Some(service::uninstall()),
+        _ => None,
+    };
+    if let Some(result) = service {
+        println!("{}", result.as_ref().unwrap_or_else(|e| e));
+        std::process::exit(if result.is_ok() { 0 } else { 1 });
     }
     let path = socket_path();
     if env::args().nth(1).as_deref() == Some("bridge") {

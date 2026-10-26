@@ -34,7 +34,17 @@ Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon adm
   device and its owning Tailscale user get in. A tagged device has no owner, so
   it is refused, and on a tagged server only the server itself gets in.
   `--tailnet-allow-identified` admits every caller Tailscale identifies.
-  Refused callers get HTTP 403. `hello_ok` carries the daemon's `user` (`$USER`). An admitted caller sends
+  Refused callers get HTTP 403.
+  To keep a listener running on a Linux host, `zurafa-daemon install-service`
+  installs a systemd user service (`~/.config/systemd/user/zurafa.service`)
+  that runs `~/.zurafa/service/zurafa-daemon --extra-listen tailnet://:7297`.
+  It restarts the service only when the binary or unit changed, and enables
+  lingering so the service survives logout. `uninstall-service` removes both.
+  `{id,type:"hosts.service",host_id,enable}` runs either one on a saved host
+  over SSH, uploading this build first if needed. It replies `ok` with a
+  `message` once done; this can take seconds, and other replies and output on
+  the connection keep flowing in the meantime. In the app, the bolt button on
+  a saved host does this. `hello_ok` carries the daemon's `user` (`$USER`). An admitted caller sends
   `GET /zurafa HTTP/1.1` with `Connection: Upgrade` and `Upgrade: zurafa`.
   After `101 Switching Protocols` the connection carries the frames below,
   exactly as on the Unix socket. The client's `principal` in snapshots is
