@@ -17,7 +17,7 @@ After=network-online.target
 StartLimitIntervalSec=0
 
 [Service]
-ExecStart=%h/.zurafa/service/zurafa-daemon --socket %h/.zurafa/service/daemon.sock --extra-listen tailnet://:7297
+ExecStart=%h/.zurafa/service/zurafa-daemon --socket %h/.zurafa/service/daemon.sock --extra-listen tailnet://:7297 --extra-listen tailnet-serve://%h/.zurafa/service/serve.sock
 Restart=on-failure
 RestartSec=5
 
@@ -107,7 +107,8 @@ mod tests {
     #[test]
     fn service_listens_only_on_the_tailnet() {
         let exec = UNIT_FILE.lines().find(|l| l.starts_with("ExecStart=")).unwrap();
-        assert!(exec.ends_with("--extra-listen tailnet://:7297"));
+        assert!(exec.contains("--extra-listen tailnet://:7297 "));
+        assert!(exec.ends_with("--extra-listen tailnet-serve://%h/.zurafa/service/serve.sock"));
         assert!(!exec.contains("--exit-when-idle") && !exec.contains("--tailnet-allow-identified"));
     }
 }

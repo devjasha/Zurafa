@@ -35,9 +35,21 @@ Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon adm
   it is refused, and on a tagged server only the server itself gets in.
   `--tailnet-allow-identified` admits every caller Tailscale identifies.
   Refused callers get HTTP 403.
+- Tailscale Serve listener (as Rex's `tailnet-serve://`):
+  `--extra-listen tailnet-serve:///absolute/path.sock` opens a Unix socket with
+  mode 0600 (parent directory 0700) for
+  `sudo tailscale serve --bg --https=443 unix:/absolute/path.sock`. Serve
+  terminates HTTPS with the machine's `*.ts.net` certificate and names the caller
+  in `Tailscale-User-Login`, which this listener trusts and the `tailnet://`
+  listener ignores. By default only this machine's owner gets in;
+  `--tailnet-allow-identified` admits any named caller. Serve does not name
+  tagged devices, so they are always refused here; they can use `tailnet://`.
+  The principal is `{kind:"tailscale-serve",login}`. Use this listener where
+  Tailscale runs in userspace networking: there `tailnet://` cannot bind, so it
+  logs a warning and skips the address instead of failing.
   To keep a listener running on a Linux host, `zurafa-daemon install-service`
   installs a systemd user service (`~/.config/systemd/user/zurafa.service`)
-  that runs `~/.zurafa/service/zurafa-daemon --extra-listen tailnet://:7297`.
+  that runs `~/.zurafa/service/zurafa-daemon --extra-listen tailnet://:7297 --extra-listen tailnet-serve://$HOME/.zurafa/service/serve.sock`.
   It restarts the service only when the binary or unit changed, and enables
   lingering so the service survives logout. `uninstall-service` removes both.
   `{id,type:"hosts.service",host_id,enable}` runs either one on a saved host
@@ -159,8 +171,10 @@ remote session. Each tab or split in that session runs `zurafa-daemon remote [-p
 daemon on the remote host so it survives dropped connections:
 
 0. If `<hostname>` resolves to a Tailscale address that `tailscale whois` knows
-   as a peer, it first tries that host's tailnet listener on port 7297
-   (`--extra-listen tailnet://`, see Transport). It never uses this route for
+   as a peer, it first tries the host's daemon directly, in Rex's order. First
+   it tries HTTPS on 443 through Tailscale Serve, only for `*.ts.net` names,
+   with certificates checked against the Mozilla roots. Then it tries plain
+   HTTP on 7297 (`--extra-listen tailnet://`, see Transport). It never uses this route for
    non-tailnet addresses, because the route is plain HTTP inside WireGuard. If
    the daemon answers `hello_ok` and either no SSH user was given or its `user`
    matches it, the tab uses that daemon and skips steps 1–2. Every reconnect

@@ -115,8 +115,8 @@ async fn main() -> io::Result<()> {
     let mut args = env::args();
     while let Some(a) = args.next() {
         if a == "--extra-listen" {
-            let port = listen::tailnet_port(&args.next().unwrap_or_default()).map_err(io::Error::other)?;
-            listen::start(port, terms.clone(), allow_identified).await?;
+            let spec = listen::parse(&args.next().unwrap_or_default()).map_err(io::Error::other)?;
+            listen::start(spec, terms.clone(), allow_identified).await?;
         }
     }
     // Daemons a bridge starts on a remote host stop once nothing uses them, so old builds don't pile up.

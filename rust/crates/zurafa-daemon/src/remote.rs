@@ -125,7 +125,8 @@ struct Conn {
 /// How this tab reaches its remote daemon. A reconnect must reach the same daemon to find its shell.
 #[derive(Clone, Copy)]
 enum Route {
-    Direct(SocketAddr),
+    /// `tls`: HTTPS through Tailscale Serve, else plain HTTP to a `tailnet://` listener.
+    Direct { addr: SocketAddr, tls: bool },
     Ssh,
 }
 
@@ -179,24 +180,42 @@ fn is_tailnet(ip: IpAddr) -> bool {
     }
 }
 
-/// The host's daemon listener, when the host resolves to an address Tailscale knows as a peer.
-fn direct_addr(host: &str) -> Option<SocketAddr> {
-    (host, crate::listen::DEFAULT_PORT)
+/// The host's address when it resolves to one Tailscale knows as a peer.
+fn tailnet_ip(host: &str) -> Option<IpAddr> {
+    (host, 0)
         .to_socket_addrs()
         .ok()?
-        .filter(|a| is_tailnet(a.ip()))
+        .map(|a| a.ip())
+        .filter(|ip| is_tailnet(*ip))
         // 100.64.0.0/10 is also carrier-grade NAT space: make sure it is really our tailnet.
-        .find(|a| crate::hosts::tailscale(&["whois", &a.ip().to_string()]).is_some())
+        .find(|ip| crate::hosts::tailscale(&["whois", &ip.to_string()]).is_some())
 }
 
-fn open_direct(addr: SocketAddr, user: Option<&str>) -> Option<Conn> {
+/// Rex's order: HTTPS on 443 (Tailscale Serve, which only has certificates for `*.ts.net` names),
+/// then plain HTTP on 7297 (a `tailnet://` listener).
+fn open_first_direct(host: &str, user: Option<&str>) -> Option<(Route, Conn)> {
+    let ip = tailnet_ip(host)?;
+    let routes = [(443, true), (crate::listen::DEFAULT_PORT, false)];
+    routes.into_iter().filter(|&(_, tls)| !tls || host.ends_with(".ts.net")).find_map(|(port, tls)| {
+        let route = Route::Direct { addr: SocketAddr::new(ip, port), tls };
+        Some((route, open_direct(route, host, user)?))
+    })
+}
+
+fn open_direct(route: Route, host: &str, user: Option<&str>) -> Option<Conn> {
+    let Route::Direct { addr, tls } = route else { return None };
     let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3)).ok()?;
     // run() pings every 15 s, so 45 s of silence means a dead link, like SSH's ServerAlive settings.
     stream.set_read_timeout(Some(Duration::from_secs(45))).ok()?;
     stream.set_write_timeout(Some(Duration::from_secs(45))).ok()?;
-    let mut to: Box<dyn Write + Send> = Box::new(stream.try_clone().ok()?);
-    let mut from = BufReader::new(Box::new(stream) as Box<dyn Read + Send>);
-    write!(to, "GET /zurafa HTTP/1.1\r\nHost: {addr}\r\nConnection: Upgrade\r\nUpgrade: zurafa\r\n\r\n").ok()?;
+    let (from, mut to): (Box<dyn Read + Send>, Box<dyn Write + Send>) = if tls {
+        tls::split(stream, host)?
+    } else {
+        (Box::new(stream.try_clone().ok()?), Box::new(stream))
+    };
+    let mut from = BufReader::new(from);
+    write!(to, "GET /zurafa HTTP/1.1\r\nHost: {host}\r\nConnection: Upgrade\r\nUpgrade: zurafa\r\n\r\n").ok()?;
+    to.flush().ok()?;
     let mut head = (&mut from).take(8192);
     let mut line = String::new();
     head.read_line(&mut line).ok()?;
@@ -241,7 +260,10 @@ fn open_ssh(dest: &[String], build: &str) -> Conn {
 
 fn reopen(route: Route, dest: &[String], build: &str) -> Option<Conn> {
     match route {
-        Route::Direct(addr) => open_direct(addr, destination(dest).0),
+        Route::Direct { .. } => {
+            let (user, host) = destination(dest);
+            open_direct(route, host, user)
+        }
         Route::Ssh => match open(dest, build) {
             Open::Ready(conn) => Some(conn),
             _ => None,
@@ -281,6 +303,92 @@ pub fn service(dest: &[String], enable: bool) -> Result<String, String> {
         };
     }
     Err("Installing the Zurafa daemon on the host failed".into())
+}
+
+#[cfg(target_os = "macos")]
+mod tls {
+    //! Blocking TLS that one thread reads while another writes. rustls does no I/O itself, so the
+    //! reader waits on the socket without holding the session lock.
+    use rustls::{pki_types::ServerName, ClientConfig, ClientConnection, RootCertStore};
+    use std::io::{self, Read, Write};
+    use std::net::TcpStream;
+    use std::sync::{Arc, Mutex};
+
+    type Session = Arc<Mutex<ClientConnection>>;
+
+    pub fn split(sock: TcpStream, host: &str) -> Option<(Box<dyn Read + Send>, Box<dyn Write + Send>)> {
+        // Tailscale Serve certificates come from Let's Encrypt, which these roots include.
+        let roots = RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
+        let config = ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .ok()?
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        let name = ServerName::try_from(host.to_owned()).ok()?;
+        let session: Session = Arc::new(Mutex::new(ClientConnection::new(Arc::new(config), name).ok()?));
+        let writer = sock.try_clone().ok()?;
+        Some((Box::new(Reader(session.clone(), sock)), Box::new(Writer(session, writer))))
+    }
+
+    /// Sends what the session has queued: handshake messages, alerts and data.
+    fn send(session: &mut ClientConnection, sock: &mut TcpStream) -> io::Result<()> {
+        while session.wants_write() {
+            session.write_tls(sock)?;
+        }
+        Ok(())
+    }
+
+    struct Reader(Session, TcpStream);
+
+    impl Read for Reader {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            loop {
+                {
+                    let mut session = self.0.lock().unwrap();
+                    send(&mut session, &mut self.1)?;
+                    match session.reader().read(buf) {
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+                        done => return done,
+                    }
+                }
+                let mut raw = [0u8; 16 * 1024];
+                let n = self.1.read(&mut raw)?;
+                if n == 0 {
+                    return Ok(0);
+                }
+                let mut session = self.0.lock().unwrap();
+                let mut data = &raw[..n];
+                while !data.is_empty() {
+                    session.read_tls(&mut data)?;
+                    session.process_new_packets().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                }
+            }
+        }
+    }
+
+    struct Writer(Session, TcpStream);
+
+    impl Write for Writer {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let mut session = self.0.lock().unwrap();
+            let n = session.writer().write(buf)?;
+            send(&mut session, &mut self.1)?;
+            Ok(n)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            send(&mut self.0.lock().unwrap(), &mut self.1)
+        }
+    }
+}
+
+/// Only the Mac app opens remote tabs, so Linux builds leave HTTPS out.
+#[cfg(not(target_os = "macos"))]
+mod tls {
+    use std::io::{Read, Write};
+    pub fn split(_: std::net::TcpStream, _: &str) -> Option<(Box<dyn Read + Send>, Box<dyn Write + Send>)> {
+        None
+    }
 }
 
 fn upload(dest: &[String], build: &str, binary: &PathBuf) -> bool {
@@ -331,8 +439,7 @@ fn finish(writer: &Writer, terminal: &str, code: i32) -> ! {
 pub fn run(dest: Vec<String>) -> ! {
     let build = build_id();
     let (user, host) = destination(&dest);
-    let direct = direct_addr(host).and_then(|addr| Some((Route::Direct(addr), open_direct(addr, user)?)));
-    let (route, conn) = match direct {
+    let (route, conn) = match open_first_direct(host, user) {
         Some(direct) => direct,
         None => (Route::Ssh, open_ssh(&dest, &build)),
     };
@@ -536,10 +643,11 @@ mod tests {
 
     #[test]
     fn opens_direct_connections_only_as_the_right_user() {
-        assert!(open_direct(fake_daemon("101 Switching Protocols", "al"), None).is_some());
-        assert!(open_direct(fake_daemon("101 Switching Protocols", "al"), Some("al")).is_some());
-        assert!(open_direct(fake_daemon("101 Switching Protocols", "al"), Some("root")).is_none());
-        assert!(open_direct(fake_daemon("403 Forbidden", "al"), None).is_none());
+        let plain = |addr| Route::Direct { addr, tls: false };
+        assert!(open_direct(plain(fake_daemon("101 Switching Protocols", "al")), "box", None).is_some());
+        assert!(open_direct(plain(fake_daemon("101 Switching Protocols", "al")), "box", Some("al")).is_some());
+        assert!(open_direct(plain(fake_daemon("101 Switching Protocols", "al")), "box", Some("root")).is_none());
+        assert!(open_direct(plain(fake_daemon("403 Forbidden", "al")), "box", None).is_none());
     }
 
     #[test]
