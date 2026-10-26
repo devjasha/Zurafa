@@ -84,7 +84,12 @@ over SSH on first use (Linux x86_64/arm64 and Apple silicon Macs), so they survi
 dropped connections and sleep. The SSH connection uses saved host details and your
 normal macOS SSH configuration; it needs key or agent authentication. Hosts that
 need a password, or that the daemon can't run on, fall back to plain SSH tabs.
-See `docs/ipc-protocol.md`. Saved hosts persist on disk, while open
+On a Linux tailnet host, the bolt button next to a saved host installs a Zurafa
+service there. Tabs then connect directly over Tailscale (HTTPS through Tailscale
+Serve, or tailnet port 7297) without SSH, much like Rex. A root login server
+(`sudo zurafa-daemon install-login-server`) hands each Tailscale caller to the
+account `/etc/zurafa/accounts.jsonc` allows. See the website's
+[Direct over Tailscale](https://zurafa-website.vercel.app/docs/remote-access/) guide and `docs/ipc-protocol.md`. Saved hosts persist on disk, while open
 sessions and their PTYs live only for the current daemon process.
 Use ⌘K to choose Follow System, Light, or Dark appearance immediately; ⇧⌘A
 switches between light and dark. Zurafa remembers the choice across launches. In Follow

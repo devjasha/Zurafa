@@ -1,0 +1,40 @@
+<svg viewBox="0 0 760 290" role="img" aria-labelledby="login-title login-desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="login-title">How the login server hands a caller to an account</title>
+  <desc id="login-desc">A remote tab connects with its Tailscale identity and the account it asks for. The root login server checks accounts.jsonc, picks one account, and runs runuser -l for that account, which opens a PAM session and runs zurafa-daemon bridge. The bridge connects to the account's own daemon, which keeps its shells. Bytes flow both ways along this chain.</desc>
+  <defs>
+    <marker id="login-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-head" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <rect class="dg-box" x="16" y="24" width="200" height="76" rx="10"/>
+  <text class="dg-title" x="116" y="52" text-anchor="middle">Remote tab</text>
+  <text class="dg-sub" x="116" y="70" text-anchor="middle">Tailscale identity +</text>
+  <text class="dg-sub" x="116" y="86" text-anchor="middle">account from host user</text>
+
+  <rect class="dg-box dg-accent" x="276" y="24" width="220" height="76" rx="10"/>
+  <text class="dg-title" x="386" y="52" text-anchor="middle">zurafa-login-server</text>
+  <text class="dg-sub" x="386" y="70" text-anchor="middle">root, on :7297 and :443</text>
+  <text class="dg-sub" x="386" y="86" text-anchor="middle">picks one account</text>
+
+  <rect class="dg-box dg-dashed" x="556" y="24" width="188" height="76" rx="10"/>
+  <text class="dg-title" x="650" y="52" text-anchor="middle">accounts.jsonc</text>
+  <text class="dg-sub" x="650" y="70" text-anchor="middle">who may use which</text>
+  <text class="dg-sub" x="650" y="86" text-anchor="middle">account; read per login</text>
+
+  <rect class="dg-box" x="276" y="196" width="220" height="76" rx="10"/>
+  <text class="dg-title" x="386" y="224" text-anchor="middle">runuser -l &lt;account&gt;</text>
+  <text class="dg-sub" x="386" y="242" text-anchor="middle">PAM session, no password</text>
+  <text class="dg-sub" x="386" y="258" text-anchor="middle">runs zurafa-daemon bridge</text>
+
+  <rect class="dg-box dg-ok" x="556" y="196" width="188" height="76" rx="10"/>
+  <text class="dg-title" x="650" y="224" text-anchor="middle">Account's own daemon</text>
+  <text class="dg-sub" x="650" y="242" text-anchor="middle">~/.zurafa/daemon.sock</text>
+  <text class="dg-sub" x="650" y="258" text-anchor="middle">keeps its shells</text>
+
+  <path class="dg-edge dg-edge-accent" d="M220 62H272" marker-start="url(#login-arrow)" marker-end="url(#login-arrow)"/>
+  <path class="dg-edge dg-dashed" d="M556 62H500" marker-end="url(#login-arrow)"/>
+  <text class="dg-label" x="528" y="54" text-anchor="middle">rules</text>
+  <path class="dg-edge dg-edge-accent" d="M386 104V192" marker-start="url(#login-arrow)" marker-end="url(#login-arrow)"/>
+  <text class="dg-label" x="394" y="152">chosen account</text>
+  <path class="dg-edge dg-edge-accent" d="M500 234H552" marker-start="url(#login-arrow)" marker-end="url(#login-arrow)"/>
+  <text class="dg-label" x="526" y="226" text-anchor="middle">bridge</text>
+</svg>

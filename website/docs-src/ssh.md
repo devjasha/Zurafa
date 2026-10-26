@@ -20,6 +20,10 @@ The first time you open a remote tab, Zurafa installs its daemon on that host ov
 
 This needs SSH login without prompts: a key, your SSH agent, or [Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh) (`sudo tailscale set --ssh` on the remote machine). If the host asks for a password, has an unknown host key, can't run the daemon, or prints text when a non-interactive shell starts, the tab says so and falls back to plain SSH. That still works, password prompts included, but the session does not survive a dropped connection.
 
+## Skip SSH on your tailnet
+
+For a Linux host in your tailnet, the **bolt** button next to a saved host turns on a direct connection: tabs then connect straight to the host's Zurafa daemon over Tailscale and use SSH only as a fallback. [Direct over Tailscale](/docs/remote-access/) explains how it works, HTTPS through Tailscale Serve, and the login server for several accounts.
+
 ## Work in a remote session
 
 Create tabs and split panes as you would locally. The session label and host are visible in the top bar and picker. You can keep local and remote sessions open in the same app and switch between them. Remote tabs show program status from OSC 7501 but not the foreground-process icon.

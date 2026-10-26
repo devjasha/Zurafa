@@ -18,7 +18,9 @@ pkill zurafa-daemon
 
 ## A remote host does not connect
 
-Zurafa uses `/usr/bin/ssh`. Try the same host or alias in macOS Terminal. Check DNS or Tailscale reachability, your `~/.ssh/config`, keys, host verification, and authentication prompts. There is no mosh or separate Tailscale SSH implementation.
+Zurafa uses `/usr/bin/ssh` unless a [direct connection](/docs/remote-access/) answers first. Try the same host or alias in macOS Terminal. Check DNS or Tailscale reachability, your `~/.ssh/config`, keys, host verification, and authentication prompts. There is no mosh implementation.
+
+If a host with a direct connection still uses SSH, check on the host: `systemctl --user status zurafa` for the bolt button's service, or `journalctl -u zurafa-login-server` for the login server, which logs why it refused a caller. If the bolt button reports an SSH error, `ssh -o BatchMode=yes <host> true` must succeed from your Mac.
 
 ## Terminal screen content is missing after reconnecting
 
@@ -33,7 +35,7 @@ The daemon samples the PTY foreground process group every 250 ms when reliable m
 - Apple Silicon macOS 14+ only; Intel packaging is not provided yet.
 - Developer ID signing and notarization are configured for release builds.
 - Session layouts and PTYs are in daemon memory, not persisted across daemon restarts.
-- The standalone `zurafa` CLI is early and intentionally small; there is no Lua runtime, mosh transport, native Tailscale API, or remote file browser yet.
+- The standalone `zurafa` CLI is early and intentionally small; there is no Lua runtime, mosh transport, built-in Tailscale node, or remote file browser yet.
 - No PTY scrollback replay after a client disconnect.
 - Ghostty import covers supported terminal font and color settings, not all Ghostty settings.
 

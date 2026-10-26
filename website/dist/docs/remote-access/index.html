@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Direct over Tailscale · Zurafa Docs</title><meta name="description" content="Remote tabs can skip SSH and connect straight to the Zurafa daemon on a host in your tailnet, much like [Rex](https://www.superlogical.com/rex/docs/linux/remote-access). Tailscale encrypts the connection and tells the daemon who is calling, so there are no SSH keys or password prompts, and SSH stays as the fallback.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f6f4"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1114"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/remote-access/">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="docs-page" data-page="remote-access">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.17-macos-arm64.dmg" download>Download for Mac</a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+<a href="/docs/status/" data-page="status">Program status</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Workspace</div><h1>Direct over Tailscale</h1><div class="prose"><p>Remote tabs can skip SSH and connect straight to the Zurafa daemon on a host in your tailnet, much like <a href="https://www.superlogical.com/rex/docs/linux/remote-access">Rex</a>. Tailscale encrypts the connection and tells the daemon who is calling, so there are no SSH keys or password prompts, and SSH stays as the fallback.</p>
+<h2 id="how-a-tab-connects">How a tab connects</h2>
+<p>When you open a remote tab, Zurafa checks whether the host resolves to a Tailscale address that your Tailscale knows as a peer. Only then does it try a direct connection, because the direct routes are plain HTTP that is only safe inside WireGuard. It tries each route in turn and uses the first one that answers:</p>
+<figure class="diagram"><svg viewBox="0 0 860 290" role="img" aria-labelledby="routes-title routes-desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="routes-title">How a remote tab picks its route</title>
+  <desc id="routes-desc">A new remote tab checks whether the host is a Tailscale peer. If it is, it tries HTTPS on port 443 through Tailscale Serve, then HTTP on port 7297, then the SSH bridge, then plain ssh. Other hosts go straight to the SSH bridge. The first route that answers connects the tab, and reconnects keep that route.</desc>
+  <defs>
+    <marker id="routes-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-head" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="routes-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-head-ok" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <rect class="dg-box" x="16" y="117" width="140" height="56" rx="10"/>
+  <text class="dg-title" x="86" y="140" text-anchor="middle">Open a</text>
+  <text class="dg-title" x="86" y="157" text-anchor="middle">remote tab</text>
+
+  <rect class="dg-box dg-accent dg-dashed" x="190" y="109" width="170" height="72" rx="10"/>
+  <text class="dg-title" x="275" y="141" text-anchor="middle">Is the host a</text>
+  <text class="dg-title" x="275" y="158" text-anchor="middle">Tailscale peer?</text>
+
+  <path class="dg-edge" d="M156 145H186" marker-end="url(#routes-arrow)"/>
+  <path class="dg-edge dg-edge-accent" d="M360 131H378V39H396" marker-end="url(#routes-arrow)"/>
+  <text class="dg-label" x="372" y="96" text-anchor="end">yes</text>
+  <path class="dg-edge" d="M360 159H378V179H396" marker-end="url(#routes-arrow)"/>
+  <text class="dg-label" x="372" y="198" text-anchor="end">no</text>
+
+  <rect class="dg-box dg-accent" x="400" y="14" width="290" height="50" rx="10"/>
+  <text class="dg-title" x="416" y="35">1 · HTTPS :443 via Tailscale Serve</text>
+  <text class="dg-sub" x="416" y="52">*.ts.net names only; certificate checked</text>
+
+  <rect class="dg-box dg-accent" x="400" y="84" width="290" height="50" rx="10"/>
+  <text class="dg-title" x="416" y="105">2 · HTTP :7297 tailnet listener</text>
+  <text class="dg-sub" x="416" y="122">plain HTTP inside WireGuard</text>
+
+  <rect class="dg-box" x="400" y="154" width="290" height="50" rx="10"/>
+  <text class="dg-title" x="416" y="175">3 · SSH bridge</text>
+  <text class="dg-sub" x="416" y="192">installs the daemon on first use</text>
+
+  <rect class="dg-box" x="400" y="224" width="290" height="50" rx="10"/>
+  <text class="dg-title" x="416" y="245">4 · Plain ssh -tt</text>
+  <text class="dg-sub" x="416" y="262">always works, but no reconnect</text>
+
+  <path class="dg-edge" d="M545 64V80" marker-end="url(#routes-arrow)"/>
+  <text class="dg-label" x="553" y="77">if it fails</text>
+  <path class="dg-edge" d="M545 134V150" marker-end="url(#routes-arrow)"/>
+  <text class="dg-label" x="553" y="147">if it fails</text>
+  <path class="dg-edge" d="M545 204V220" marker-end="url(#routes-arrow)"/>
+  <text class="dg-label" x="553" y="217">if it fails</text>
+
+  <path class="dg-edge dg-edge-ok" d="M690 39H712M690 109H712M690 179H712M690 249H712M712 39V249"/>
+  <path class="dg-edge dg-edge-ok" d="M712 144H744" marker-end="url(#routes-arrow-ok)"/>
+  <rect class="dg-box dg-ok" x="748" y="112" width="104" height="64" rx="10"/>
+  <text class="dg-title" x="800" y="138" text-anchor="middle">Connected</text>
+  <text class="dg-sub" x="800" y="155" text-anchor="middle">reconnects keep</text>
+  <text class="dg-sub" x="800" y="169" text-anchor="middle">this route</text>
+</svg>
+<figcaption>The first route that answers wins. A tab keeps its route when it reconnects, because its shell lives in that one daemon.</figcaption></figure>
+<ol>
+<li><strong>HTTPS on port 443</strong> through Tailscale Serve, for <code>*.ts.net</code> names. The certificate is checked like any website&#x27;s.</li>
+<li><strong>HTTP on port 7297</strong> to the daemon&#x27;s tailnet listener.</li>
+<li><strong>The SSH bridge</strong> from <a href="/docs/ssh/">Remote SSH</a>: installs the daemon over SSH and survives dropped connections.</li>
+<li><strong>Plain <code>ssh -tt</code></strong> when the bridge can&#x27;t run, for example when the host asks for a password.</li>
+</ol>
+<p>Direct tabs reconnect like bridged ones: the tab says *Connection lost; reconnecting…* and replays what you missed. Zurafa pings every 15 seconds and treats 45 seconds of silence as a dropped link.</p>
+<h2 id="turn-on-a-direct-connection">Turn on a direct connection</h2>
+<p>For a Linux host with systemd that you reach over SSH with a key, the app sets everything up:</p>
+<ol>
+<li>Open <code>⌘K</code>, find the host under <strong>Saved Hosts</strong> and click its <strong>bolt</strong> button.</li>
+<li>Choose <strong>Turn On</strong>. The status bar shows *Setting up direct connection…* and then the result.</li>
+<li>Open a new tab to that host. It now connects directly.</li>
+</ol>
+<p>Over SSH, this copies the daemon to <code>~/.zurafa/service/</code>, installs a systemd user service <code>zurafa.service</code>, starts it, and runs <code>loginctl enable-linger</code> so it keeps running after you log out. The service listens on the host&#x27;s Tailscale addresses, port 7297, and on a socket for Tailscale Serve. It admits only your own Tailscale account.</p>
+<figure class="diagram"><svg viewBox="0 0 820 270" role="img" aria-labelledby="direct-title direct-desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="direct-title">A direct connection to your own account</title>
+  <desc id="direct-desc">A remote tab on your Mac reaches the zurafa systemd user service on the Linux host either over HTTP on tailnet port 7297, admitted with tailscale whois, or over HTTPS on port 443 through Tailscale Serve, which forwards to the service's serve.sock and names the caller. The service runs your shells, which survive dropped connections.</desc>
+  <defs>
+    <marker id="direct-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-head" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <rect class="dg-region" x="290" y="10" width="520" height="250" rx="14"/>
+  <text class="dg-label" x="306" y="32">Linux host</text>
+  <text class="dg-label" x="24" y="96">Your Mac</text>
+
+  <rect class="dg-box" x="16" y="106" width="200" height="76" rx="10"/>
+  <text class="dg-title" x="116" y="134" text-anchor="middle">Remote tab</text>
+  <text class="dg-sub" x="116" y="152" text-anchor="middle">zurafa-daemon remote</text>
+  <text class="dg-sub" x="116" y="168" text-anchor="middle">one per tab</text>
+
+  <rect class="dg-box" x="320" y="44" width="210" height="64" rx="10"/>
+  <text class="dg-title" x="425" y="72" text-anchor="middle">Tailscale Serve</text>
+  <text class="dg-sub" x="425" y="90" text-anchor="middle">HTTPS :443 · names the caller</text>
+
+  <rect class="dg-box dg-accent" x="590" y="106" width="200" height="76" rx="10"/>
+  <text class="dg-title" x="690" y="134" text-anchor="middle">zurafa.service</text>
+  <text class="dg-sub" x="690" y="152" text-anchor="middle">your daemon (systemd --user)</text>
+  <text class="dg-sub" x="690" y="168" text-anchor="middle">admits only you</text>
+
+  <rect class="dg-box dg-ok" x="590" y="204" width="200" height="46" rx="10"/>
+  <text class="dg-title" x="690" y="223" text-anchor="middle">Your shells</text>
+  <text class="dg-sub" x="690" y="240" text-anchor="middle">survive dropped links</text>
+
+  <path class="dg-edge dg-edge-accent" d="M216 124H262V76H316" marker-end="url(#direct-arrow)"/>
+  <text class="dg-label" x="256" y="100" text-anchor="end">HTTPS :443</text>
+  <path class="dg-edge dg-edge-accent" d="M216 160H586" marker-end="url(#direct-arrow)"/>
+  <text class="dg-label" x="400" y="152" text-anchor="middle">HTTP :7297 · checked with tailscale whois</text>
+  <path class="dg-edge" d="M530 76H560V124H586" marker-end="url(#direct-arrow)"/>
+  <text class="dg-label" x="566" y="98">serve.sock</text>
+  <path class="dg-edge" d="M690 182V200" marker-end="url(#direct-arrow)"/>
+</svg>
+<figcaption>A direct connection to your own account: HTTP on the tailnet port, or HTTPS through Tailscale Serve. Either way the service checks with Tailscale that the caller is you.</figcaption></figure>
+<p><strong>Turn Off</strong> stops the service and removes it. Turning it on again after a Zurafa update restarts the service, which ends tabs that use it.</p>
+<h2 id="https-through-tailscale-serve">HTTPS through Tailscale Serve</h2>
+<p>To also reach the service over HTTPS on the host&#x27;s <code>*.ts.net</code> name, point Serve at its socket once, on the host:</p>
+<pre><code>sudo tailscale serve --bg --https=443 unix:/home/&lt;you&gt;/.zurafa/service/serve.sock</code></pre>
+<p>Other Serve entries on other ports stay as they are. If HTTPS certificates are not enabled for your tailnet yet, Serve prints a link to turn them on. Serve names the caller in a <code>Tailscale-User-Login</code> header and replaces any such header a caller sends itself. It does not name tagged devices, so they can only use port 7297.</p>
+<aside class="note">Where Tailscale runs in userspace networking (common in containers), the daemon cannot listen on the Tailscale address itself. It skips it with a warning, and Serve is the way in.</aside>
+<h2 id="who-may-connect">Who may connect</h2>
+<div class="table-scroll"><table>
+<tr><th>Caller</th><th>Port 7297</th><th>HTTPS via Serve</th></tr>
+<tr><td>You, from any of your devices</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Another person on your tailnet</td><td>Only with <code>--tailnet-allow-identified</code></td><td>Only with <code>--tailnet-allow-identified</code></td></tr>
+<tr><td>A tagged device</td><td>Only with <code>--tailnet-allow-identified</code></td><td>Never</td></tr>
+<tr><td>The host itself</td><td>Yes</td><td>Yes</td></tr>
+</table></div>
+<p>On a tagged host, which has no owner, only the host itself gets in unless you pass <code>--tailnet-allow-identified</code>. Anyone admitted can run programs as the daemon&#x27;s user, just as with SSH. Refused callers get HTTP 403, and their tab falls back to SSH.</p>
+<h2 id="several-accounts-the-login-server">Several accounts: the login server</h2>
+<p>To let people on your tailnet use different accounts on one host, run the login server instead of the per-user service. It runs as root, finds out who each caller is from Tailscale, and starts a session for one local account. There are no passwords: the Tailscale identity is the authentication.</p>
+<figure class="diagram"><svg viewBox="0 0 760 290" role="img" aria-labelledby="login-title login-desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="login-title">How the login server hands a caller to an account</title>
+  <desc id="login-desc">A remote tab connects with its Tailscale identity and the account it asks for. The root login server checks accounts.jsonc, picks one account, and runs runuser -l for that account, which opens a PAM session and runs zurafa-daemon bridge. The bridge connects to the account's own daemon, which keeps its shells. Bytes flow both ways along this chain.</desc>
+  <defs>
+    <marker id="login-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-head" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <rect class="dg-box" x="16" y="24" width="200" height="76" rx="10"/>
+  <text class="dg-title" x="116" y="52" text-anchor="middle">Remote tab</text>
+  <text class="dg-sub" x="116" y="70" text-anchor="middle">Tailscale identity +</text>
+  <text class="dg-sub" x="116" y="86" text-anchor="middle">account from host user</text>
+
+  <rect class="dg-box dg-accent" x="276" y="24" width="220" height="76" rx="10"/>
+  <text class="dg-title" x="386" y="52" text-anchor="middle">zurafa-login-server</text>
+  <text class="dg-sub" x="386" y="70" text-anchor="middle">root, on :7297 and :443</text>
+  <text class="dg-sub" x="386" y="86" text-anchor="middle">picks one account</text>
+
+  <rect class="dg-box dg-dashed" x="556" y="24" width="188" height="76" rx="10"/>
+  <text class="dg-title" x="650" y="52" text-anchor="middle">accounts.jsonc</text>
+  <text class="dg-sub" x="650" y="70" text-anchor="middle">who may use which</text>
+  <text class="dg-sub" x="650" y="86" text-anchor="middle">account; read per login</text>
+
+  <rect class="dg-box" x="276" y="196" width="220" height="76" rx="10"/>
+  <text class="dg-title" x="386" y="224" text-anchor="middle">runuser -l &lt;account&gt;</text>
+  <text class="dg-sub" x="386" y="242" text-anchor="middle">PAM session, no password</text>
+  <text class="dg-sub" x="386" y="258" text-anchor="middle">runs zurafa-daemon bridge</text>
+
+  <rect class="dg-box dg-ok" x="556" y="196" width="188" height="76" rx="10"/>
+  <text class="dg-title" x="650" y="224" text-anchor="middle">Account's own daemon</text>
+  <text class="dg-sub" x="650" y="242" text-anchor="middle">~/.zurafa/daemon.sock</text>
+  <text class="dg-sub" x="650" y="258" text-anchor="middle">keeps its shells</text>
+
+  <path class="dg-edge dg-edge-accent" d="M220 62H272" marker-start="url(#login-arrow)" marker-end="url(#login-arrow)"/>
+  <path class="dg-edge dg-dashed" d="M556 62H500" marker-end="url(#login-arrow)"/>
+  <text class="dg-label" x="528" y="54" text-anchor="middle">rules</text>
+  <path class="dg-edge dg-edge-accent" d="M386 104V192" marker-start="url(#login-arrow)" marker-end="url(#login-arrow)"/>
+  <text class="dg-label" x="394" y="152">chosen account</text>
+  <path class="dg-edge dg-edge-accent" d="M500 234H552" marker-start="url(#login-arrow)" marker-end="url(#login-arrow)"/>
+  <text class="dg-label" x="526" y="226" text-anchor="middle">bridge</text>
+</svg>
+<figcaption>The login server picks an account, then runs runuser -l for it. That opens a PAM session and starts the account&#x27;s own daemon, which keeps its shells when the login server restarts or is upgraded.</figcaption></figure>
+<p>On the host, turn off your per-user direct connection first (both use port 7297), then install it with sudo:</p>
+<pre><code>sudo &quot;$HOME/.zurafa/$(ls -t ~/.zurafa | head -1)/zurafa-daemon&quot; install-login-server
+sudo tailscale serve --bg --https=443 unix:/run/zurafa/serve.sock</code></pre>
+<p>This installs <code>zurafa-login-server.service</code> and, if it doesn&#x27;t exist yet, <code>/etc/zurafa/accounts.jsonc</code>, which gives the account you ran sudo from to the machine&#x27;s Tailscale owner. Edit the file to decide who may use which account. It allows comments and trailing commas, and changes apply to the next connection:</p>
+<pre><code>{
+  &quot;version&quot;: 1,
+  &quot;accounts&quot;: {
+    &quot;alice&quot;: { &quot;principals&quot;: [&quot;tailscale:alice@example.com&quot;] },
+    &quot;root&quot;: { &quot;principals&quot;: [&quot;tailscale:alice@example.com&quot;] },
+    &quot;guest&quot;: { &quot;principals&quot;: [&quot;tailscale:tag:ci&quot;, &quot;anonymous&quot;] },
+  },
+  &quot;defaults&quot;: { &quot;tailscale:alice@example.com&quot;: &quot;alice&quot; },
+}</code></pre>
+<div class="table-scroll"><table>
+<tr><th>Principal</th><th>Matches</th></tr>
+<tr><td><code>tailscale:&lt;login&gt;</code></td><td>One person, by Tailscale login</td></tr>
+<tr><td><code>tailscale:tag:&lt;tag&gt;</code></td><td>Devices with that Tailscale tag</td></tr>
+<tr><td><code>tailscale:*</code></td><td>Any person on the tailnet (never a tagged device)</td></tr>
+<tr><td><code>tailscale:tag:*</code></td><td>Any tagged device</td></tr>
+<tr><td><code>identified</code></td><td>Any caller Tailscale can name</td></tr>
+<tr><td><code>anonymous</code></td><td>Callers on a plain listener started with <code>--allow-anonymous</code></td></tr>
+</table></div>
+<p>The account <code>&quot;*&quot;</code> grants every regular account (user ID 1000 or higher) to its principals, but never to anonymous callers. Anonymous callers never get root.</p>
+<p><strong>Choosing an account.</strong> A tab asks for its saved host&#x27;s user: save the host as <code>root@host</code> to get root. Without a user, the most specific matching default applies, in this order: login, tag, <code>tailscale:*</code>, <code>identified</code>, <code>anonymous</code>. Failing that, a caller gets the only account it may use. Accounts with a <code>nologin</code> or <code>false</code> shell are refused, and so is everyone but root while <code>/etc/nologin</code> exists. Logs: <code>journalctl -u zurafa-login-server</code>.</p>
+<p>To remove it: <code>sudo /usr/local/lib/zurafa/zurafa-daemon uninstall-login-server</code>. That keeps the accounts file.</p>
+<h2 id="check-which-route-a-tab-uses">Check which route a tab uses</h2>
+<p>On your Mac, list the tabs&#x27; connections:</p>
+<pre><code>lsof -nP -iTCP -sTCP:ESTABLISHED | grep zurafa-da</code></pre>
+<p>A tab connected to <code>:443</code> or <code>:7297</code> is direct. A tab with an <code>ssh</code> process instead uses SSH. On a host with the login server, <code>journalctl -u zurafa-login-server</code> shows each login, such as <code>zurafa login: alice@example.com -&gt; alice</code>.</p>
+<h2 id="limits">Limits</h2>
+<ul>
+<li>The bolt button and the login server need Linux with systemd. Other hosts keep using SSH.</li>
+<li>The bolt button needs key-based SSH. It cannot install the login server, because that needs sudo.</li>
+<li>When a direct connection is refused, the tab falls back to SSH without saying why; the host&#x27;s log has the reason.</li>
+<li>The login server finds accounts in <code>/etc/passwd</code> only, not in LDAP or SSSD.</li>
+<li>Removing someone from the accounts file does not end sessions they already have open.</li>
+<li>Rex&#x27;s built-in Tailscale (<code>--tailscale</code>, a daemon that joins the tailnet itself) is not available yet.</li>
+</ul></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/ssh/"><small>← Previous</small><strong>Remote SSH</strong></a><a href="/docs/appearance/"><small>Next →</small><strong>Appearance, config &amp; Ghostty</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#how-a-tab-connects">How a tab connects</a><a href="#turn-on-a-direct-connection">Turn on a direct connection</a><a href="#https-through-tailscale-serve">HTTPS through Tailscale Serve</a><a href="#who-may-connect">Who may connect</a><a href="#several-accounts-the-login-server">Several accounts: the login server</a><a href="#check-which-route-a-tab-uses">Check which route a tab uses</a><a href="#limits">Limits</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

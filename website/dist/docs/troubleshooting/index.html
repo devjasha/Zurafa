@@ -27,6 +27,7 @@
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
 <a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
 </div>
 <div class="nav-group"><p>Personalization</p>
 <a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
@@ -50,6 +51,7 @@
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
 <a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
 </div>
 <div class="nav-group"><p>Personalization</p>
 <a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
@@ -72,7 +74,8 @@
 <pre><code>pkill zurafa-daemon</code></pre>
 <p><strong>This ends all terminals and sessions owned by that daemon.</strong> The beta does not restore their screen contents or processes afterward. You can set <code>ZURAFA_SOCKET</code> to override the socket path for development.</p>
 <h2 id="a-remote-host-does-not-connect">A remote host does not connect</h2>
-<p>Zurafa uses <code>/usr/bin/ssh</code>. Try the same host or alias in macOS Terminal. Check DNS or Tailscale reachability, your <code>~/.ssh/config</code>, keys, host verification, and authentication prompts. There is no mosh or separate Tailscale SSH implementation.</p>
+<p>Zurafa uses <code>/usr/bin/ssh</code> unless a <a href="/docs/remote-access/">direct connection</a> answers first. Try the same host or alias in macOS Terminal. Check DNS or Tailscale reachability, your <code>~/.ssh/config</code>, keys, host verification, and authentication prompts. There is no mosh implementation.</p>
+<p>If a host with a direct connection still uses SSH, check on the host: <code>systemctl --user status zurafa</code> for the bolt button&#x27;s service, or <code>journalctl -u zurafa-login-server</code> for the login server, which logs why it refused a caller. If the bolt button reports an SSH error, <code>ssh -o BatchMode=yes &lt;host&gt; true</code> must succeed from your Mac.</p>
 <h2 id="terminal-screen-content-is-missing-after-reconnecting">Terminal screen content is missing after reconnecting</h2>
 <p>The app can recover layout, running state, titles, directories, and program status from a new snapshot. PTY screen bytes emitted while the app was disconnected are not replayed, so a full-screen program may need a redraw. A daemon restart ends active terminals and starts fresh state.</p>
 <h2 id="foreground-program-icon-is-delayed-or-absent">Foreground program icon is delayed or absent</h2>
@@ -82,7 +85,7 @@
 <li>Apple Silicon macOS 14+ only; Intel packaging is not provided yet.</li>
 <li>Developer ID signing and notarization are configured for release builds.</li>
 <li>Session layouts and PTYs are in daemon memory, not persisted across daemon restarts.</li>
-<li>The standalone <code>zurafa</code> CLI is early and intentionally small; there is no Lua runtime, mosh transport, native Tailscale API, or remote file browser yet.</li>
+<li>The standalone <code>zurafa</code> CLI is early and intentionally small; there is no Lua runtime, mosh transport, built-in Tailscale node, or remote file browser yet.</li>
 <li>No PTY scrollback replay after a client disconnect.</li>
 <li>Ghostty import covers supported terminal font and color settings, not all Ghostty settings.</li>
 </ul>

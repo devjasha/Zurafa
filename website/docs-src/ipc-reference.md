@@ -27,6 +27,83 @@ Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon adm
   "version": "0.1.0" }`. No event precedes this reply.
 - Request IDs are unsigned integers. Each valid request gets one reply with its
   ID. Failures use `{ "id": 1, "type": "error", "message": "..." }`.
+- Tailnet listener (as Rex's `tailnet://`): `--extra-listen tailnet://[:PORT]`
+  (default port 7297) also binds each of this machine's Tailscale addresses,
+  never a wildcard address. It needs Tailscale running and signed in at start.
+  For each caller the daemon runs `tailscale whois`: by default only this
+  device and its owning Tailscale user get in. A tagged device has no owner, so
+  it is refused, and on a tagged server only the server itself gets in.
+  `--tailnet-allow-identified` admits every caller Tailscale identifies.
+  Refused callers get HTTP 403.
+- Tailscale Serve listener (as Rex's `tailnet-serve://`):
+  `--extra-listen tailnet-serve:///absolute/path.sock` opens a Unix socket with
+  mode 0600 (parent directory 0700) for
+  `sudo tailscale serve --bg --https=443 unix:/absolute/path.sock`. Serve
+  terminates HTTPS with the machine's `*.ts.net` certificate and names the caller
+  in `Tailscale-User-Login`, which this listener trusts and the `tailnet://`
+  listener ignores. By default only this machine's owner gets in;
+  `--tailnet-allow-identified` admits any named caller. Serve does not name
+  tagged devices, so they are always refused here; they can use `tailnet://`.
+  The principal is `{kind:"tailscale-serve",login}`. Use this listener where
+  Tailscale runs in userspace networking: there `tailnet://` cannot bind, so it
+  logs a warning and skips the address instead of failing.
+  To keep a listener running on a Linux host, `zurafa-daemon install-service`
+  installs a systemd user service (`~/.config/systemd/user/zurafa.service`)
+  that runs `~/.zurafa/service/zurafa-daemon --extra-listen tailnet://:7297 --extra-listen tailnet-serve://$HOME/.zurafa/service/serve.sock`.
+  It restarts the service only when the binary or unit changed, and enables
+  lingering so the service survives logout. `uninstall-service` removes both.
+  `{id,type:"hosts.service",host_id,enable}` runs either one on a saved host
+  over SSH, uploading this build first if needed. It replies `ok` with a
+  `message` once done; this can take seconds, and other replies and output on
+  the connection keep flowing in the meantime. In the app, the bolt button on
+  a saved host does this. `hello_ok` carries the daemon's `user` (`$USER`). An admitted caller sends
+  `GET /zurafa HTTP/1.1` with `Connection: Upgrade` and `Upgrade: zurafa`.
+  After `101 Switching Protocols` the connection carries the frames below,
+  exactly as on the Unix socket. The client's `principal` in snapshots is
+  `{kind:"tailnet",login,node,tags}`; Unix socket clients have `null`.
+  Anyone admitted can run programs as the daemon's user.
+- Plain TCP listener (as Rex's `--extra-listen :7297 --allow-anonymous`):
+  `--extra-listen :PORT` or `IP:PORT`. It cannot tell callers apart, so the
+  daemon refuses to start it without `--allow-anonymous`. On a personal daemon,
+  every caller gets a shell as that user, and startup prints a warning. The
+  principal is `{kind:"anonymous"}`. Remote tabs never use such a listener,
+  because they only connect directly to tailnet addresses.
+- Login server (as Rex's `rex-login-server`):
+  `zurafa-daemon login-server [--accounts PATH] --extra-listen SPEC…
+  [--allow-anonymous]` runs as root. It admits every caller its listeners can
+  identify, plus anonymous callers on a plain listener. Then
+  `/etc/zurafa/accounts.jsonc` (JSON with comments and trailing commas) decides
+  which local account the caller gets. The file has `accounts`, mapping an
+  account name to `{principals:[…]}`, and `defaults`, mapping a principal to an
+  account.
+  - Principals: `tailscale:<login>`, `tailscale:tag:<tag>`, `tailscale:*` (any
+    person), `tailscale:tag:*` (any tagged device), `identified` and
+    `anonymous`. A tagged device never matches a login or `tailscale:*`.
+  - The account `"*"` grants every regular account (user ID ≥ 1000) but never
+    to anonymous callers. Anonymous callers never get root.
+  - Choosing an account: a client asks for one with a `Zurafa-Account` header;
+    remote tabs send their saved host's SSH user. Otherwise the most specific
+    matching default wins (login, tag, Tailscale wildcard, `identified`, then
+    `anonymous`; ties go to the first entry in the file). Failing that, the
+    only account the caller may use. The file is read for every connection,
+    so edits apply to new connections.
+  - Accounts with a `nologin`/`false` shell are refused, and so is everyone
+    but root while `/etc/nologin` exists. Accounts come from `/etc/passwd`
+    only; the static build has no NSS, so LDAP and SSSD users are not found.
+  - The server answers `101`, then runs `runuser -l <account> -s /bin/sh -c
+    'exec /usr/local/lib/zurafa/zurafa-daemon bridge'` and splices the
+    connection to it. `runuser` opens the account's PAM session (account
+    checks, limits, environment) without a password. `bridge` starts or
+    reuses that account's own daemon (`~/.zurafa/daemon.sock`), which keeps
+    its terminals when the login server restarts or is upgraded.
+  - `sudo zurafa-daemon install-login-server` copies the binary to
+    `/usr/local/lib/zurafa/` and installs `zurafa-login-server.service`
+    (tailnet port 7297 plus Serve socket `/run/zurafa/serve.sock`,
+    `KillMode=process`). If no accounts file exists yet, it creates one that
+    gives the sudo user's account to the machine's Tailscale owner, or to
+    nobody. `uninstall-login-server` removes the service and binary but keeps
+    the accounts file. Turn off a personal direct connection on the same host
+    first, because both use port 7297.
 - A second daemon exits successfully if the socket already accepts connections.
   Disconnecting clients does not stop their PTYs.
 
@@ -37,6 +114,7 @@ Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon adm
 | `{id,type:"ping"}` | `{id,type:"pong"}` |
 | `{id,type:"spawn",cols,rows,cwd?,command?}` | `{id,type:"spawned",terminal}` |
 | `{id,type:"kill",terminal}` | `{id,type:"ok"}` |
+| `{id,type:"attach",terminal,since?}` | `{id,type:"attached",terminal,end,data,gap}` |
 
 `spawn` creates a new window and block in `default`. Positive `cols`/`rows` are
 u16 values. `command` is a nonempty string array; omission runs `$SHELL` (fallback
@@ -44,6 +122,17 @@ u16 values. `command` is a nonempty string array; omission runs `$SHELL` (fallba
 `TERM=xterm-256color`, `COLORTERM=truecolor`, and `TERM_PROGRAM=Zurafa`.
 A failed spawn makes no layout change. `kill` terminates the attached child;
 the retained block is marked stopped when the child is reaped.
+
+`spawn` also accepts `raw:true`: the terminal's bytes are passed through without
+OSC parsing, for a client that parses them itself (the remote helper below).
+Each `output` event carries `end`, the terminal's total output byte count so far.
+The daemon keeps each terminal's last 256 KiB of output. `attach` returns the
+bytes after `since` (an earlier `end`, default 0) and the current `end`; if
+`since` is no longer buffered, `gap` is true and `data` is the whole buffer.
+Chunks are published under the same lock `attach` copies under, so a client can
+skip any later `output` whose `end` is not past the attach `end`. Once a
+connection makes a raw spawn or an attach, it only receives output for those
+terminals.
 
 Fire-and-forget messages have no reply; malformed ones are ignored:
 
@@ -108,22 +197,68 @@ a session with that saved host copied into `remote`:
 {"id":30,"type":"hosts.add","host":{"id":"host-1","label":"Build server","hostname":"build.example.net","user":"alice","port":22}}
 {"id":31,"type":"hosts.list"}
 {"id":32,"type":"layout.command","command":{"op":"create_session","session":"build","label":"Build server","remote":{"id":"host-1","label":"Build server","hostname":"build.example.net","user":"alice","port":22}}}
+{"id":34,"type":"hosts.update","host":{"id":"host-1","label":"Build server","hostname":"new-build.example.net","user":"alice","port":2222}}
 {"id":33,"type":"hosts.remove","host_id":"host-1"}
 ```
 
-`hosts.list` replies with `{id,type:"hosts.list",hosts:[...]}`; add/remove reply
-with `ok` or `error`. Saved hosts live in
+`hosts.list` replies with `{id,type:"hosts.list",hosts:[...]}`; add/update/remove reply
+with `ok` or `error`. `{id,type:"hosts.tailnet"}` replies with
+`{id,type:"hosts.tailnet",hosts:[...]}`: online Linux and macOS peers from
+`tailscale status --json`, as unsaved hosts whose `id` and `hostname` are the
+MagicDNS name, with port 22 and no user. The list is empty when the Tailscale CLI
+is missing or fails. Add Host offers these machines; saving one uses `hosts.add`. Saved hosts live in
 `~/Library/Application Support/Zurafa/hosts.json`, written with owner-only
 permissions. Set `ZURAFA_HOSTS_FILE` to override the path. A remote session
-keeps a copy of its host, so removing a saved host does not break an open
+keeps a copy of its host. `hosts.update` requires an existing host ID, replaces
+its saved definition, and refreshes matching remote sessions before emitting
+`hosts_changed`. New tabs and splits use the updated address and port; running
+SSH processes are not restarted. Removing a saved host does not break an open
 session. Host changes emit server `hosts_changed` with an opaque hash.
 The daemon validates host fields and only accepts a saved host when creating a
-remote session. Each tab or split in that session runs `/usr/bin/ssh -tt -p
-<port> -- <user@hostname>` in a PTY, using the system SSH configuration, keys,
-known hosts, and authentication prompts. Tailscale DNS names work when the
-machine can resolve and reach them. There is no separate Tailscale or mosh
-transport. Sessions are kept in daemon memory; saved host definitions persist
-across daemon restarts.
+remote session. Each tab or split in that session runs `zurafa-daemon remote [-p
+<port>] -- <user@hostname>` in a local PTY. That helper keeps the shell in a
+daemon on the remote host so it survives dropped connections:
+
+0. If `<hostname>` resolves to a Tailscale address that `tailscale whois` knows
+   as a peer, it first tries the host's daemon directly, in Rex's order. First
+   it tries HTTPS on 443 through Tailscale Serve, only for `*.ts.net` names,
+   with certificates checked against the Mozilla roots. Then it tries plain
+   HTTP on 7297 (`--extra-listen tailnet://`, see Transport). It never uses this route for
+   non-tailnet addresses, because the route is plain HTTP inside WireGuard. If
+   the daemon answers `hello_ok` and either no SSH user was given or its `user`
+   matches it, the tab uses that daemon and skips steps 1–2. Every reconnect
+   uses the same route, because the shell lives in that daemon. To detect a
+   dead direct link, the helper pings every 15 s and treats 45 s of silence as
+   a drop. Otherwise it falls back to SSH:
+1. It runs `ssh -T -o BatchMode=yes … <dest> "sh -c '…'"`, which execs
+   `~/.zurafa/<build>/zurafa-daemon bridge --socket ~/.zurafa/<build>/daemon.sock`.
+   `<build>` is a hash of the local daemon binary, so each app build installs and
+   talks to its own remote daemon. `bridge` pipes stdin/stdout to that socket,
+   first starting a detached daemon (`setsid`) that exits after a minute with no
+   terminals and no clients.
+2. If the binary is missing, the script prints `zurafa-need <uname -sm>`. The
+   helper uploads the matching static build from
+   `Zurafa.app/Contents/Resources/remote/<target>/` (Linux x86_64/arm64; an
+   Apple silicon Mac gets the local binary) over the same SSH, then retries.
+   `ZURAFA_REMOTE_BINARIES` overrides that directory.
+3. It spawns a raw remote terminal and pipes bytes between it and the local PTY,
+   which is in raw mode. The local daemon still parses titles, cwd and OSC 7501.
+   Remote foreground-process changes are not forwarded, so remote tabs show no
+   process icon unless a program reports OSC 7501 `app`.
+4. When SSH drops (ServerAlive detects a dead link in about 45 s), it prints a
+   notice and reconnects with backoff (1 s doubling to 10 s), then `attach`es
+   from the last `end` it wrote. A `gap` resets the screen before replaying.
+5. When the remote shell exits, the helper closes the remote block and exits
+   with its code. When the tab closes (SIGHUP or EOF), it closes the remote
+   terminal first.
+
+If the bridge cannot be reached (password or interactive authentication, an
+unknown host key, an unsupported platform, or a shell that prints on
+non-interactive start), the helper prints a notice and `exec`s `/usr/bin/ssh -tt
+[-p <port>] -- <user@hostname>` instead, as before. It uses the system SSH
+configuration, keys, and known hosts. `ZURAFA_SSH` overrides the ssh program.
+Tailscale DNS names work when the machine can resolve and reach them. Sessions
+are kept in daemon memory; saved host definitions persist across daemon restarts.
 
 A resize path walks a binary split tree (`0` = first, `1` = second); `[]` means
 the root split. Ratios must be finite and within 0.05–0.95. Focusing a block

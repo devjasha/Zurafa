@@ -27,6 +27,7 @@
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
 <a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
 </div>
 <div class="nav-group"><p>Personalization</p>
 <a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
@@ -50,6 +51,7 @@
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
 <a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
 </div>
 <div class="nav-group"><p>Personalization</p>
 <a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
@@ -77,14 +79,16 @@
 <li>The remote daemon stops by itself a minute after its last shell ends.</li>
 </ul>
 <p>This needs SSH login without prompts: a key, your SSH agent, or <a href="https://tailscale.com/kb/1193/tailscale-ssh">Tailscale SSH</a> (<code>sudo tailscale set --ssh</code> on the remote machine). If the host asks for a password, has an unknown host key, can&#x27;t run the daemon, or prints text when a non-interactive shell starts, the tab says so and falls back to plain SSH. That still works, password prompts included, but the session does not survive a dropped connection.</p>
+<h2 id="skip-ssh-on-your-tailnet">Skip SSH on your tailnet</h2>
+<p>For a Linux host in your tailnet, the <strong>bolt</strong> button next to a saved host turns on a direct connection: tabs then connect straight to the host&#x27;s Zurafa daemon over Tailscale and use SSH only as a fallback. <a href="/docs/remote-access/">Direct over Tailscale</a> explains how it works, HTTPS through Tailscale Serve, and the login server for several accounts.</p>
 <h2 id="work-in-a-remote-session">Work in a remote session</h2>
 <p>Create tabs and split panes as you would locally. The session label and host are visible in the top bar and picker. You can keep local and remote sessions open in the same app and switch between them. Remote tabs show program status from OSC 7501 but not the foreground-process icon.</p>
 <h2 id="saved-hosts-and-session-lifetime">Saved hosts and session lifetime</h2>
 <p>Host definitions are stored in <code>~/Library/Application Support/Zurafa/hosts.json</code> with owner-only permissions. A remote session keeps a copy of its host definition, so removing a saved host does not alter a session already open. Saved host definitions survive daemon restarts. Restarting the Zurafa daemon on your Mac closes its remote tabs, and their remote shells with them.</p>
 <h2 id="troubleshooting-connections">Troubleshooting connections</h2>
 <p>Zurafa validates addresses before saving them and passes SSH arguments separately. Host authenticity and authentication are handled by system SSH.</p>
-<p>If a connection fails, first run the same SSH target from macOS Terminal. Check DNS, network reachability, <code>~/.ssh/config</code>, your keys, and host verification there. To check that the remote daemon can be used, <code>ssh -o BatchMode=yes &lt;host&gt; true</code> must succeed without asking for anything. <a href="/docs/troubleshooting/">Troubleshooting</a> covers more checks.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/previews/"><small>← Previous</small><strong>Files &amp; images</strong></a><a href="/docs/appearance/"><small>Next →</small><strong>Appearance, config &amp; Ghostty</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#add-a-host">Add a host</a><a href="#sessions-that-survive-disconnects">Sessions that survive disconnects</a><a href="#work-in-a-remote-session">Work in a remote session</a><a href="#saved-hosts-and-session-lifetime">Saved hosts and session lifetime</a><a href="#troubleshooting-connections">Troubleshooting connections</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+<p>If a connection fails, first run the same SSH target from macOS Terminal. Check DNS, network reachability, <code>~/.ssh/config</code>, your keys, and host verification there. To check that the remote daemon can be used, <code>ssh -o BatchMode=yes &lt;host&gt; true</code> must succeed without asking for anything. <a href="/docs/troubleshooting/">Troubleshooting</a> covers more checks.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/previews/"><small>← Previous</small><strong>Files &amp; images</strong></a><a href="/docs/remote-access/"><small>Next →</small><strong>Direct over Tailscale</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#add-a-host">Add a host</a><a href="#sessions-that-survive-disconnects">Sessions that survive disconnects</a><a href="#skip-ssh-on-your-tailnet">Skip SSH on your tailnet</a><a href="#work-in-a-remote-session">Work in a remote session</a><a href="#saved-hosts-and-session-lifetime">Saved hosts and session lifetime</a><a href="#troubleshooting-connections">Troubleshooting connections</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>

@@ -1,0 +1,37 @@
+<svg viewBox="0 0 820 270" role="img" aria-labelledby="direct-title direct-desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="direct-title">A direct connection to your own account</title>
+  <desc id="direct-desc">A remote tab on your Mac reaches the zurafa systemd user service on the Linux host either over HTTP on tailnet port 7297, admitted with tailscale whois, or over HTTPS on port 443 through Tailscale Serve, which forwards to the service's serve.sock and names the caller. The service runs your shells, which survive dropped connections.</desc>
+  <defs>
+    <marker id="direct-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-head" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <rect class="dg-region" x="290" y="10" width="520" height="250" rx="14"/>
+  <text class="dg-label" x="306" y="32">Linux host</text>
+  <text class="dg-label" x="24" y="96">Your Mac</text>
+
+  <rect class="dg-box" x="16" y="106" width="200" height="76" rx="10"/>
+  <text class="dg-title" x="116" y="134" text-anchor="middle">Remote tab</text>
+  <text class="dg-sub" x="116" y="152" text-anchor="middle">zurafa-daemon remote</text>
+  <text class="dg-sub" x="116" y="168" text-anchor="middle">one per tab</text>
+
+  <rect class="dg-box" x="320" y="44" width="210" height="64" rx="10"/>
+  <text class="dg-title" x="425" y="72" text-anchor="middle">Tailscale Serve</text>
+  <text class="dg-sub" x="425" y="90" text-anchor="middle">HTTPS :443 · names the caller</text>
+
+  <rect class="dg-box dg-accent" x="590" y="106" width="200" height="76" rx="10"/>
+  <text class="dg-title" x="690" y="134" text-anchor="middle">zurafa.service</text>
+  <text class="dg-sub" x="690" y="152" text-anchor="middle">your daemon (systemd --user)</text>
+  <text class="dg-sub" x="690" y="168" text-anchor="middle">admits only you</text>
+
+  <rect class="dg-box dg-ok" x="590" y="204" width="200" height="46" rx="10"/>
+  <text class="dg-title" x="690" y="223" text-anchor="middle">Your shells</text>
+  <text class="dg-sub" x="690" y="240" text-anchor="middle">survive dropped links</text>
+
+  <path class="dg-edge dg-edge-accent" d="M216 124H262V76H316" marker-end="url(#direct-arrow)"/>
+  <text class="dg-label" x="256" y="100" text-anchor="end">HTTPS :443</text>
+  <path class="dg-edge dg-edge-accent" d="M216 160H586" marker-end="url(#direct-arrow)"/>
+  <text class="dg-label" x="400" y="152" text-anchor="middle">HTTP :7297 · checked with tailscale whois</text>
+  <path class="dg-edge" d="M530 76H560V124H586" marker-end="url(#direct-arrow)"/>
+  <text class="dg-label" x="566" y="98">serve.sock</text>
+  <path class="dg-edge" d="M690 182V200" marker-end="url(#direct-arrow)"/>
+</svg>

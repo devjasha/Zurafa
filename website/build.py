@@ -12,7 +12,7 @@ DIST = ROOT / "dist"
 ORIGIN = "https://zurafa-website.vercel.app"
 GROUPS = [
     ("Start here", [("overview", "Overview"), ("install", "Install on macOS"), ("quickstart", "Quick start")]),
-    ("Workspace", [("sessions", "Sessions, tabs & panes"), ("shortcuts", "Commands & shortcuts"), ("previews", "Files & images"), ("ssh", "Remote SSH")]),
+    ("Workspace", [("sessions", "Sessions, tabs & panes"), ("shortcuts", "Commands & shortcuts"), ("previews", "Files & images"), ("ssh", "Remote SSH"), ("remote-access", "Direct over Tailscale")]),
     ("Personalization", [("appearance", "Appearance, config & Ghostty"), ("backgrounds", "Dithered backgrounds"), ("status", "Program status")]),
     ("Reference", [("architecture", "Architecture & events"), ("ipc-reference", "IPC protocol"), ("cli", "CLI"), ("build", "Build from source"), ("troubleshooting", "Troubleshooting & limits")]),
 ]
@@ -27,10 +27,17 @@ def inline(text):
     return text
 
 
+def diagram(name, caption):
+    """A ```diagram:name fence: docs-src/diagrams/name.svg inline, so it follows the page theme."""
+    svg = (ROOT / 'docs-src' / 'diagrams' / f'{name}.svg').read_text(encoding='utf-8')
+    return f'<figure class="diagram">{svg}<figcaption>{inline(caption)}</figcaption></figure>'
+
+
 def markdown(source):
     out, paragraph, code, headings = [], [], [], []
     listing = None
     fenced = False
+    info = ''
 
     def flush():
         if paragraph:
@@ -50,8 +57,13 @@ def markdown(source):
         if line.startswith("```"):
             flush(); end_list()
             if fenced:
-                out.append("<pre><code>" + html.escape("\n".join(code)) + "</code></pre>")
+                if info.startswith("diagram:"):
+                    out.append(diagram(info[len("diagram:"):], " ".join(c.strip() for c in code)))
+                else:
+                    out.append("<pre><code>" + html.escape("\n".join(code)) + "</code></pre>")
                 code.clear()
+            else:
+                info = line[3:].strip()
             fenced = not fenced
             i += 1
             continue
