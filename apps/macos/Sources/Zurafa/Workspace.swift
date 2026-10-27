@@ -174,7 +174,15 @@ enum EditorKind: String, Identifiable {
     var name: String { currentSession?.label ?? "Workspace" }
     var hostLabel: String { currentSession?.remote?.hostname ?? "This Mac" }
     var tab: Tab { tabs.indices.contains(selected) ? tabs[selected] : Tab(id: "", label: "", layout: .pane(""), focus: "", zoomed: false) }
-    func meta(_ id: String) -> PaneMeta { metas[id] ?? PaneMeta() }
+    /// Live metas cover the current workspace; other workspaces' panes come straight from the snapshot.
+    func meta(_ id: String) -> PaneMeta {
+        if let m = metas[id] { return m }
+        guard let session = snapshot?.sessions.values.first(where: { $0.blocks[id] != nil }) else { return PaneMeta() }
+        return paneMeta(session.blocks[id]!, in: session)
+    }
+    func tabs(in session: SessionSnapshot) -> [Tab] {
+        session.windows.map { w in Tab(id: w.windowID, label: w.label, layout: w.layout, focus: w.selectedBlock, zoomed: w.zoomedBlock != nil) }
+    }
 
     init() {
         TerminalStore.shared.onFocus = { [weak self] id in self?.focus(id) }
@@ -218,22 +226,11 @@ enum EditorKind: String, Identifiable {
 
     private func project(_ value: EventSnapshot) {
         let session = value.sessions[sessionID]
-        tabs = session?.windows.map { w in
-            Tab(id: w.windowID, label: w.label, layout: w.layout, focus: w.selectedBlock, zoomed: w.zoomedBlock != nil)
-        } ?? []
+        tabs = session.map(tabs(in:)) ?? []
         selected = max(0, tabs.firstIndex(where: { $0.id == session?.activeWindow }) ?? 0)
         var next: [String: PaneMeta] = [:]
         for (id, block) in session?.blocks ?? [:] {
-            var m = metas[id] ?? PaneMeta()
-            m.title = block.title ?? m.title
-            m.cwd = displayPath(block.pwd)
-            m.pwd = URL(string: block.pwd ?? "")?.isFileURL == true ? URL(string: block.pwd!)!.path : block.pwd
-            m.ended = block.running ? nil : "exited"
-            m.statuses = block.statuses.records
-            m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
-                                       argv: block.foreground?.argv, remote: session?.remote != nil,
-                                       remoteShell: session?.remote?.shellProgram ?? .ssh)
-            next[id] = m
+            next[id] = paneMeta(block, in: session!, base: metas[id] ?? PaneMeta())
         }
         metas = next
         let allBlocks = value.sessions.values.flatMap { $0.blocks.values }
@@ -246,6 +243,19 @@ enum EditorKind: String, Identifiable {
                 Task { if !(await createTab(in: target)) { creatingInitialTab = false } }
             }
         }
+    }
+
+    private func paneMeta(_ block: BlockSnapshot, in session: SessionSnapshot, base: PaneMeta = PaneMeta()) -> PaneMeta {
+        var m = base
+        m.title = block.title ?? m.title
+        m.cwd = displayPath(block.pwd)
+        m.pwd = URL(string: block.pwd ?? "")?.isFileURL == true ? URL(string: block.pwd!)!.path : block.pwd
+        m.ended = block.running ? nil : "exited"
+        m.statuses = block.statuses.records
+        m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
+                                   argv: block.foreground?.argv, remote: session.remote != nil,
+                                   remoteShell: session.remote?.shellProgram ?? .ssh)
+        return m
     }
 
     private func apply(_ event: EventEnvelope) {

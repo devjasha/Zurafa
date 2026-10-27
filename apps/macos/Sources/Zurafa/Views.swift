@@ -404,7 +404,6 @@ struct BarStatus: View {
 
 struct WorkspacePickerButton: View {
     @EnvironmentObject var ws: Workspace
-    var inSidebar = false
 
     var body: some View {
         Button { ws.paletteOpen = false; ws.sessionPickerOpen.toggle() } label: {
@@ -422,7 +421,6 @@ struct WorkspacePickerButton: View {
                         .font(.system(size: 10))
                 }
                 .lineLimit(1)
-                if inSidebar { Spacer(minLength: 0) }
             }
             .contentShape(Rectangle())
         }
@@ -450,71 +448,81 @@ struct VerticalTabSidebar: View {
             .padding(.trailing, 4)
             .frame(height: ws.windowControls.height)
             .background(WindowDragView())
-            WorkspacePickerButton(inSidebar: true)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 5)
-            Text("TABS")
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(Theme.inkSoft)
-                .padding(.horizontal, 12)
             ScrollView {
-                LazyVStack(spacing: 3) {
-                    ForEach(Array(ws.tabs.enumerated()), id: \.element.id) { index, tab in
-                        Button { ws.selectTab(index) } label: {
-                            let meta = ws.meta(tab.focus)
-                            let state = ws.taskState(for: tab)
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack(spacing: 9) {
-                                    TileStack(tab: tab)
-                                        .overlay(alignment: .topTrailing) {
-                                            if state.done && index != ws.selected { TaskDoneDot().offset(x: 3, y: -3) }
-                                        }
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 5) {
-                                            Text(meta.label ?? meta.title)
-                                                .font(.system(size: 12, weight: .medium))
-                                                .foregroundStyle(Theme.ink)
-                                                .lineLimit(1)
-                                            if state.working { WorkingDots() }
-                                        }
-                                        Text(meta.cwd)
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(Theme.inkSoft)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                                ForEach(tab.layout.panes, id: \.self) { paneID in
-                                    let pane = ws.meta(paneID)
-                                    ForEach(pane.statusItems) { item in
-                                        StatusRecordRow(item: item, fallback: pane.program.title)
-                                            .padding(.leading, 31)
-                                    }
-                                }
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(ws.orderedSessions, id: \.sessionID) { session in
+                        let current = session.sessionID == ws.sessionID
+                        Text(session.remote.map { "\(session.label) · \($0.hostname)" } ?? session.label)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.inkSoft)
+                            .lineLimit(1)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 10)
+                            .padding(.bottom, 4)
+                        ForEach(ws.tabs(in: session)) { tab in
+                            SidebarTabRow(tab: tab, on: current && tab.id == ws.tab.id) {
+                                if !current { ws.selectSession(session.sessionID) }
+                                ws.focus(tab.focus)
                             }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 9)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background {
-                                if index == ws.selected {
-                                    RoundedRectangle(cornerRadius: 10).fill(Theme.activeTab.opacity(0.55))
-                                }
-                            }
-                            .contentShape(RoundedRectangle(cornerRadius: 10))
                         }
-                        .buttonStyle(.plain)
-                        .help(tab.label)
                     }
                 }
-                .padding(.leading, 6)
+                .padding(.horizontal, 8)
             }
-            VStack(alignment: .leading, spacing: 6) { BarStatus() }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
+            HStack(spacing: 6) {
+                BarStatus()
+                Spacer(minLength: 0)
+                BarButton(symbol: "rectangle.stack.badge.plus", help: "Workspaces") { ws.paletteOpen = false; ws.sessionPickerOpen.toggle() }
+                    .popover(isPresented: $ws.sessionPickerOpen, arrowEdge: .top) { SessionPicker().environmentObject(ws) }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
         }
         .frame(width: ws.style.sidebarWidth)
         .background(Theme.background.opacity(0.12))
+    }
+}
+
+struct SidebarTabRow: View {
+    let tab: Tab, on: Bool, select: () -> Void
+    @EnvironmentObject var ws: Workspace
+
+    var body: some View {
+        let meta = ws.meta(tab.focus)
+        let state = ws.taskState(for: tab)
+        let title = meta.label ?? meta.title
+        Button(action: select) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 9) {
+                    TileStack(tab: tab, size: 24)
+                        .overlay(alignment: .topTrailing) {
+                            if state.done && !on { TaskDoneDot().offset(x: 3, y: -3) }
+                        }
+                    (Text(title).foregroundStyle(Theme.ink)
+                        + Text(title.hasSuffix(meta.cwd) ? "" : " " + meta.cwd).foregroundStyle(Theme.inkSoft))
+                        .font(.system(size: 14, weight: .medium))
+                        .lineLimit(1)
+                    if state.working { WorkingDots() }
+                    Spacer(minLength: 0)
+                }
+                ForEach(tab.layout.panes, id: \.self) { paneID in
+                    let pane = ws.meta(paneID)
+                    ForEach(pane.statusItems) { item in
+                        StatusRecordRow(item: item, fallback: pane.program.title)
+                            .padding(.leading, 33)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if on { RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.activeTab.opacity(0.55)) }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(tab.label)
     }
 }
 
