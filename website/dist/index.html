@@ -30,16 +30,27 @@
       </div>
     </section>
 
-    <section class="section shell" id="features"><div class="section-intro"><p class="kicker">THE WORKSPACE</p><h2>Stay oriented, even when<br>the work branches out.</h2><p>Zurafa brings the moving parts of terminal work into one coherent place.</p></div>
-      <div class="feature-grid">
-        <article class="feature feature-wide"><span class="feature-index">01 / PREVIEW</span><h3>Open files without leaving the terminal.</h3><p>⌘-click a path in terminal output to preview images, rendered Markdown, and syntax-highlighted code beside your panes, with the file's git status at a glance.</p><div class="feature-diagram" aria-hidden="true"><span><i>❯</i> ls docs/</span><span>README.md</span><b>→</b><span>preview</span></div></article>
-        <article class="feature"><span class="feature-index">02 / AGENTS</span><div class="status-demo">Claude Code · Codex · Pi</div><h3>Made for coding agents.</h3><p>Tabs show the icon of every program running in their panes. Paste a screenshot and Zurafa hands the agent a file path.</p></article>
-        <article class="feature"><span class="feature-index">03 / CONFIG</span><div class="feature-symbol">⌘,</div><h3>One plain config file.</h3><p>Theme, accent color, opacity, and pane spacing live in <code>~/.config/config.zurafa</code>. Changes apply when you save.</p></article>
-        <article class="feature"><span class="feature-index">04 / YOUR SETUP</span><div class="feature-symbol">◐</div><h3>Your Ghostty theme, everywhere.</h3><p>Use any Ghostty theme or import your Ghostty colors and fonts. The whole app follows them, down to the command palette.</p></article>
-        <article class="feature"><span class="feature-index">05 / REMOTE</span><div class="feature-symbol">⌁</div><h3>Go remote with SSH.</h3><p>Save hosts and open remote sessions through the system SSH client. Your existing keys, aliases, and host verification stay in play.</p></article>
-        <article class="feature"><span class="feature-index">06 / SIGNAL</span><div class="status-demo"><span class="dot amber"></span> working <span class="dot green"></span> done <span class="dot pink"></span> blocked</div><h3>See structured status.</h3><p>OSC 7501 reports let compatible programs share progress and state without Zurafa guessing from terminal text.</p></article>
-        <article class="feature feature-wide"><span class="feature-index">07 / SCRIPTABLE</span><h3>Drive it from the command line.</h3><p>Zurafa offers to install the <code>zurafa</code> CLI on first launch, so scripts can list and control sessions, tabs, and panes.</p><div class="feature-diagram" aria-hidden="true"><span><i>❯</i> zurafa ls</span><span><i>❯</i> zurafa session inspect default</span></div></article>
-        <article class="feature feature-full"><div><span class="feature-index">08 / INTERACTIVE</span><h3>Explanations you can click into.</h3><p>Agents can open live HTML pages in the preview: animations you step through, charts that update, Mermaid diagrams. Click a node or a button and its follow-up question lands in the agent's prompt, ready for you to edit and send.</p><p>Pages run offline and can't reach the network, and nothing is sent until you press Enter.</p></div><img src="/assets/zurafa-interactive-preview.png" width="2000" height="1222" loading="lazy" alt="Zurafa with a coding agent explaining Neural ODEs in the left pane and an interactive preview on the right: an Euler-step explorer with a step button, live values, and a chart of the Euler path against the exact curve."></article>
+    <section class="section shell" id="features"><div class="section-intro"><p class="kicker">TRY IT HERE</p><h2>Take Zurafa for a spin,<br>right in your browser.</h2><p>This is a small simulated Zurafa window. Type a command, or pick one below to see a feature.</p></div>
+      <div class="demo">
+        <div class="demo-window" id="demo-window">
+          <div class="demo-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><div class="demo-tabs" id="demo-tabs"></div></div>
+          <div class="demo-body">
+            <div class="demo-pane"><div class="pane-head" id="demo-title">~</div>
+              <div class="demo-term" id="demo-term"><div id="demo-out" role="log" aria-live="polite"></div><label class="demo-line"><span id="demo-prompt"></span><span class="sr-only">Command</span><input id="demo-input" autocomplete="off" autocapitalize="off" spellcheck="false"></label></div>
+            </div>
+            <aside class="demo-preview" id="demo-preview" hidden><div class="pane-head"><span id="preview-title"></span><button type="button" id="preview-close" aria-label="Close preview">×</button></div><div class="preview-body" id="preview-body"></div></aside>
+          </div>
+        </div>
+        <div class="demo-suggest" aria-label="Try a command">
+          <button type="button" data-cmd="ssh kali"><b>Local VMs</b><code>ssh kali</code></button>
+          <button type="button" data-cmd="zurafa preview README.md"><b>File previews</b><code>zurafa preview README.md</code></button>
+          <button type="button" data-cmd="zurafa preview euler.html"><b>Interactive pages</b><code>zurafa preview euler.html</code></button>
+          <button type="button" data-cmd="claude"><b>Coding agents</b><code>claude</code></button>
+          <button type="button" data-cmd="theme dracula"><b>Ghostty themes</b><code>theme dracula</code></button>
+          <button type="button" data-cmd="cat ~/.config/config.zurafa"><b>Plain config</b><code>cat ~/.config/config.zurafa</code></button>
+          <button type="button" data-cmd="zurafa ls"><b>Scriptable</b><code>zurafa ls</code></button>
+          <button type="button" data-cmd="help"><b>Everything else</b><code>help</code></button>
+        </div>
       </div>
     </section>
     <section class="section rhythm"><div class="shell rhythm-grid"><div><p class="kicker">A PRACTICAL FLOW</p><h2>From local prompt<br>to remote work.</h2></div><div class="steps"><div><b>01</b><span><strong>Open a session.</strong><small>Give each line of work its own place.</small></span></div><div><b>02</b><span><strong>Split for context.</strong><small>Keep a build, editor, and shell in view.</small></span></div><div><b>03</b><span><strong>Switch machines.</strong><small>Use a saved SSH host or a local workspace.</small></span></div></div></div></section>
@@ -55,5 +66,6 @@
   </main>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
+  <script src="/assets/demo.js" defer></script>
 </body>
 </html>
