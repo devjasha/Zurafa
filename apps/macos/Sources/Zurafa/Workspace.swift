@@ -18,9 +18,9 @@ enum TabStripLayout: String {
 }
 
 enum Program {
-    case claude, codex, gemini, pi, emacs, git, dev, ssh, shell
-    static func detect(_ name: String?, executable: String? = nil, argv: [String]? = nil, remote: Bool) -> Program {
-        guard let name else { return remote ? .ssh : .shell }
+    case claude, codex, gemini, pi, emacs, git, dev, ssh, vm, kali, shell
+    static func detect(_ name: String?, executable: String? = nil, argv: [String]? = nil, remote: Bool, remoteShell: Program = .ssh) -> Program {
+        guard let name else { return remote ? remoteShell : .shell }
         let n = ([name, executable] + (argv ?? [])).compactMap { $0 }.joined(separator: " ").lowercased()
         if n.contains("claude") { return .claude }
         if n.contains("codex") { return .codex }
@@ -36,16 +36,16 @@ enum Program {
         if base == "git" || base == "lazygit" { return .git }
         if base == "ssh" { return .ssh }
         if ["node", "npm", "pnpm", "bun", "deno", "vite"].contains(base) { return .dev }
-        return remote ? .ssh : .shell
+        return remote ? remoteShell : .shell
     }
     var title: String {
-        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .emacs: "Emacs"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .shell: "Shell" }
+        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .emacs: "Emacs"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .vm: "VM"; case .kali: "Kali Linux"; case .shell: "Shell" }
     }
     var icon: String {
-        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "brain.head.profile"; case .emacs: "text.cursor"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .shell: "terminal" }
+        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "brain.head.profile"; case .emacs: "text.cursor"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .vm, .kali: "desktopcomputer"; case .shell: "terminal" }
     }
     var iconAssetName: String? {
-        switch self { case .claude: "Claude"; case .codex: "Codex"; case .pi: "Pi"; case .emacs: "Doom"; case .shell: "Terminal"; default: nil }
+        switch self { case .claude: "Claude"; case .codex: "Codex"; case .pi: "Pi"; case .emacs: "Doom"; case .kali: "Kali Linux"; case .shell: "Terminal"; default: nil }
     }
     var tile: [Color] {
         switch self {
@@ -57,6 +57,7 @@ enum Program {
         case .git: [Color(red: 0.49, green: 0.83, blue: 0.47), Color(red: 0.22, green: 0.62, blue: 0.32)]
         case .dev: [Color(red: 0.33, green: 0.34, blue: 0.38), Color(red: 0.11, green: 0.12, blue: 0.14)]
         case .ssh: [Color(red: 0.28, green: 0.47, blue: 0.57)]
+        case .vm, .kali: [Color(red: 0.24, green: 0.38, blue: 0.72), Color(red: 0.12, green: 0.18, blue: 0.40)]
         case .shell: [Color(red: 0.20, green: 0.20, blue: 0.22), Color(red: 0.03, green: 0.03, blue: 0.04)]
         }
     }
@@ -130,6 +131,8 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var hosts: [RemoteHost] = []
     /// Online tailnet machines not saved yet, offered by Add Host.
     @Published private(set) var tailnetHosts: [RemoteHost] = []
+    /// VMs on this Mac's shared network not saved yet, offered by Add Host.
+    @Published private(set) var vmHosts: [RemoteHost] = []
     @Published var paletteOpen = false
     @Published var sessionPickerOpen = false
     @Published var editor: EditorKind?
@@ -228,7 +231,8 @@ enum EditorKind: String, Identifiable {
             m.ended = block.running ? nil : "exited"
             m.statuses = block.statuses.records
             m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
-                                       argv: block.foreground?.argv, remote: session?.remote != nil)
+                                       argv: block.foreground?.argv, remote: session?.remote != nil,
+                                       remoteShell: session?.remote?.shellProgram ?? .ssh)
             next[id] = m
         }
         metas = next
@@ -264,7 +268,7 @@ enum EditorKind: String, Identifiable {
                 let name = event.payload.object?["foreground"]?.object?["name"]?.string
                 let executable = event.payload.object?["foreground"]?.object?["executable"]?.string
                 let argv = event.payload.object?["foreground"]?.object?["argv"]?.array?.compactMap(\.string)
-                metas[id]?.program = Program.detect(name, executable: executable, argv: argv, remote: currentSession?.remote != nil)
+                metas[id]?.program = Program.detect(name, executable: executable, argv: argv, remote: currentSession?.remote != nil, remoteShell: currentSession?.remote?.shellProgram ?? .ssh)
             }
         case "terminal.child_exited":
             if let id = event.blockID { if event.sessionID == sessionID { metas[id]?.ended = "exited" }; TerminalStore.shared.exited(id, code: event.payload.object?["exit_code"]?.int) }
@@ -554,11 +558,15 @@ enum EditorKind: String, Identifiable {
         }
     }
 
-    func refreshTailnet() {
+    func refreshFoundHosts() {
         Task {
             // An older daemon rejects the request; offering no machines is the right fallback.
             let found = (try? await daemon.request(["type": .string("hosts.tailnet")]).hosts) ?? []
             tailnetHosts = found.filter { machine in !hosts.contains { $0.hostname == machine.hostname } }
+        }
+        Task {
+            let found = (try? await daemon.request(["type": .string("hosts.vms")]).hosts) ?? []
+            vmHosts = found.filter { machine in !hosts.contains { $0.hostname == machine.hostname } }
         }
     }
 

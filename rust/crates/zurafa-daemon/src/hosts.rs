@@ -182,6 +182,45 @@ fn tailnet_hosts(status: &[u8], resolves: impl Fn(&str) -> bool) -> Vec<RemoteHo
     hosts
 }
 
+/// VMs on this Mac's shared network (UTM, Tart, Apple Virtualization), from the vmnet DHCP
+/// leases, as unsaved hosts (ID = IP). Empty when no VM has ever leased an address.
+pub fn local_vms() -> Vec<RemoteHost> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    fs::read_to_string("/var/db/dhcpd_leases").map(|text| vm_hosts(&text, now)).unwrap_or_default()
+}
+
+/// Unexpired leases, newest IP per VM name. A stopped VM keeps its lease until it expires,
+/// so it can still be listed; connecting then fails like any offline host.
+fn vm_hosts(leases: &str, now: u64) -> Vec<RemoteHost> {
+    let mut leased: Vec<(u64, RemoteHost)> = Vec::new();
+    for block in leases.split('{').skip(1) {
+        let field = |key: &str| {
+            block.lines().find_map(|line| line.trim().strip_prefix(key)?.strip_prefix('=').map(str::trim))
+        };
+        let (Some(ip), Some(expiry)) = (field("ip_address"), field("lease")) else { continue };
+        let expiry = u64::from_str_radix(expiry.trim_start_matches("0x"), 16).unwrap_or(0);
+        if expiry <= now || ip.parse::<std::net::Ipv4Addr>().is_err() {
+            continue;
+        }
+        let label = field("name").filter(|n| !n.is_empty()).unwrap_or(ip).to_owned();
+        let host = RemoteHost { id: ip.to_owned(), label, hostname: ip.to_owned(), user: None, port: 22 };
+        if validate(&host).is_ok() {
+            leased.push((expiry, host));
+        }
+    }
+    leased.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut hosts: Vec<RemoteHost> = Vec::new();
+    for (_, host) in leased {
+        if !hosts.iter().any(|h| h.label == host.label) {
+            hosts.push(host);
+        }
+    }
+    hosts.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+    hosts
+}
+
 /// The ssh arguments naming `host`: `[-p port] -- user@hostname`.
 pub fn ssh_destination(host: &RemoteHost) -> Vec<String> {
     let destination = match &host.user {
@@ -219,6 +258,21 @@ mod tests {
         let by_ip = tailnet_hosts(status, |name| name.starts_with("checs"));
         let names: Vec<_> = by_ip.iter().map(|h| (h.label.as_str(), h.hostname.as_str())).collect();
         assert_eq!(names, [("Chec's MacBook", "checs-mb.tail1.ts.net"), ("stuart", "100.86.111.84")]);
+    }
+
+    #[test]
+    fn local_vms_lists_unexpired_leases() {
+        // A VM that got a new address keeps its old lease too; the later expiry wins.
+        let leases = "{\n\tip_address=192.168.64.2\n\thw_address=1,a\n\tlease=0x1ff\n\tname=kali-linux-vm-1\n}\n\
+            {\n\tip_address=192.168.64.5\n\thw_address=1,a\n\tlease=0x200\n\tname=kali-linux-vm-1\n}\n\
+            {\n\tip_address=192.168.64.3\n\tlease=0x200\n}\n\
+            {\n\tip_address=192.168.64.4\n\tlease=0x10\n\tname=stopped-long-ago\n}\n\
+            {\n\tip_address=-oProxyCommand=x\n\tlease=0x200\n\tname=bad\n}\n";
+        let hosts = vm_hosts(leases, 0x100);
+        let names: Vec<_> = hosts.iter().map(|h| (h.label.as_str(), h.hostname.as_str())).collect();
+        assert_eq!(names, [("192.168.64.3", "192.168.64.3"), ("kali-linux-vm-1", "192.168.64.5")]);
+        assert!(hosts.iter().all(|h| h.port == 22 && h.user.is_none()));
+        assert!(vm_hosts("", 0).is_empty());
     }
 
     #[test]

@@ -206,7 +206,11 @@ with `ok` or `error`. `{id,type:"hosts.tailnet"}` replies with
 `{id,type:"hosts.tailnet",hosts:[...]}`: online Linux and macOS peers from
 `tailscale status --json`, as unsaved hosts whose `id` and `hostname` are the
 MagicDNS name, with port 22 and no user. The list is empty when the Tailscale CLI
-is missing or fails. Add Host offers these machines; saving one uses `hosts.add`. Saved hosts live in
+is missing or fails. `{id,type:"hosts.vms"}` replies with
+`{id,type:"hosts.vms",hosts:[...]}`: VMs on this Mac's shared network (UTM, Tart,
+Apple Virtualization) with an unexpired lease in `/var/db/dhcpd_leases`, as unsaved
+hosts whose `id` and `hostname` are the IPv4 address and `label` the VM name, with
+port 22 and no user. Add Host offers these machines; saving one uses `hosts.add`. Saved hosts live in
 `~/Library/Application Support/Zurafa/hosts.json`, written with owner-only
 permissions. Set `ZURAFA_HOSTS_FILE` to override the path. A remote session
 keeps a copy of its host. `hosts.update` requires an existing host ID, replaces

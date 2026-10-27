@@ -79,14 +79,14 @@ struct SessionPicker: View {
                     if sessions.contains(where: { $0.remote == nil }) { header("This Mac", symbol: "laptopcomputer") }
                     ForEach(Array(sessions.enumerated()), id: \.element.sessionID) { index, session in
                         if let remote = session.remote, index == 0 || sessions[index - 1].remote?.id != remote.id {
-                            header(remote.addressLabel, symbol: "globe")
+                            header(remote.addressLabel, symbol: "globe", program: remote.isLocalVM ? remote.shellProgram : nil)
                         }
                         sessionRow(session, highlighted: selection == index)
                     }
                     if !matchingHosts.isEmpty {
                         header("Saved Hosts", symbol: "network")
                         ForEach(Array(matchingHosts.enumerated()), id: \.element.id) { index, host in
-                            row(host.label, symbol: nil, shortcut: hovered == host.id ? nil : host.addressLabel,
+                            row(host.label, symbol: nil, program: host.isLocalVM ? host.shellProgram : nil, shortcut: hovered == host.id ? nil : host.addressLabel,
                                 highlighted: selection == sessions.count + index, trailingInset: 26) {
                                 ws.openHost(host)
                                 ws.sessionPickerOpen = false
@@ -173,9 +173,12 @@ struct SessionPicker: View {
         Divider().overlay(PickerStyle.secondary.opacity(0.25)).padding(.vertical, 4).padding(.horizontal, 6)
     }
 
-    private func header(_ title: String, symbol: String) -> some View {
+    private func header(_ title: String, symbol: String, program: Program? = nil) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: symbol).frame(width: 18)
+            Group {
+                if let program { ProgramGlyph(program: program).frame(width: 14, height: 14) } else { Image(systemName: symbol) }
+            }
+            .frame(width: 18)
             Text(title).lineLimit(1)
         }
         .font(.system(size: 12, weight: .semibold))
@@ -222,12 +225,13 @@ struct SessionPicker: View {
         .help(help)
     }
 
-    private func row(_ title: String, symbol: String?, shortcut: String?, selected: Bool = false, highlighted: Bool,
+    private func row(_ title: String, symbol: String?, program: Program? = nil, shortcut: String?, selected: Bool = false, highlighted: Bool,
                      trailingInset: CGFloat = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Group {
                     if selected { Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)) }
+                    else if let program { ProgramGlyph(program: program).frame(width: 14, height: 14) }
                     else if let symbol { Image(systemName: symbol) }
                 }
                 .frame(width: 18)
@@ -292,7 +296,7 @@ struct EditorSheet: View {
     @State private var savingHost = false
     @State private var directoryCandidates: [DirectoryCandidate] = []
     @State private var directorySelection = 0
-    @State private var tailnetSelection: Int?
+    @State private var hostSelection: Int?
     @FocusState private var focusedField: FieldFocus?
 
     private var heading: String {
@@ -312,17 +316,17 @@ struct EditorSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 if kind == .addHost {
                     hostAddressField
-                    if !matchingTailnetHosts.isEmpty { tailnetList }
+                    if !matchingHosts.isEmpty { foundHostsList }
                     Button(action: save) {
-                        Text(hostError ?? (tailnetSelection != nil ? "Press Return to save and connect to this machine"
-                            : address.isEmpty ? (matchingTailnetHosts.isEmpty ? "Type the address of an SSH host" : "Type the address of an SSH host, or pick a tailnet machine")
+                        Text(hostError ?? (hostSelection != nil ? "Press Return to save and connect to this machine"
+                            : address.isEmpty ? (matchingHosts.isEmpty ? "Type the address of an SSH host" : "Type the address of an SSH host, or pick a machine")
                             : "Press Return to save and connect with SSH"))
                             .font(.system(size: 12))
                             .foregroundStyle(hostError == nil ? PickerStyle.secondary : Color.red)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
-                    .disabled(address.isEmpty && tailnetSelection == nil)
+                    .disabled(address.isEmpty && hostSelection == nil)
                 } else if kind == .editHost {
                     HStack {
                         Text(heading).font(.system(size: 15, weight: .semibold))
@@ -401,7 +405,7 @@ struct EditorSheet: View {
             default: break
             }
             if kind == .goDirectory { refreshDirectoryCandidates() }
-            if kind == .addHost { ws.refreshTailnet() }
+            if kind == .addHost { ws.refreshFoundHosts() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 focusedField = kind == .addHost || kind == .editHost ? .hostname : .label
             }
@@ -418,15 +422,15 @@ struct EditorSheet: View {
                 .textFieldStyle(.plain)
                 .focused($focusedField, equals: .hostname)
                 .onSubmit(save)
-                .onChange(of: address) { _, _ in hostError = nil; tailnetSelection = nil }
+                .onChange(of: address) { _, _ in hostError = nil; hostSelection = nil }
                 .onKeyPress(.downArrow) {
-                    guard !matchingTailnetHosts.isEmpty else { return .ignored }
-                    tailnetSelection = min((tailnetSelection ?? -1) + 1, matchingTailnetHosts.count - 1)
+                    guard !matchingHosts.isEmpty else { return .ignored }
+                    hostSelection = min((hostSelection ?? -1) + 1, matchingHosts.count - 1)
                     return .handled
                 }
                 .onKeyPress(.upArrow) {
-                    guard let selected = tailnetSelection else { return .ignored }
-                    tailnetSelection = selected == 0 ? nil : selected - 1
+                    guard let selected = hostSelection else { return .ignored }
+                    hostSelection = selected == 0 ? nil : selected - 1
                     return .handled
                 }
             if !address.isEmpty {
@@ -440,21 +444,27 @@ struct EditorSheet: View {
         .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(PickerStyle.outline, lineWidth: 1))
     }
 
-    private var matchingTailnetHosts: [RemoteHost] {
+    private var matchingHosts: [RemoteHost] {
         let query = address.trimmingCharacters(in: .whitespaces)
-        return ws.tailnetHosts.filter { query.isEmpty || $0.label.localizedCaseInsensitiveContains(query)
+        return (ws.vmHosts + ws.tailnetHosts).filter { query.isEmpty || $0.label.localizedCaseInsensitiveContains(query)
             || $0.hostname.localizedCaseInsensitiveContains(query) }
     }
 
-    private var tailnetList: some View {
+    private var foundHostsList: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("TAILNET").font(.system(size: 10, weight: .semibold)).foregroundStyle(PickerStyle.secondary)
-                .padding(.horizontal, 8).padding(.bottom, 2)
-            ForEach(Array(matchingTailnetHosts.enumerated()), id: \.element.id) { index, machine in
-                let selected = index == tailnetSelection
-                Button { addTailnetHost(machine) } label: {
+            ForEach(Array(matchingHosts.enumerated()), id: \.element.id) { index, machine in
+                let selected = index == hostSelection
+                let isVM = ws.vmHosts.contains(machine)
+                if index == 0 || isVM != ws.vmHosts.contains(matchingHosts[index - 1]) {
+                    Text(isVM ? "LOCAL VMS" : "TAILNET").font(.system(size: 10, weight: .semibold)).foregroundStyle(PickerStyle.secondary)
+                        .padding(.horizontal, 8).padding(.top, index == 0 ? 0 : 4).padding(.bottom, 2)
+                }
+                Button { addFoundHost(machine) } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "network").frame(width: 16)
+                        Group {
+                            if isVM { ProgramGlyph(program: machine.shellProgram) } else { Image(systemName: "network") }
+                        }
+                        .frame(width: 16, height: 16)
                         Text(machine.label).lineLimit(1)
                         Spacer(minLength: 6)
                         Text(machine.hostname)
@@ -477,7 +487,7 @@ struct EditorSheet: View {
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(PickerStyle.outline, lineWidth: 1))
     }
 
-    private func addTailnetHost(_ machine: RemoteHost) {
+    private func addFoundHost(_ machine: RemoteHost) {
         ws.addRemoteHost(label: machine.label, hostname: machine.hostname, user: nil, port: machine.port)
         close()
     }
@@ -597,8 +607,8 @@ struct EditorSheet: View {
 
     private func save() {
         if kind == .addHost {
-            if let index = tailnetSelection, matchingTailnetHosts.indices.contains(index) {
-                addTailnetHost(matchingTailnetHosts[index])
+            if let index = hostSelection, matchingHosts.indices.contains(index) {
+                addFoundHost(matchingHosts[index])
                 return
             }
             do {

@@ -75,6 +75,8 @@ enum Request {
     HostsUpdate { id: u64, host: RemoteHost },
     #[serde(rename = "hosts.tailnet")]
     HostsTailnet { id: u64 },
+    #[serde(rename = "hosts.vms")]
+    HostsVms { id: u64 },
     #[serde(rename = "hosts.remove")]
     HostsRemove { id: u64, host_id: String },
     #[serde(rename = "hosts.service")]
@@ -239,6 +241,10 @@ async fn request(
         Request::HostsTailnet { id } => {
             let hosts = tokio::task::spawn_blocking(crate::hosts::tailnet).await.unwrap_or_default();
             json!({"id":id,"type":"hosts.tailnet","hosts":hosts})
+        }
+        Request::HostsVms { id } => {
+            let hosts = tokio::task::spawn_blocking(crate::hosts::local_vms).await.unwrap_or_default();
+            json!({"id":id,"type":"hosts.vms","hosts":hosts})
         }
         Request::HostsService { id, host_id, enable } => {
             let Some(host) = terms.hosts().into_iter().find(|h| h.id == host_id) else {

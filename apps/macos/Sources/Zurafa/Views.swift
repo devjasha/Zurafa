@@ -409,8 +409,11 @@ struct WorkspacePickerButton: View {
     var body: some View {
         Button { ws.paletteOpen = false; ws.sessionPickerOpen.toggle() } label: {
             HStack(spacing: 7) {
-                Image(systemName: ws.currentSession?.remote == nil ? "laptopcomputer" : "globe")
-                    .font(.system(size: 12))
+                Group {
+                    if let remote = ws.currentSession?.remote { ProgramGlyph(program: remote.shellProgram) }
+                    else { Image(systemName: "laptopcomputer").resizable().scaledToFit() }
+                }
+                .frame(width: 14, height: 14)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(ws.name)
                         .font(.system(size: 13, weight: .semibold))

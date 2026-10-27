@@ -51,6 +51,11 @@ struct RemoteHost: Codable, Identifiable, Equatable {
 
     var destination: String { user.map { "\($0)@\(hostname)" } ?? hostname }
     var addressLabel: String { port == 22 ? hostname : "\(hostname):\(port)" }
+    // shortcut: matches macOS's default shared VM subnet only; store a flag if users change it.
+    var isLocalVM: Bool { hostname.hasPrefix("192.168.64.") }
+    var isKali: Bool { isLocalVM && "\(label) \(hostname)".localizedCaseInsensitiveContains("kali") }
+    /// What a shell on this host shows as, before any program on it is detected.
+    var shellProgram: Program { isKali ? .kali : isLocalVM ? .vm : .ssh }
     var wire: JSONValue {
         .object(["id": .string(id), "label": .string(label), "hostname": .string(hostname),
                  "user": user.map(JSONValue.string) ?? .null, "port": .number(Double(port))])
