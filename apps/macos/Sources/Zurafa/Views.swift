@@ -494,13 +494,13 @@ struct SidebarTabRow: View {
         Button(action: select) {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 9) {
-                    TileStack(tab: tab, size: 24)
+                    TileStack(tab: tab, size: 20)
                         .overlay(alignment: .topTrailing) {
                             if state.done && !on { TaskDoneDot().offset(x: 3, y: -3) }
                         }
                     (Text(title).foregroundStyle(Theme.ink)
                         + Text(title.hasSuffix(meta.cwd) ? "" : " " + meta.cwd).foregroundStyle(Theme.inkSoft))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
                     if state.working { WorkingDots() }
                     Spacer(minLength: 0)
@@ -509,17 +509,17 @@ struct SidebarTabRow: View {
                     let pane = ws.meta(paneID)
                     ForEach(pane.statusItems) { item in
                         StatusRecordRow(item: item, fallback: pane.program.title)
-                            .padding(.leading, 33)
+                            .padding(.leading, 29)
                     }
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                if on { RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.activeTab.opacity(0.55)) }
+                if on { RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.activeTab.opacity(0.55)) }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(tab.label)
