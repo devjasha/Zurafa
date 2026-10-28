@@ -109,7 +109,8 @@ in your default text editor. The first time, Zurafa writes a commented template
 listing every setting. Changes apply as soon as you save. Settings include
 `theme` (any Ghostty theme name, or `light:A,dark:B`), terminal colors and font,
 `accent-color`, `window-opacity`, `pane-gap`, `pane-padding`,
-`pane-corner-radius`, `unfocused-pane-opacity`, `sidebar-width`, and the
+`pane-corner-radius`, `unfocused-pane-opacity`, `sidebar-width`,
+`sidebar-position` (`left` or `right`), and the
 background image. Values in this file override imported Ghostty settings.
 
 Terminal panes bundle Symbols Nerd Font Mono as an icon fallback. The chosen

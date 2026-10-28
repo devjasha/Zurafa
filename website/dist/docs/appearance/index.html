@@ -11,7 +11,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases" target="_blank" rel="noopener">Releases ↗</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.19-macos-arm64.dmg" download>Download for Mac</a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.20-macos-arm64.dmg" download>Download for Mac</a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -76,8 +76,9 @@ pane-gap = 8
 pane-padding = 12
 pane-corner-radius = 14
 unfocused-pane-opacity = 0.7
-sidebar-width = 194</code></pre>
-<p><code>theme</code> accepts any Ghostty theme name from <code>~/.config/ghostty/themes</code> or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (<code>foreground</code>, <code>background</code>, <code>cursor-color</code>, <code>palette</code>, <code>font-family</code>, <code>font-size</code>) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored.</p>
+sidebar-width = 194
+sidebar-position = left</code></pre>
+<p><code>theme</code> accepts any Ghostty theme name from <code>~/.config/ghostty/themes</code> or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (<code>foreground</code>, <code>background</code>, <code>cursor-color</code>, <code>palette</code>, <code>font-family</code>, <code>font-size</code>) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. <code>sidebar-position</code> is <code>left</code> or <code>right</code>; <strong>Move Sidebar to Right</strong> in <code>⌘K</code> sets it for you.</p>
 <h2 id="import-ghostty-settings">Import Ghostty settings</h2>
 <p>Choose <strong>Import Ghostty Settings</strong> from <code>⌘K</code>. Zurafa reads Ghostty&#x27;s standard XDG and macOS configuration paths, including supported includes and named light and dark themes. The import can apply the terminal font family, font size, foreground and background colors, cursor and selection colors, and the ANSI palette.</p>
 <p>The imported background color tints the entire workspace surface; terminal drawing areas stay transparent so the pane and window feel continuous. Color changes remain local to Zurafa after import. If you later edit Ghostty&#x27;s files, run the import again to refresh Zurafa&#x27;s copy.</p>
