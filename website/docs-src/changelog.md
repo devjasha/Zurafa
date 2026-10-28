@@ -2,6 +2,13 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.22
+
+**October 28, 2026**
+
+- Go to Directory (⌘⇧G) opens the highlighted folder when you press Return, instead of the partly typed path.
+- Go to Directory now works in remote workspaces: it suggests folders from the remote machine and opens the new tab there. Suggestions need SSH key or agent login; you can always type a full path.
+
 ## 0.1.21
 
 **October 28, 2026**
