@@ -722,14 +722,15 @@ enum EditorKind: String, Identifiable {
     }
 
     func openDirectory(_ path: String) {
-        guard currentSession?.remote == nil else { commandError = "Directory selection is only available on This Mac"; return }
+        let target = sessionID
+        // A remote path is checked on its host: the remote daemon falls back to $HOME if it is missing.
+        guard currentSession?.remote == nil else { Task { await createTab(in: target, cwd: path) }; return }
         let expanded = (path as NSString).expandingTildeInPath
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory), isDirectory.boolValue else {
             commandError = "Choose an existing local directory"
             return
         }
-        let target = sessionID
         Task { await createTab(in: target, cwd: expanded) }
     }
 }

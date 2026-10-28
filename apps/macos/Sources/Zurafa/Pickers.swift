@@ -296,6 +296,8 @@ struct EditorSheet: View {
     @State private var savingHost = false
     @State private var directoryCandidates: [DirectoryCandidate] = []
     @State private var directorySelection = 0
+    /// One remote directory's entries, so typing within a name filters without another SSH round trip.
+    @State private var remoteListing: (dir: String, entries: [(name: String, isDirectory: Bool)])?
     @State private var hostSelection: Int?
     @FocusState private var focusedField: FieldFocus?
 
@@ -394,7 +396,7 @@ struct EditorSheet: View {
             switch kind {
             case .renameSession: label = ws.name
             case .renameTab: label = ws.tab.label
-            case .goDirectory: label = NSHomeDirectory()
+            case .goDirectory: label = ws.currentSession?.remote == nil ? NSHomeDirectory() : "~/"
             case .editHost:
                 if let host = ws.editingHost {
                     label = host.label
@@ -494,7 +496,7 @@ struct EditorSheet: View {
 
     private var directoryField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            field("Local directory path", text: $label, focus: .label)
+            field("Directory path", text: $label, focus: .label)
                 .onSubmit(save)
                 .onChange(of: label) { _, _ in refreshDirectoryCandidates() }
                 .onKeyPress(.downArrow) {
@@ -540,7 +542,7 @@ struct EditorSheet: View {
                 .padding(5)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(PickerStyle.outline, lineWidth: 1))
-                Text("↑↓ choose · Tab completes · Return opens a local tab")
+                Text("↑↓ choose · Tab completes · Return opens a tab")
                     .font(.system(size: 11))
                     .foregroundStyle(PickerStyle.secondary)
             }
@@ -565,33 +567,77 @@ struct EditorSheet: View {
 
     private func refreshDirectoryCandidates() {
         guard kind == .goDirectory else { return }
+        let remote = ws.currentSession?.remote
         let typed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        let expanded = (typed.isEmpty ? NSHomeDirectory() : (typed as NSString).expandingTildeInPath)
+        // Remote paths keep their `~`: only the remote host knows its home directory.
+        let expanded = remote != nil ? (typed.isEmpty ? "~/" : typed)
+            : (typed.isEmpty ? NSHomeDirectory() : (typed as NSString).expandingTildeInPath)
         let endsWithSlash = expanded.hasSuffix("/")
         let parent = endsWithSlash ? expanded : (expanded as NSString).deletingLastPathComponent
         let prefix = endsWithSlash ? "" : (expanded as NSString).lastPathComponent
         let directory = parent.isEmpty ? "/" : parent
-        do {
-            let urls = try FileManager.default.contentsOfDirectory(
+        let entries: [(name: String, isDirectory: Bool)]
+        if let remote {
+            guard let listing = remoteListing, listing.dir == directory else {
+                directoryCandidates = []
+                directorySelection = 0
+                loadRemoteListing(directory, on: remote)
+                return
+            }
+            entries = listing.entries
+        } else {
+            let urls = (try? FileManager.default.contentsOfDirectory(
                 at: URL(fileURLWithPath: directory, isDirectory: true),
                 includingPropertiesForKeys: [.isDirectoryKey],
                 options: [.skipsHiddenFiles]
-            )
-            directoryCandidates = urls.compactMap { url in
-                let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
-                let isDirectory = values?.isDirectory == true
-                let name = url.lastPathComponent
-                guard prefix.isEmpty || name.localizedCaseInsensitiveContains(prefix) else { return nil }
-                return DirectoryCandidate(id: url.path, name: name, path: url.path, isDirectory: isDirectory)
+            )) ?? []
+            entries = urls.map { ($0.lastPathComponent, (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true) }
+        }
+        directoryCandidates = entries.compactMap { entry in
+            guard prefix.isEmpty || entry.name.localizedCaseInsensitiveContains(prefix) else { return nil }
+            let path = (directory as NSString).appendingPathComponent(entry.name)
+            return DirectoryCandidate(id: path, name: entry.name, path: path, isDirectory: entry.isDirectory)
+        }
+        .sorted {
+            if $0.isDirectory != $1.isDirectory { return $0.isDirectory && !$1.isDirectory }
+            // An exact name match goes first so Return after Tab opens what was completed.
+            let exact0 = $0.name.caseInsensitiveCompare(prefix) == .orderedSame
+            if exact0 != ($1.name.caseInsensitiveCompare(prefix) == .orderedSame) { return exact0 }
+            return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+        directorySelection = min(directorySelection, max(0, directoryCandidates.count - 1))
+    }
+
+    private func loadRemoteListing(_ directory: String, on host: RemoteHost) {
+        Task.detached {
+            let entries = Self.listRemoteDirectory(directory, on: host)
+            await MainActor.run {
+                remoteListing = (directory, entries)
+                refreshDirectoryCandidates()
             }
-            .sorted {
-                if $0.isDirectory != $1.isDirectory { return $0.isDirectory && !$1.isDirectory }
-                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
-            }
-            directorySelection = min(directorySelection, max(0, directoryCandidates.count - 1))
-        } catch {
-            directoryCandidates = []
-            directorySelection = 0
+        }
+    }
+
+    /// Lists `directory` on `host` over SSH. Empty when it is missing or the host needs a password.
+    private nonisolated static func listRemoteDirectory(_ directory: String, on host: RemoteHost) -> [(name: String, isDirectory: Bool)] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+        // The path arrives on stdin so no quoting survives the remote login shell, which may be fish.
+        process.arguments = ["-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5"]
+            + (host.port == 22 ? [] : ["-p", String(host.port)])
+            + ["--", host.destination, #"sh -c 'read -r d; case $d in "~"*) d="$HOME${d#\~}";; esac; cd "$d" && ls -1p'"#]
+        let input = Pipe(), output = Pipe()
+        process.standardInput = input
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return [] }
+        input.fileHandleForWriting.write(Data((directory + "\n").utf8))
+        try? input.fileHandleForWriting.close()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return [] }
+        return String(decoding: data, as: UTF8.self).split(separator: "\n").map { line in
+            line.hasSuffix("/") ? (String(line.dropLast()), true) : (String(line), false)
         }
     }
 
@@ -653,7 +699,10 @@ struct EditorSheet: View {
         case .renameSession: ws.renameSession(value)
         case .renameTab: ws.renameTab(value)
         case .newSession: ws.createSession(label: value)
-        case .goDirectory: ws.openDirectory(value)
+        case .goDirectory:
+            // Return opens the highlighted row, not the partial text typed so far.
+            let selected = directoryCandidates.indices.contains(directorySelection) ? directoryCandidates[directorySelection] : nil
+            ws.openDirectory(selected?.isDirectory == true ? selected!.path : value)
         case .addHost, .editHost: break
         }
         close()

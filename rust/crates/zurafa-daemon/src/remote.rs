@@ -498,7 +498,7 @@ pub fn run(dest: Vec<String>) -> ! {
         let (cols, rows) = window_size();
         let current = terminal.lock().unwrap().clone();
         writer.send(match &current {
-            None => json!({"id":2,"type":"spawn","cols":cols,"rows":rows,"raw":true}),
+            None => json!({"id":2,"type":"spawn","cols":cols,"rows":rows,"raw":true,"cwd":env::var("ZURAFA_REMOTE_CWD").ok()}),
             Some(t) => json!({"id":2,"type":"attach","terminal":t,"since":end}),
         });
         let mut stash = Vec::new();

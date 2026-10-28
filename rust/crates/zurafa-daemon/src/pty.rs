@@ -180,6 +180,17 @@ fn default_shell() -> String {
     choose_shell(login_shell().as_deref(), env::var("SHELL").ok().as_deref())
 }
 
+/// `~` comes from the directory picker; a missing directory falls back to $HOME instead of failing the tab.
+fn start_dir(cwd: Option<String>, home: Option<String>) -> Option<String> {
+    let cwd = cwd
+        .map(|d| match (d.strip_prefix('~'), &home) {
+            (Some(rest), Some(home)) if rest.is_empty() || rest.starts_with('/') => format!("{home}{rest}"),
+            _ => d,
+        })
+        .filter(|d| std::path::Path::new(d).is_dir());
+    cwd.or(home)
+}
+
 fn choose_shell(account: Option<&str>, inherited: Option<&str>) -> String {
     account
         .filter(|s| !s.is_empty())
@@ -325,7 +336,7 @@ impl Terminals {
         let SpawnOptions {
             cols,
             rows,
-            cwd,
+            mut cwd,
             command,
             session,
             split,
@@ -368,6 +379,10 @@ impl Terminals {
                 let mut c = CommandBuilder::new(env::current_exe().map_err(err)?);
                 c.arg("remote");
                 c.args(hosts::ssh_destination(remote.as_ref().unwrap()));
+                // The directory is on the remote host: hand it to the remote daemon, start ssh locally in $HOME.
+                if let Some(dir) = cwd.take() {
+                    c.env("ZURAFA_REMOTE_CWD", dir);
+                }
                 c
             }
             None => {
@@ -378,7 +393,7 @@ impl Terminals {
                 c
             }
         };
-        if let Some(dir) = cwd.or_else(|| env::var("HOME").ok()) {
+        if let Some(dir) = start_dir(cwd, env::var("HOME").ok()) {
             cmd.cwd(dir);
         }
         cmd.env("TERM", "xterm-256color");
@@ -515,6 +530,17 @@ mod shell_tests {
         );
         assert_eq!(choose_shell(None, Some("/bin/sh")), "/bin/sh");
         assert_eq!(choose_shell(None, None), "/bin/zsh");
+    }
+
+    #[test]
+    fn start_dir_expands_tilde_and_falls_back_home() {
+        let home = Some("/tmp".to_owned());
+        assert_eq!(start_dir(Some("~".into()), home.clone()), home);
+        assert_eq!(start_dir(Some("~/".into()), home.clone()).as_deref(), Some("/tmp/"));
+        assert_eq!(start_dir(Some("/".into()), home.clone()).as_deref(), Some("/"));
+        assert_eq!(start_dir(Some("/no/such/dir".into()), home.clone()), home);
+        assert_eq!(start_dir(Some("~other".into()), home.clone()), home);
+        assert_eq!(start_dir(None, None), None);
     }
 
     #[test]
