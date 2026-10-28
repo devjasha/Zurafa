@@ -435,15 +435,19 @@ enum EditorKind: String, Identifiable {
         applyTerminalConfig()
     }
 
-    /// Writes `theme = name` into config.zurafa, creating it from the template if needed.
-    func setTheme(_ name: String) {
+    func setTheme(_ name: String) { writeConfig("theme", name) }
+
+    func toggleSidebarPosition() { writeConfig("sidebar-position", style.sidebarOnRight ? "left" : "right") }
+
+    /// Writes `key = value` into config.zurafa, creating it from the template if needed.
+    private func writeConfig(_ key: String, _ value: String) {
         let loader = ZurafaConfigLoader()
         let url = loader.fileURL
         do {
             let content = FileManager.default.fileExists(atPath: url.path)
                 ? try String(contentsOf: url, encoding: .utf8) : ZurafaConfigLoader.template
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try ZurafaConfigLoader.settingTheme(name, in: content).write(to: url, atomically: true, encoding: .utf8)
+            try ZurafaConfigLoader.setting(key, to: value, in: content).write(to: url, atomically: true, encoding: .utf8)
         } catch { commandError = error.localizedDescription; return }
         previewedTheme = nil
         loadZurafaConfig()

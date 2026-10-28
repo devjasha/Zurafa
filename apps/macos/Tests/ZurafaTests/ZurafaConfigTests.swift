@@ -63,6 +63,7 @@ final class ZurafaConfigTests: XCTestCase {
         pane-corner-radius = 0
         unfocused-pane-opacity = 2
         sidebar-width = 10
+        sidebar-position = Right
         """)
 
         XCTAssertEqual(config.theme, "light:Day,dark:Night")
@@ -73,6 +74,8 @@ final class ZurafaConfigTests: XCTestCase {
         XCTAssertEqual(config.style.paneCornerRadius, 0)
         XCTAssertEqual(config.style.unfocusedPaneOpacity, ZurafaStyle().unfocusedPaneOpacity)
         XCTAssertEqual(config.style.sidebarWidth, ZurafaStyle().sidebarWidth)
+        XCTAssertTrue(config.style.sidebarOnRight)
+        XCTAssertFalse(ZurafaConfigLoader.parse("sidebar-position = middle").style.sidebarOnRight)
     }
 
     func testTemplateIsAllCommentsSoItChangesNothing() {
@@ -95,10 +98,12 @@ final class ZurafaConfigTests: XCTestCase {
     }
 
     func testSettingThemeReplacesActiveLinesAndKeepsComments() {
-        XCTAssertEqual(ZurafaConfigLoader.settingTheme("Nord", in: "# theme = Old\ntheme = A\nfont-size = 13\nTheme=B\n"),
+        XCTAssertEqual(ZurafaConfigLoader.setting("theme", to: "Nord", in: "# theme = Old\ntheme = A\nfont-size = 13\nTheme=B\n"),
                        "# theme = Old\ntheme = Nord\nfont-size = 13\n")
-        XCTAssertEqual(ZurafaConfigLoader.settingTheme("Nord", in: "font-size = 13\n"), "font-size = 13\ntheme = Nord\n")
-        XCTAssertEqual(ZurafaConfigLoader.settingTheme("Nord", in: ""), "theme = Nord\n")
+        XCTAssertEqual(ZurafaConfigLoader.setting("theme", to: "Nord", in: "font-size = 13\n"), "font-size = 13\ntheme = Nord\n")
+        XCTAssertEqual(ZurafaConfigLoader.setting("theme", to: "Nord", in: ""), "theme = Nord\n")
+        XCTAssertEqual(ZurafaConfigLoader.setting("sidebar-position", to: "right", in: "theme = A\n"),
+                       "theme = A\nsidebar-position = right\n")
     }
 
     func testListsThemesInLookupOrderWithoutDuplicates() throws {

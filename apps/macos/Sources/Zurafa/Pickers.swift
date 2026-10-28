@@ -723,6 +723,8 @@ struct CommandPicker: View {
             .init(id: "Appearance: Dark", detail: ws.appearance == .dark ? "Current" : nil, shortcut: nil) { ws.setAppearance(.dark) },
             .init(id: "Toggle Tab Layout", title: ws.tabStripLayout == .horizontal ? "Switch to Vertical Tabs" : "Switch to Horizontal Tabs",
                   detail: nil, shortcut: "⌥⌘T") { ws.toggleTabStripLayout() },
+            .init(id: "Toggle Sidebar Position", title: ws.style.sidebarOnRight ? "Move Sidebar to Left" : "Move Sidebar to Right",
+                  detail: nil, shortcut: nil) { ws.toggleSidebarPosition() },
             .init(id: "Open Config File", detail: nil, shortcut: "⌘,") { ws.openConfig() },
             .init(id: "Import Ghostty Settings", detail: nil, shortcut: nil) { ws.importGhosttySettings() },
             .init(id: "Use Zurafa Terminal Defaults", detail: nil, shortcut: nil) { ws.clearGhosttySettings() },

@@ -22,6 +22,7 @@ struct ZurafaStyle: Equatable {
     var paneCornerRadius: CGFloat = 14
     var unfocusedPaneOpacity = 0.7
     var sidebarWidth: CGFloat = 194
+    var sidebarOnRight = false
     var accent: UInt32?
 }
 
@@ -89,6 +90,12 @@ struct ZurafaConfigLoader {
         case "pane-padding": number(value, in: 0...64).map { config.style.panePadding = $0 }
         case "pane-corner-radius": number(value, in: 0...40).map { config.style.paneCornerRadius = $0 }
         case "sidebar-width": number(value, in: 140...480).map { config.style.sidebarWidth = $0 }
+        case "sidebar-position":
+            switch value.lowercased() {
+            case "left": config.style.sidebarOnRight = false
+            case "right": config.style.sidebarOnRight = true
+            default: break
+            }
         case "palette":
             if let pair = value.split(separator: "=", maxSplits: 1).first,
                let index = Int(pair.trimmingCharacters(in: .whitespaces)), (0..<16).contains(index),
@@ -107,19 +114,19 @@ struct ZurafaConfigLoader {
     }
 
     /// Out-of-range values are ignored, like `font-size`, so a typo keeps the default.
-    /// `content` with its active `theme =` lines replaced by one for `name`; every other line stays as written.
-    static func settingTheme(_ name: String, in content: String) -> String {
+    /// `content` with its active `key =` lines replaced by one for `value`; every other line stays as written.
+    static func setting(_ key: String, to value: String, in content: String) -> String {
         var replaced = false
         var lines = content.components(separatedBy: "\n").compactMap { line -> String? in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("#"), let equals = trimmed.firstIndex(of: "="),
-                  trimmed[..<equals].trimmingCharacters(in: .whitespaces).lowercased() == "theme" else { return line }
+                  trimmed[..<equals].trimmingCharacters(in: .whitespaces).lowercased() == key else { return line }
             defer { replaced = true }
-            return replaced ? nil : "theme = \(name)"
+            return replaced ? nil : "\(key) = \(value)"
         }
         if !replaced {
             if lines.last == "" { lines.removeLast() }
-            lines += ["theme = \(name)", ""]
+            lines += ["\(key) = \(value)", ""]
         }
         return lines.joined(separator: "\n")
     }
@@ -164,6 +171,8 @@ struct ZurafaConfigLoader {
 
     # Width of the vertical tab sidebar, 140 to 480.
     # sidebar-width = 194
+    # Side of the window the vertical tab sidebar sits on: left or right.
+    # sidebar-position = left
 
     # Background image
     # background-image = ~/Pictures/wallpaper.png
