@@ -1,0 +1,152 @@
+/* Homepage only. Values follow the landing-page-design skill: Tailwind type scale, the fixed spacing set, flat backgrounds, one easing curve. */
+.home{--ease:cubic-bezier(.22,1,.36,1);font-family:Geist,-apple-system,BlinkMacSystemFont,sans-serif;font-size:16px;line-height:24px}
+.home::before{display:none}
+.home h1,.home h2,.home .brand{font-weight:700}
+.home h1,.home h2{text-wrap:balance}.home p{text-wrap:pretty}
+.home *{transition-timing-function:var(--ease)}
+.home .hero-mascot,.home .download-mascot,.home .sparkle{animation-timing-function:var(--ease);animation-direction:alternate}
+
+/* nav */
+.home .nav-wrap{height:64px;gap:32px;padding:0 8px 0 16px}
+.home .brand{font-size:24px;line-height:32px}
+.home .nav-wrap nav a{font-size:14px;line-height:20px;font-weight:600;padding:8px 12px;transition-duration:.3s}
+.home .nav-download{font-size:14px;line-height:20px;font-weight:600;padding:12px 16px;transition-duration:.3s}
+
+/* buttons and states */
+.home .button{min-height:0;padding:8px 12px;border-radius:12px;font-size:16px;line-height:24px;font-weight:600;gap:8px;transition:transform .5s var(--ease),opacity .3s var(--ease)}
+.home .button.primary{padding:12px 24px}
+.home .button:hover,.home .nav-download:hover{transform:translateY(-2px)}
+.home .button:active,.home .nav-download:active,.home .demo-suggest button:active{transform:scale(.98)}
+.home a:focus-visible,.home button:focus-visible,.home summary:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:4px}
+
+/* hero */
+.home .hero{padding-top:80px;padding-bottom:96px}
+.home .eyebrow,.home .kicker{font-size:12px;line-height:16px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.home .hero h1{max-width:680px;font-size:60px;line-height:1;letter-spacing:-.04em;margin:24px 0}
+.home .lead{max-width:680px;font-size:18px;line-height:28px}
+.home .hero-actions{margin-top:32px;gap:12px}
+.home .proof{display:flex;flex-wrap:wrap;gap:8px 16px;margin:24px 0 0;font-size:14px;line-height:20px;color:var(--muted)}
+.home .proof a{color:var(--ink);font-weight:600;transition:color .3s}.home .proof a:hover{color:var(--accent)}
+.home .proof span+span::before,.home .proof a+span::before{content:"·";margin-right:16px;color:var(--faint)}
+.home .hero-meta-line{margin:8px 0 0;font-size:12px;line-height:16px;color:var(--faint)}
+
+/* sections */
+.home .section{padding-block:96px}
+.home .section h2,.home .band h2{font-size:48px;line-height:1;letter-spacing:-.04em;margin:16px 0 24px}
+.home .section-intro{max-width:680px;margin-bottom:48px}
+.home .section-intro>p:last-child,.home .open-copy>p{font-size:18px;line-height:28px}
+.home .band{padding-block:64px}
+.home .problem{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start}
+.home .problem h2{font-size:36px;line-height:40px;margin:0}
+.home .problem p{font-size:18px;line-height:28px;color:var(--muted);margin:0}
+.home .benefits{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.home .benefits li{padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--panel);transition:transform .5s,border-color .3s}
+.home .benefits li:hover{transform:translateY(-4px);border-color:var(--line-strong)}
+.home .benefits strong{display:block;margin:16px 0 8px;font-size:18px;line-height:28px}
+.home .benefits p{margin:0;font-size:14px;line-height:20px;color:var(--muted)}
+.home .badge{display:inline-flex;align-items:center;gap:8px;padding:4px 8px;border-radius:8px;background:var(--panel-2);font:12px/16px ui-monospace,SFMono-Regular,monospace;color:var(--muted)}
+.home .badge .dot:not(.amber):not(.green):not(.pink){background:var(--blue)}
+
+/* tagline reveal */
+.home .tagline{padding-block:96px}
+.home .tagline p{max-width:680px;margin:0 auto;text-align:center;font-size:48px;line-height:1.1;font-weight:700;letter-spacing:-.04em}
+.js .home .tagline .word{opacity:.3;transition:opacity .5s var(--ease)}
+.js .home .tagline .word.lit{opacity:1}
+
+/* animated product window (replaces the old interactive demo) */
+.home .mock{display:grid;grid-template-columns:240px minmax(0,1.25fr) minmax(0,1fr);grid-template-rows:minmax(0,1.3fr) minmax(0,1fr);gap:8px;height:560px;padding:8px;border-radius:24px;border:1px solid var(--line-strong);background:var(--bg-alt);box-shadow:var(--shadow);font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace}
+.home .mock p{margin:0}
+.home .mock-side{grid-row:1/3;display:flex;flex-direction:column;gap:4px;padding:16px 8px;font-family:Geist,-apple-system,sans-serif;font-size:14px;line-height:20px}
+.home .mock-lights{display:flex;gap:8px;padding:0 8px 16px}.home .mock-lights i{width:12px;height:12px;border-radius:50%;background:#ff5f57}.home .mock-lights i:nth-child(2){background:#febc2e}.home .mock-lights i:nth-child(3){background:#28c840}
+.home .mock-ws{display:flex;align-items:center;gap:8px;padding:16px 8px 4px;color:var(--faint)}
+.home .mock-ws b{font-weight:500;font-size:12px;padding:0 4px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.home .mock-ws .needs{margin-left:auto;font-style:normal;color:var(--amber);opacity:0;transition:opacity .3s}
+.home .mock-ws .needs.on{opacity:1}
+.home .mock-tab{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border-radius:8px;color:var(--ink)}
+.home .mock-tab.is-active{background:var(--panel);font-weight:600}
+.home .mock-counts{margin-top:auto;display:flex;gap:16px;padding:8px;color:var(--muted);font-size:12px}
+.home .mock-counts span{display:flex;align-items:center;gap:4px}.home .mock-counts i{font-style:normal}
+.home .mock s{flex:none;display:inline-block;width:10px;height:10px;border-radius:50%;text-decoration:none;transition:background-color .3s,box-shadow .3s}
+.home .mock s[data-state=working]{background:var(--accent);animation:pulse 1.6s var(--ease) infinite alternate}
+.home .mock s[data-state=blocked]{background:var(--amber);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 25%,transparent)}
+.home .mock s[data-state=done]{background:var(--green)}
+.home .mock s[data-state=idle]{box-shadow:inset 0 0 0 2px var(--faint)}
+@keyframes pulse{to{opacity:.35;transform:scale(.8)}}
+.home .mock-pane{min-height:0;display:flex;flex-direction:column;border-radius:16px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+.home .mock-preview{grid-column:3;grid-row:1/3}
+.home .mock-head{display:flex;align-items:center;gap:8px;padding:12px 16px;font-family:Geist,-apple-system,sans-serif;font-size:14px;line-height:20px;font-weight:600;color:var(--ink);white-space:nowrap}
+.home .mock-head span{font-weight:400;color:var(--faint);overflow:hidden;text-overflow:ellipsis}
+.home .mock-head em{margin-left:auto;font-style:normal;font-weight:400;font-size:12px;padding:0 8px;border-radius:9999px;background:var(--panel-2);color:var(--muted)}
+.home .mock-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:4px 16px 16px;color:var(--ink);overflow:hidden}
+.home .mock-body b{color:var(--accent);font-weight:400}
+.home .c-dim{color:var(--faint)}.home .c-acc{color:var(--accent)}.home .c-ok{color:var(--green)}.home .c-red{color:var(--red)}
+.home .mock-ask{padding:8px 12px;border-radius:8px;border:1px solid var(--amber);display:grid;gap:4px}
+.home .mock-ask b{color:var(--amber);font-weight:600}
+.home .mock-bar{margin-top:auto;height:4px;border-radius:9999px;background:var(--panel-2);overflow:hidden}
+.home .mock-bar i{display:block;height:100%;background:var(--green);transform:scaleX(0);transform-origin:left}
+.home .mock.go .mock-bar i{transform:scaleX(1);transition:transform 4.7s var(--ease)}
+.home .mock-doc{font-family:Geist,-apple-system,sans-serif;font-size:14px;line-height:20px;gap:12px}
+.home .mock-h{font-size:18px;line-height:28px;font-weight:700}
+.home .mock-check{display:flex;gap:8px;color:var(--muted)}
+.home .mock-check::before{content:"";flex:none;width:16px;height:16px;margin-top:2px;border-radius:4px;box-shadow:inset 0 0 0 2px var(--line-strong);transition:background-color .3s,box-shadow .3s}
+.home .mock-check.done{color:var(--ink)}.home .mock-check.done::before{background:var(--green);box-shadow:none}
+.home .mock-note{margin-top:auto!important;font-size:12px;line-height:16px}
+.home .mock-note code{font-size:12px;background:none;padding:0}
+.js .home .mock [data-at]{opacity:0;transform:translateY(8px);transition:opacity .5s var(--ease),transform .5s var(--ease)}
+.js .home .mock [data-at].on{opacity:1;transform:none}
+.home .mock [data-hide-at].off{display:none}
+
+/* how it works */
+.home .rhythm{background:var(--bg-alt)}
+.home .rhythm-grid{gap:96px}
+.home .steps>div{gap:24px;padding:24px 0}
+.home .steps b{font-size:12px;line-height:16px}
+.home .steps strong{font-size:18px;line-height:28px}
+.home .steps small{font-size:14px;line-height:20px}
+.home .steps code,.home .faq code,.home .open-copy code{font:14px/20px ui-monospace,SFMono-Regular,monospace;background:var(--panel-2);padding:2px 4px;border-radius:4px}
+
+/* proof */
+.home .shots{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:64px}
+.home .shots figure{margin:0}
+.home .shots img{display:block;width:100%;height:auto;border-radius:16px;border:1px solid var(--line);box-shadow:var(--shadow)}
+.home .shots figcaption{margin-top:12px;font-size:14px;line-height:20px;color:var(--muted)}
+.home .proof-code{gap:64px}
+.home .code-card{border-radius:16px}
+.home .code-card pre{padding:24px 32px;font-size:14px;line-height:24px}
+
+/* faq */
+.home .faq{max-width:800px}
+.home .faq details{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px}
+.home .faq summary{cursor:pointer;padding:16px 24px;font-size:16px;line-height:24px;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:16px}
+.home .faq summary::-webkit-details-marker{display:none}
+.home .faq summary::after{content:"+";color:var(--accent);transition:transform .5s}
+.home .faq details[open] summary::after{transform:rotate(45deg)}
+.home .faq details p{margin:0;padding:0 24px 16px;color:var(--muted);font-size:16px;line-height:24px}
+.home .faq a{color:var(--accent);text-decoration:underline;text-underline-offset:4px}
+
+/* final cta */
+.home .download-section{background:var(--bg-alt);padding-block:80px}
+.home .download-inner h2{font-size:48px;line-height:1;letter-spacing:-.04em;margin:16px 0}
+.home .download-inner p:not(.kicker){font-size:18px;line-height:28px}
+.home .download-inner small{margin-top:16px;font-size:14px;line-height:20px}
+.home .download-inner small .text-link{margin:0 0 0 4px}
+.home .footer-inner{padding-block:48px}.home .footer-inner p{font-size:12px;line-height:16px}.home .footer-links{gap:24px;font-size:14px}
+
+/* scroll reveals, once per section */
+.js .home .reveal{opacity:0;transform:translateY(32px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.js .home .reveal.in{opacity:1;transform:none}
+
+@media(max-width:1000px){.home .mock{grid-template-columns:200px minmax(0,1fr)}.home .mock-preview{display:none}.home .benefits{grid-template-columns:1fr 1fr}.home .problem{grid-template-columns:1fr;gap:24px}}
+@media(max-width:690px){
+  .home .hero{padding-top:48px;padding-bottom:64px}
+  .home .hero h1{font-size:36px;line-height:40px}
+  .home .lead{font-size:16px;line-height:24px}
+  .home .section{padding-block:64px}
+  .home .section h2,.home .band h2,.home .download-inner h2{font-size:30px;line-height:36px}
+  .home .problem h2{font-size:24px;line-height:32px}
+  .home .tagline{padding-block:64px}.home .tagline p{font-size:30px;line-height:36px}
+  .home .benefits,.home .shots{grid-template-columns:1fr}
+  .home .mock{grid-template-columns:1fr;grid-template-rows:400px;height:auto}.home .mock-side,.home .mock-tests,.home .mock-preview{display:none}
+  .home .rhythm-grid,.home .proof-code{gap:32px}
+}
+@media(prefers-reduced-motion:reduce){.js .home .reveal{transform:none}.js .home .tagline .word{transition:opacity .3s!important}}

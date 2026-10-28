@@ -32,7 +32,7 @@ def target(path):
 
 def main():
     pages = list(DIST.rglob('*.html'))
-    assert len(pages) == 17, f'expected homepage plus 16 guides, found {len(pages)}'
+    assert len(pages) == 18, f'expected homepage, 404, and 16 guides, found {len(pages)}'
     errors = []
     for page in pages:
         source = page.read_text(encoding='utf-8')

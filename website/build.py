@@ -113,9 +113,10 @@ def markdown(source):
 def main():
     DIST.mkdir(exist_ok=True)
     (DIST / 'assets').mkdir(exist_ok=True)
-    for name in ('style.css', 'site.js', 'demo.js', 'zurafa-local-vm.png', 'zurafa-icon.png', 'zurafa-mascot.png', 'zurafa-star.png', 'zurafa-workspace.png', 'zurafa-interactive-preview.png'):
+    for name in ('style.css', 'home.css', 'site.js', 'home.js', 'zurafa-local-vm.png', 'zurafa-icon.png', 'zurafa-mascot.png', 'zurafa-star.png', 'zurafa-workspace.png', 'zurafa-interactive-preview.png'):
         shutil.copy2(ROOT / 'assets' / name, DIST / 'assets' / name)
     (DIST / 'index.html').write_text((ROOT / 'home.html').read_text(), encoding='utf-8')
+    (DIST / '404.html').write_text((ROOT / '404.html').read_text(), encoding='utf-8')
     template = (ROOT / 'docs-template.html').read_text()
     nav = []
     for group, items in GROUPS:
