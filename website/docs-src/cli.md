@@ -30,6 +30,38 @@ zurafa preview README.md          # open a file in the preview beside the curren
 
 Run `zurafa help` for the full command list.
 
+## Driving panes from agents
+
+Agents running in a Zurafa pane can use the CLI the way you would: start a test run beside themselves, type into another agent, wait for it and read its screen.
+
+```sh
+zurafa send review "npm run migrate" --enter   # type text, then press Enter
+zurafa send review -e 'y\n'                     # interpret \n \r \t \e \xHH escapes
+zurafa key review ctrl+c                       # press keys: enter, tab, escape, up, ctrl+c…
+zurafa read review -n 40                       # the last 40 lines, scrollback included
+zurafa wait review                             # until it stops working
+zurafa wait review --for blocked,error -t 10m  # until it reaches one of these statuses
+zurafa prompt review "summarize the diff"      # send + Enter, wait, print the screen
+zurafa events --for blocked                    # print status changes as they happen
+```
+
+A target is a pane, or a session for its focused pane. Without `-s`, agent commands search every session. `read`, `wait` and `events` default to the current pane inside Zurafa.
+
+`wait` prints the pane's status when it returns: `idle`, `working`, `blocked`, `done`, `error` or `exited`. A pane whose program reports nothing is `idle`, so `wait` and `prompt` rely on [status reports](/docs/status/). `prompt` treats a program that doesn't start working within 10 seconds as answered. `--timeout` (`30s`, `10m`, `1h`) makes `wait`, `prompt` and `events` exit with status 5.
+
+`zurafa events --json` prints one daemon event per line. `--once` exits after the first matching event.
+
+Programs and agents report their own status with `zurafa report`, which writes an OSC 7501 sequence to the terminal:
+
+```sh
+zurafa report working "Migrating the database" --progress 40
+zurafa report blocked "Approve the production deploy?" --kind permission
+zurafa report done "Deployed to staging"
+zurafa report clear
+```
+
+`--id` and `--title` report one of several tasks in a pane, and `--app` names the program.
+
 ## Taxonomy
 
 Zurafa's public UI uses these names:
@@ -88,3 +120,4 @@ Exit statuses follow the first CLI implementation:
 | 2 | The command line was invalid |
 | 3 | A target was not found or was ambiguous |
 | 4 | The daemon could not be reached |
+| 5 | `--timeout` passed |

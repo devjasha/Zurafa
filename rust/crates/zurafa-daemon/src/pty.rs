@@ -487,6 +487,12 @@ impl Terminals {
         }
     }
 
+    /// The PTY's current cell size, so a client can lay out a replay as the screen shows it.
+    pub fn size(&self, id: &str) -> Option<(u16, u16)> {
+        let size = self.get(id)?.master.lock().unwrap().get_size().ok()?;
+        Some((size.cols, size.rows))
+    }
+
     pub fn resize(&self, id: &str, cols: u16, rows: u16) {
         if cols == 0 || rows == 0 {
             return;

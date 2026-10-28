@@ -40,8 +40,11 @@ fn reply(msg: Msg, t: &Arc<Terminals>) -> Option<Value> {
             Err(e) => error(id, e),
         },
         Msg::Attach { id, terminal, since } => match t.attach(&terminal, since) {
-            Ok((end, data, gap)) => json!({"id":id,"type":"attached","terminal":terminal,
-                "end":end,"data":B64.encode(data),"gap":gap}),
+            Ok((end, data, gap)) => {
+                let (cols, rows) = t.size(&terminal).unwrap_or((80, 24));
+                json!({"id":id,"type":"attached","terminal":terminal,
+                "end":end,"data":B64.encode(data),"gap":gap,"cols":cols,"rows":rows})
+            }
             Err(e) => error(id, e),
         },
         Msg::Kill { id, terminal } => match t.kill(&terminal) {

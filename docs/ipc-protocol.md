@@ -129,6 +129,7 @@ Each `output` event carries `end`, the terminal's total output byte count so far
 The daemon keeps each terminal's last 256 KiB of output. `attach` returns the
 bytes after `since` (an earlier `end`, default 0) and the current `end`; if
 `since` is no longer buffered, `gap` is true and `data` is the whole buffer.
+The reply also carries the PTY's current `cols` and `rows`.
 Chunks are published under the same lock `attach` copies under, so a client can
 skip any later `output` whose `end` is not past the attach `end`. Once a
 connection makes a raw spawn or an attach, it only receives output for those

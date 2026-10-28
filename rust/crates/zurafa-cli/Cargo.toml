@@ -9,3 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 serde_json = "1"
+base64 = "0.22"
+libc = "0.2"
+# Lays out a pane's replayed output as its screen shows it, for `zurafa read`.
+vt100 = "0.16"
