@@ -2,40 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zurafa: a macOS terminal for running coding agents</title>
-  <meta name="description" content="Run Claude Code, Codex, and your shells side by side on macOS. Every pane shows whether its agent is working, done, or blocked. Free, notarized, with its source on GitHub.">
+  <title>Zurafa — Terminal work, in context</title>
+  <meta name="description" content="A calm macOS terminal workspace for local sessions, split panes, file previews, remote SSH, and coding agents.">
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbf8ff"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e0a2b"><link rel="canonical" href="https://zurafa-website.vercel.app/">
-  <meta property="og:title" content="Zurafa: a macOS terminal for running coding agents"><meta property="og:description" content="Run every coding agent and see which one needs you."><meta property="og:type" content="website"><meta property="og:image" content="https://zurafa-website.vercel.app/assets/zurafa-workspace.png"><meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" href="/assets/zurafa-icon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
-  <link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/home.css">
-  <script>document.documentElement.classList.add('js')</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
-    {"@type":"Question","name":"Which coding agents does Zurafa work with?","acceptedAnswer":{"@type":"Answer","text":"Any agent that runs in a terminal. Claude Code, Codex, and Gemini get their own pane icons, and any program can report its status with zurafa report."}},
-    {"@type":"Question","name":"Is Zurafa free?","acceptedAnswer":{"@type":"Answer","text":"Yes. Zurafa is free, and its source is public on GitHub."}},
-    {"@type":"Question","name":"Does it run on Intel Macs?","acceptedAnswer":{"@type":"Answer","text":"Not yet. The current build needs an Apple Silicon Mac running macOS 14 or newer."}},
-    {"@type":"Question","name":"How does Zurafa know an agent is blocked?","acceptedAnswer":{"@type":"Answer","text":"The agent tells it. A program reports working, done, blocked, or error over OSC 7501, usually with one zurafa report line in a hook. Zurafa never guesses by reading terminal text."}},
-    {"@type":"Question","name":"Can I keep my Ghostty theme?","acceptedAnswer":{"@type":"Answer","text":"Yes. Zurafa imports Ghostty themes, colors, and fonts."}},
-    {"@type":"Question","name":"What happens to my panes when the app restarts?","acceptedAnswer":{"@type":"Answer","text":"The Rust daemon keeps your processes running and the app restores pane content after a restart or update. Sessions do not yet survive a restart of the daemon itself."}},
-    {"@type":"Question","name":"How do updates work?","acceptedAnswer":{"@type":"Answer","text":"Zurafa checks for new releases through Sparkle and installs them from inside the app."}},
-    {"@type":"Question","name":"Can I work on remote machines?","acceptedAnswer":{"@type":"Answer","text":"Yes. Open tabs on saved SSH hosts and local VMs, or connect directly to machines on your tailnet over Tailscale."}}
-  ]}</script>
+  <meta property="og:title" content="Zurafa — Terminal work, in context"><meta property="og:description" content="A calm macOS terminal workspace for the shells, sessions, and machines you move between."><meta property="og:type" content="website"><meta property="og:image" content="https://zurafa-website.vercel.app/assets/zurafa-icon.png">
+  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
 </head>
-<body class="home">
+<body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header"><div class="shell nav-wrap">
-    <a class="brand" href="/" aria-label="Zurafa home" aria-current="page"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
-    <nav aria-label="Main navigation"><a href="#features">Try it</a><a href="/docs/">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub ↗</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.20-macos-arm64.dmg" download>Download</a>
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="#features">Features</a><a href="/docs/">Docs</a><a href="https://github.com/devjasha/Zurafa/releases" target="_blank" rel="noopener">Releases ↗</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download for Mac</a>
   </div></header>
   <main id="main">
     <section class="hero shell"><div class="hero-copy">
-      <p class="eyebrow"><span class="live-dot"></span> Free macOS beta for Apple Silicon</p>
-      <h1>Run every coding agent <span class="gradient-text">and see which one needs you</span></h1>
-      <p class="lead">Zurafa is a macOS terminal workspace for Claude Code, Codex, and your shells. Each pane shows whether its agent is working, done, or blocked, so you stop hunting through tabs.</p>
-      <div class="hero-actions"><a class="button primary" href="/releases/Zurafa-0.1.20-macos-arm64.dmg" download>Download for macOS</a></div>
-      <p class="proof"><a href="https://github.com/devjasha/Zurafa/stargazers" target="_blank" rel="noopener"><span aria-hidden="true">★</span> <span id="star-count">Star</span> on GitHub</a><span>Notarized by Apple</span><span>Source on GitHub</span></p>
-      <p class="hero-meta-line">Version 0.1.20 · macOS 14 or newer · Apple Silicon</p>
+      <p class="eyebrow"><span class="live-dot"></span> FIRST MACOS BETA · APPLE SILICON</p>
+      <h1>Command your terminals <span class="gradient-text">without losing the thread.</span></h1>
+      <p class="lead">Zurafa is a composed macOS terminal workspace for local shells, split panes, file previews, remote SSH, and coding agents — designed to feel quiet even when the work gets loud.</p>
+      <div class="hero-actions"><a class="button primary" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download for macOS</a><a class="button secondary" href="/docs/install/">Install guide <span aria-hidden="true">→</span></a></div>
+      <div class="hero-meta" aria-label="Release details"><span>0.1.21</span><span>macOS 14+</span><span>Apple Silicon</span><span>Notarized</span></div>
     </div>
       <div class="hero-visual">
         <img class="hero-shot" src="/assets/zurafa-workspace.png" width="2000" height="1222" alt="The Zurafa window: a tab bar with Claude Code and shell tabs above three split terminal panes running fish.">
@@ -44,27 +30,7 @@
       </div>
     </section>
 
-    <section class="band shell problem reveal" aria-labelledby="problem-title">
-      <h2 id="problem-title">Four agents, four windows, and no idea which one is waiting on you.</h2>
-      <p>Agents stall on a permission prompt while you watch a different tab. Zurafa puts every agent, build, and shell in one window and marks the pane that needs an answer, so a blocked agent never sits idle for twenty minutes.</p>
-    </section>
-
-    <section class="band shell reveal" aria-labelledby="benefits-title">
-      <p class="kicker">Why agent developers switch</p>
-      <h2 id="benefits-title">Less tab hunting, more shipped work</h2>
-      <ul class="benefits">
-        <li><span class="badge"><span class="dot amber"></span> blocked</span><strong>Know who is waiting</strong><p>Agents report working, done, blocked, or error, and the sidebar counts them for each workspace.</p></li>
-        <li><span class="badge"><span class="dot green"></span> 3 panes</span><strong>Keep context in one window</strong><p>Sessions, tabs, and even splits keep an agent, its build, and a shell in view together.</p></li>
-        <li><span class="badge"><span class="dot pink"></span> restored</span><strong>Survive app restarts</strong><p>A Rust daemon owns every process, so pane content comes back after the app restarts or updates.</p></li>
-        <li><span class="badge"><span class="dot"></span> tailnet</span><strong>Work on any machine</strong><p>Open tabs on saved SSH hosts and local VMs, or connect straight to Tailscale machines without SSH.</p></li>
-      </ul>
-    </section>
-
-    <section class="tagline shell" aria-label="Zurafa in one sentence">
-      <p id="tagline">Stop checking every tab.<br>Zurafa tells you which agent<br>needs you next.</p>
-    </section>
-
-    <section class="section shell" id="features"><div class="section-intro"><p class="kicker">Try it here</p><h2>Take Zurafa for a spin,<br>right in your browser.</h2><p>This is a small simulated Zurafa window. Type a command, or pick one below to see a feature.</p></div>
+    <section class="section shell" id="features"><div class="section-intro"><p class="kicker">TRY IT HERE</p><h2>Take Zurafa for a spin,<br>right in your browser.</h2><p>This is a small simulated Zurafa window. Type a command, or pick one below to see a feature.</p></div>
       <div class="demo">
         <div class="demo-window" id="demo-window">
           <div class="demo-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><div class="demo-tabs" id="demo-tabs"></div></div>
@@ -76,10 +42,10 @@
           </div>
         </div>
         <div class="demo-suggest" aria-label="Try a command">
-          <button type="button" data-cmd="claude"><b>Coding agents</b><code>claude</code></button>
           <button type="button" data-cmd="ssh kali"><b>Local VMs</b><code>ssh kali</code></button>
           <button type="button" data-cmd="zurafa preview README.md"><b>File previews</b><code>zurafa preview README.md</code></button>
           <button type="button" data-cmd="zurafa preview euler.html"><b>Interactive pages</b><code>zurafa preview euler.html</code></button>
+          <button type="button" data-cmd="claude"><b>Coding agents</b><code>claude</code></button>
           <button type="button" data-cmd="theme dracula"><b>Ghostty themes</b><code>theme dracula</code></button>
           <button type="button" data-cmd="cat ~/.config/config.zurafa"><b>Plain config</b><code>cat ~/.config/config.zurafa</code></button>
           <button type="button" data-cmd="zurafa ls"><b>Scriptable</b><code>zurafa ls</code></button>
@@ -87,41 +53,19 @@
         </div>
       </div>
     </section>
-
-    <section class="section rhythm reveal" aria-labelledby="how-title"><div class="shell rhythm-grid"><div><p class="kicker">How it works</p><h2 id="how-title">Three steps<br>to a calm workspace</h2></div><div class="steps">
-      <div><b>01</b><span><strong>Open a session for each line of work.</strong><small>Give the refactor, the bug, and the review their own place.</small></span></div>
-      <div><b>02</b><span><strong>Have your agent report its status.</strong><small>One <code>zurafa report</code> line in a hook lights up the pane icon.</small></span></div>
-      <div><b>03</b><span><strong>Glance at the sidebar and answer.</strong><small>Jump straight to the pane that is blocked and get it moving again.</small></span></div>
-    </div></div></section>
-
-    <section class="section shell reveal" aria-labelledby="proof-title">
-      <div class="section-intro"><p class="kicker">Built in the open</p><h2 id="proof-title">See exactly what you install</h2><p>Every line of Zurafa is on GitHub. A Rust daemon owns sessions, layout, and processes, and the event stream it publishes is documented, so your own scripts can drive agents too.</p></div>
-      <div class="shots">
-        <figure><img src="/assets/zurafa-local-vm.png" width="2000" height="1230" alt="Zurafa with a tab connected to a local Kali Linux VM over SSH." loading="lazy"><figcaption>Local VMs and SSH hosts sit next to your local tabs.</figcaption></figure>
-        <figure><img src="/assets/zurafa-interactive-preview.png" width="2000" height="1222" alt="Zurafa showing an interactive HTML preview beside a terminal pane." loading="lazy"><figcaption>Agents can open files and pages in a preview beside the pane.</figcaption></figure>
-      </div>
-      <div class="open-design proof-code"><div class="open-copy"><p>Wait for an agent from a script, read its screen, or send it a prompt. The <code>zurafa</code> CLI talks to the same daemon the app uses.</p><a class="text-link" href="/docs/cli/">Read the CLI guide <span aria-hidden="true">→</span></a></div><div class="code-card" aria-label="Example CLI session"><div class="code-top"><span class="dot green"></span> zurafa cli <span>protocol 2</span></div><pre><code>$ zurafa wait review --for blocked,done -t 10m
-blocked  review  Approve the database migration?
-$ zurafa read review -n 3</code></pre></div></div>
-    </section>
-
-    <section class="section shell faq reveal" aria-labelledby="faq-title">
-      <p class="kicker">Questions</p><h2 id="faq-title">Before you download</h2>
-      <details><summary>Which coding agents does Zurafa work with?</summary><p>Any agent that runs in a terminal. Claude Code, Codex, and Gemini get their own pane icons, and any program can report its status with <code>zurafa report</code>.</p></details>
-      <details><summary>Is Zurafa free?</summary><p>Yes. Zurafa is free, and its source is public on <a href="https://github.com/devjasha/Zurafa">GitHub</a>.</p></details>
-      <details><summary>Does it run on Intel Macs?</summary><p>Not yet. The current build needs an Apple Silicon Mac running macOS 14 or newer.</p></details>
-      <details><summary>How does Zurafa know an agent is blocked?</summary><p>The agent tells it. A program reports working, done, blocked, or error over OSC 7501, usually with one <code>zurafa report</code> line in a hook. Zurafa never guesses by reading terminal text. <a href="/docs/status/">Read the status guide</a>.</p></details>
-      <details><summary>Can I keep my Ghostty theme?</summary><p>Yes. Zurafa imports Ghostty themes, colors, and fonts. <a href="/docs/appearance/">See appearance settings</a>.</p></details>
-      <details><summary>What happens to my panes when the app restarts?</summary><p>The Rust daemon keeps your processes running and the app restores pane content after a restart or update. Sessions do not yet survive a restart of the daemon itself.</p></details>
-      <details><summary>How do updates work?</summary><p>Zurafa checks for new releases through Sparkle and installs them from inside the app.</p></details>
-      <details><summary>Can I work on remote machines?</summary><p>Yes. Open tabs on saved SSH hosts and local VMs, or connect directly to machines on your tailnet. <a href="/docs/remote-access/">See remote access</a>.</p></details>
-    </section>
-
-    <section class="download-section reveal" aria-labelledby="cta-title"><div class="shell download-inner"><div><p class="kicker">Free to download</p><h2 id="cta-title">Your agents are waiting.<br>Now you will know it.</h2><p>No account, no trial, no credit card. Zurafa is notarized by Apple and updates itself through Sparkle.</p><div class="hero-actions"><a class="button primary" href="/releases/Zurafa-0.1.20-macos-arm64.dmg" download>Download for macOS</a></div><small>Open the DMG and drag Zurafa into Applications. <a class="text-link" href="/docs/install/">Install guide</a></small></div><div class="download-art" aria-hidden="true"><img class="download-mascot" src="/assets/zurafa-mascot.png" width="900" height="885" alt="" loading="lazy"><img class="sparkle s1" src="/assets/zurafa-star.png" width="240" height="240" alt="" loading="lazy"><img class="sparkle s2" src="/assets/zurafa-star.png" width="240" height="240" alt="" loading="lazy"></div></div></section>
+    <section class="section rhythm"><div class="shell rhythm-grid"><div><p class="kicker">A PRACTICAL FLOW</p><h2>From local prompt<br>to remote work.</h2></div><div class="steps"><div><b>01</b><span><strong>Open a session.</strong><small>Give each line of work its own place.</small></span></div><div><b>02</b><span><strong>Split for context.</strong><small>Keep a build, editor, and shell in view.</small></span></div><div><b>03</b><span><strong>Switch machines.</strong><small>Use a saved SSH host or a local workspace.</small></span></div></div></div></section>
+    <section class="section shell open-design"><div class="open-copy"><p class="kicker">OPEN BY DESIGN</p><h2>Understand the machinery.</h2><p>A Rust daemon owns sessions, layout, PTYs, events, and snapshots; the macOS app follows that state and recovers after reconnecting. The event schema and IPC protocol are documented.</p><a class="text-link" href="/docs/architecture/">Read the architecture <span aria-hidden="true">→</span></a></div><div class="code-card" aria-label="Example structured event"><div class="code-top"><span class="dot green"></span> event stream <span>protocol 2</span></div><pre><code>{
+  "category": "terminal",
+  "name": "program_status_changed",
+  "payload": {
+    "id": "build",
+    "reason": "report"
+  }
+}</code></pre></div></section>
+    <section class="download-section"><div class="shell download-inner"><div><p class="kicker">READY TO TRY IT?</p><h2>A quieter place<br>for busy terminals.</h2><p>Zurafa 0.1.21 is available as a notarized DMG for Apple Silicon Macs running macOS 14 or newer.</p><div class="hero-actions"><a class="button primary" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download for macOS</a><a class="button secondary" href="/docs/install/">Installation guide</a></div><small>Open the DMG, drag Zurafa into Applications, and future updates arrive in the app via Sparkle.</small></div><div class="download-art" aria-hidden="true"><img class="download-mascot" src="/assets/zurafa-mascot.png" width="900" height="885" alt="" loading="lazy"><img class="sparkle s1" src="/assets/zurafa-star.png" width="240" height="240" alt="" loading="lazy"><img class="sparkle s2" src="/assets/zurafa-star.png" width="240" height="240" alt="" loading="lazy"></div></div></section>
   </main>
-  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
   <script src="/assets/demo.js" defer></script>
-  <script src="/assets/home.js" defer></script>
 </body>
 </html>
