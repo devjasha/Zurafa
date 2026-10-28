@@ -89,6 +89,10 @@ final class PaneTerminal: TerminalView {
     var onOpenLink: (String, String) -> Bool = { _, _ in false }
     private var views: [String: PaneTerminal] = [:]
     private var pendingOutput: [String: Data] = [:]
+    /// Output end offset already shown from a replay; live chunks up to it are duplicates.
+    private var replayed: [String: UInt64] = [:]
+    /// Live output held back while a pane's replay is in flight, so it lands after it.
+    private var attaching: [String: [(Data, UInt64?)]] = [:]
     private var knownBlocks: Set<String> = []
     private var runningBlocks: Set<String> = []
     private var isDark = false
@@ -111,7 +115,7 @@ final class PaneTerminal: TerminalView {
 
     override init() {
         super.init()
-        daemon.onOutput = { [weak self] id, data in self?.receive(id, data) }
+        daemon.onOutput = { [weak self] id, data, end in self?.receive(id, data, end) }
     }
 
     func setDark(_ dark: Bool) {
@@ -178,7 +182,9 @@ final class PaneTerminal: TerminalView {
         view.needsDisplay = true
     }
 
-    private func receive(_ id: String, _ data: Data) {
+    private func receive(_ id: String, _ data: Data, _ end: UInt64?) {
+        if let end, let shown = replayed[id], end <= shown { return }
+        if attaching[id] != nil { attaching[id]?.append((data, end)); return }
         if let view = views[id] { view.feed(byteArray: ArraySlice(data)); return }
         var buffered = pendingOutput[id] ?? Data()
         buffered.append(data)
@@ -204,12 +210,34 @@ final class PaneTerminal: TerminalView {
         view.onSized = { [weak self, weak view] in
             guard let self, let view else { return }
             let size = view.terminalDimensions
+            // A size change makes full-screen programs redraw; the same size alone would not signal them.
+            self.daemon.send(Msg(type: "resize", cols: size.cols, rows: max(size.rows - 1, 1), terminal: id))
             self.daemon.send(Msg(type: "resize", cols: size.cols, rows: size.rows, terminal: id))
         }
         views[id] = view
-        if let buffered = pendingOutput.removeValue(forKey: id) { view.feed(byteArray: ArraySlice(buffered)) }
+        if runningBlocks.contains(id) { replay(id, into: view) }
+        else if let buffered = pendingOutput.removeValue(forKey: id) { view.feed(byteArray: ArraySlice(buffered)) }
         if knownBlocks.contains(id) && !runningBlocks.contains(id) { view.feed(text: Self.dim("[process exited]")) }
         return view
+    }
+
+    /// A pane reopened after a restart or update starts empty, so it is filled from the daemon's output buffer.
+    private func replay(_ id: String, into view: PaneTerminal) {
+        attaching[id] = []
+        let buffered = pendingOutput.removeValue(forKey: id)
+        Task { [weak self] in
+            let reply = try? await self?.daemon.request(Msg(type: "attach", terminal: id))
+            guard let self else { return }
+            let queued = attaching.removeValue(forKey: id) ?? []
+            guard views[id] === view else { return }
+            if let reply, let data = reply.data, let end = reply.end {
+                view.feed(byteArray: ArraySlice(data))
+                replayed[id] = end
+            } else if let buffered {
+                view.feed(byteArray: ArraySlice(buffered))
+            }
+            for (data, end) in queued where end == nil || end! > replayed[id] ?? 0 { view.feed(byteArray: ArraySlice(data)) }
+        }
     }
 
     @discardableResult func attach(_ id: String, program: Program, to box: NSView) -> PaneTerminal {
@@ -233,7 +261,7 @@ final class PaneTerminal: TerminalView {
 
     func sync(blocks: Set<String>, running: Set<String>) {
         for id in Array(views.keys) where !blocks.contains(id) { views.removeValue(forKey: id)?.removeFromSuperview() }
-        for id in knownBlocks.subtracting(blocks) { pendingOutput[id] = nil }
+        for id in knownBlocks.subtracting(blocks) { pendingOutput[id] = nil; replayed[id] = nil }
         knownBlocks = blocks
         runningBlocks = running
         for (id, view) in views where !running.contains(id) { view.terminal = nil }
@@ -243,6 +271,8 @@ final class PaneTerminal: TerminalView {
         for view in views.values { view.removeFromSuperview() }
         views.removeAll()
         pendingOutput.removeAll()
+        replayed.removeAll()
+        attaching.removeAll()
         knownBlocks.removeAll()
         runningBlocks.removeAll()
     }

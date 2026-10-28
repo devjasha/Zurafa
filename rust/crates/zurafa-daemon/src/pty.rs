@@ -201,7 +201,6 @@ impl Terminals {
     }
 
     fn emit(&self, event: Value) {
-        // shortcut: events with no connected client are dropped (no scrollback), upgrade to a per-terminal ring buffer replayed on attach once the app must restore sessions
         let _ = self.events.send(event.to_string());
     }
 
