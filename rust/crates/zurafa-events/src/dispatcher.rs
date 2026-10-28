@@ -47,7 +47,9 @@ impl Layout {
             Self::Split { first, second, .. } => first.contains(id) || second.contains(id),
         }
     }
-    fn split(&mut self, id: &str, new: &str, axis: Axis) -> bool {
+    /// Splits `id`, then evens out the run of same-axis splits around it so every pane in that row or column gets an equal share.
+    /// Returns `Some(true)` while the caller is still inside that run, `None` when `id` is absent.
+    fn split(&mut self, id: &str, new: &str, axis: Axis) -> Option<bool> {
         match self {
             Self::Block { block_id } if block_id == id => {
                 *self = Self::Split {
@@ -58,12 +60,37 @@ impl Layout {
                         block_id: new.into(),
                     }),
                 };
-                true
+                Some(true)
             }
-            Self::Split { first, second, .. } => {
-                first.split(id, new, axis.clone()) || second.split(id, new, axis)
+            Self::Split {
+                axis: own,
+                ratio,
+                first,
+                second,
+            } => {
+                let run = first
+                    .split(id, new, axis.clone())
+                    .or_else(|| second.split(id, new, axis.clone()))?;
+                if !run || *own != axis {
+                    return Some(false);
+                }
+                let (a, b) = (first.span(own), second.span(own));
+                *ratio = a / (a + b);
+                Some(true)
             }
-            _ => false,
+            _ => None,
+        }
+    }
+    /// Panes along `axis`; a split across the other axis counts as one.
+    fn span(&self, axis: &Axis) -> f64 {
+        match self {
+            Self::Split {
+                axis: own,
+                first,
+                second,
+                ..
+            } if own == axis => first.span(axis) + second.span(axis),
+            _ => 1.0,
         }
     }
     fn remove(self, id: &str) -> Option<Self> {
@@ -727,6 +754,29 @@ mod tests {
     fn add(d: &Dispatcher, id: &str, target: Option<&str>) {
         d.add_block("default", id, target, Axis::Horizontal, "Shell".into())
             .unwrap();
+    }
+    #[test]
+    fn splits_share_space_evenly_along_their_axis() {
+        let d = Dispatcher::new(32);
+        add(&d, "a", None);
+        add(&d, "b", Some("a"));
+        d.add_block("default", "c", Some("b"), Axis::Vertical, "Shell".into())
+            .unwrap();
+        d.add_block("default", "d", Some("c"), Axis::Vertical, "Shell".into())
+            .unwrap();
+        let layout = d.snapshot().sessions["default"].windows[0].layout.clone();
+        let Layout::Split { ratio, second, .. } = layout else {
+            panic!()
+        };
+        assert_eq!(ratio, 0.5, "the horizontal split is untouched");
+        let Layout::Split { ratio, second, .. } = *second else {
+            panic!()
+        };
+        assert!((ratio - 1.0 / 3.0).abs() < 1e-9);
+        let Layout::Split { ratio, .. } = *second else {
+            panic!()
+        };
+        assert_eq!(ratio, 0.5);
     }
     #[test]
     fn atomic_snapshot_boundary_and_restart() {
