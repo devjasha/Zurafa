@@ -174,12 +174,8 @@ enum EditorKind: String, Identifiable {
     var name: String { currentSession?.label ?? "Workspace" }
     var hostLabel: String { currentSession?.remote?.hostname ?? "This Mac" }
     var tab: Tab { tabs.indices.contains(selected) ? tabs[selected] : Tab(id: "", label: "", layout: .pane(""), focus: "", zoomed: false) }
-    /// Live metas cover the current workspace; other workspaces' panes come straight from the snapshot.
-    func meta(_ id: String) -> PaneMeta {
-        if let m = metas[id] { return m }
-        guard let session = snapshot?.sessions.values.first(where: { $0.blocks[id] != nil }) else { return PaneMeta() }
-        return paneMeta(session.blocks[id]!, in: session)
-    }
+    /// Live metas cover every workspace, so the sidebar and session switches show current icons and statuses.
+    func meta(_ id: String) -> PaneMeta { metas[id] ?? PaneMeta() }
     func tabs(in session: SessionSnapshot) -> [Tab] {
         session.windows.map { w in Tab(id: w.windowID, label: w.label, layout: w.layout, focus: w.selectedBlock, zoomed: w.zoomedBlock != nil) }
     }
@@ -218,6 +214,11 @@ enum EditorKind: String, Identifiable {
         snapshot = value
         latestEventSequence = max(latestEventSequence, value.sequence)
         commandError = nil
+        var next: [String: PaneMeta] = [:]
+        for session in value.sessions.values {
+            for (id, block) in session.blocks { next[id] = paneMeta(block, in: session, base: metas[id] ?? PaneMeta()) }
+        }
+        metas = next
         if value.sessions[sessionID] == nil {
             sessionID = value.sessions["default"] != nil ? "default" : value.sessions.keys.sorted().first ?? "default"
         }
@@ -228,11 +229,6 @@ enum EditorKind: String, Identifiable {
         let session = value.sessions[sessionID]
         tabs = session.map(tabs(in:)) ?? []
         selected = max(0, tabs.firstIndex(where: { $0.id == session?.activeWindow }) ?? 0)
-        var next: [String: PaneMeta] = [:]
-        for (id, block) in session?.blocks ?? [:] {
-            next[id] = paneMeta(block, in: session!, base: metas[id] ?? PaneMeta())
-        }
-        metas = next
         let allBlocks = value.sessions.values.flatMap { $0.blocks.values }
         TerminalStore.shared.sync(blocks: Set(allBlocks.map(\.blockID)), running: Set(allBlocks.filter(\.running).map(\.blockID)))
         if !tabs.isEmpty { creatingInitialTab = false }
@@ -267,30 +263,31 @@ enum EditorKind: String, Identifiable {
             refresh()
         case "session_created", "session_destroyed", "window_created", "window_closed", "active_window_changed": refresh()
         case "terminal.title_changed":
-            if event.sessionID == sessionID, let id = event.blockID, let title = event.payload.object?["title"]?.string { metas[id]?.title = title }
+            if let id = event.blockID, let title = event.payload.object?["title"]?.string { metas[id]?.title = title }
         case "terminal.pwd_changed":
-            if event.sessionID == sessionID, let id = event.blockID, let pwd = event.payload.object?["pwd"]?.string {
+            if let id = event.blockID, let pwd = event.payload.object?["pwd"]?.string {
                 metas[id]?.cwd = displayPath(pwd)
                 metas[id]?.pwd = URL(string: pwd)?.isFileURL == true ? URL(string: pwd)!.path : pwd
             }
         case "terminal.process_changed":
-            if event.sessionID == sessionID, let id = event.blockID {
+            if let id = event.blockID {
+                let remote = event.sessionID.flatMap { snapshot?.sessions[$0]?.remote }
                 let name = event.payload.object?["foreground"]?.object?["name"]?.string
                 let executable = event.payload.object?["foreground"]?.object?["executable"]?.string
                 let argv = event.payload.object?["foreground"]?.object?["argv"]?.array?.compactMap(\.string)
-                metas[id]?.program = Program.detect(name, executable: executable, argv: argv, remote: currentSession?.remote != nil, remoteShell: currentSession?.remote?.shellProgram ?? .ssh)
+                metas[id]?.program = Program.detect(name, executable: executable, argv: argv, remote: remote != nil, remoteShell: remote?.shellProgram ?? .ssh)
             }
         case "terminal.child_exited":
-            if let id = event.blockID { if event.sessionID == sessionID { metas[id]?.ended = "exited" }; TerminalStore.shared.exited(id, code: event.payload.object?["exit_code"]?.int) }
+            if let id = event.blockID { metas[id]?.ended = "exited"; TerminalStore.shared.exited(id, code: event.payload.object?["exit_code"]?.int) }
         case "terminal.program_status_changed":
-            if event.sessionID == sessionID, let id = event.blockID, let key = event.payload.object?["id"]?.string,
+            if let id = event.blockID, let key = event.payload.object?["id"]?.string,
                let value = event.payload.object?["record"],
                let data = try? JSONEncoder().encode(value),
                let record = try? JSONDecoder().decode(ProgramStatus.self, from: data) {
                 metas[id]?.statuses[key] = record
             }
         case "terminal.program_status_removed":
-            if event.sessionID == sessionID, let id = event.blockID, case .array(let keys)? = event.payload.object?["ids"] {
+            if let id = event.blockID, case .array(let keys)? = event.payload.object?["ids"] {
                 for key in keys.compactMap(\.string) { metas[id]?.statuses[key] = nil }
             }
         case "terminal.clipboard_written":
