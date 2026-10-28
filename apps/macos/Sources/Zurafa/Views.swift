@@ -298,8 +298,17 @@ struct RootView: View {
             if ws.tabStripLayout == .vertical {
                 // The sidebar holds the top-bar controls, so panes reach the top edge.
                 HStack(spacing: 0) {
-                    VerticalTabSidebar()
-                    terminalContent.padding(edge)
+                    if ws.style.sidebarOnRight {
+                        // The traffic lights stay top-left, so the panes start below them.
+                        VStack(spacing: 0) {
+                            WindowDragView().frame(height: ws.windowControls.height)
+                            terminalContent.padding([.horizontal, .bottom], edge)
+                        }
+                        VerticalTabSidebar()
+                    } else {
+                        VerticalTabSidebar()
+                        terminalContent.padding(edge)
+                    }
                 }
             } else {
                 VStack(spacing: 0) {
@@ -363,6 +372,7 @@ struct TopBar: View {
             .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
             Spacer(minLength: 8)
             BarStatus()
+            AgentSummary()
             UpdateButton()
             PaletteButton()
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
@@ -439,7 +449,7 @@ struct VerticalTabSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
-                Color.clear.frame(width: ws.windowControls.width) // traffic lights
+                Color.clear.frame(width: ws.style.sidebarOnRight ? 0 : ws.windowControls.width) // traffic lights
                 Spacer(minLength: 0)
                 UpdateButton()
                 PaletteButton()
@@ -471,6 +481,7 @@ struct VerticalTabSidebar: View {
             }
             HStack(spacing: 6) {
                 BarStatus()
+                AgentSummary()
                 Spacer(minLength: 0)
                 BarButton(symbol: "rectangle.stack.badge.plus", help: "Workspaces") { ws.paletteOpen = false; ws.sessionPickerOpen.toggle() }
                     .popover(isPresented: $ws.sessionPickerOpen, arrowEdge: .top) { SessionPicker().environmentObject(ws) }
@@ -580,6 +591,59 @@ extension Workspace {
     func taskState(for tab: Tab) -> TabTaskState {
         let states = tab.layout.panes.flatMap { meta($0).statuses.values.map(\.state) }
         return TabTaskState(working: states.contains("working"), done: states.contains("done"))
+    }
+
+    /// Every agent status record in the current workspace, across all its tabs and panes.
+    var sessionAgentStates: [String] {
+        guard let session = currentSession else { return [] }
+        return tabs(in: session).flatMap(\.layout.panes).flatMap { meta($0).statuses.values.map(\.state) }
+    }
+}
+
+/// Counts of agents needing attention, working and done in the current workspace.
+struct AgentSummary: View {
+    @EnvironmentObject var ws: Workspace
+
+    var body: some View {
+        let states = ws.sessionAgentStates
+        let attention = states.filter { $0 == "blocked" || $0 == "error" }.count
+        let working = states.filter { $0 == "working" }.count
+        let done = states.filter { $0 == "done" }.count
+        HStack(spacing: 10) {
+            if attention > 0 {
+                count(attention) {
+                    Image(systemName: "smallcircle.filled.circle").foregroundStyle(StatusDot.colors["working"]!)
+                }.help("\(attention) need attention")
+            }
+            if working > 0 { count(working) { Spinner() }.help("\(working) working") }
+            if done > 0 {
+                count(done) { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.ink) }.help("\(done) done")
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .padding(.horizontal, 6)
+    }
+
+    private func count(_ n: Int, @ViewBuilder icon: () -> some View) -> some View {
+        HStack(spacing: 4) {
+            icon().frame(width: 13, height: 13)
+            Text("\(n)").foregroundStyle(Theme.inkSoft).monospacedDigit()
+        }
+    }
+}
+
+struct Spinner: View {
+    @State private var spin = false
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Theme.inkSoft.opacity(0.2), lineWidth: 1.6)
+            Circle().trim(from: 0, to: 0.35).stroke(Theme.ink, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                .rotationEffect(.degrees(spin ? 360 : 0))
+                .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spin)
+        }
+        .padding(1)
+        .onAppear { spin = true }
     }
 }
 
