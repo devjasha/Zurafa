@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Zurafa: a macOS terminal for running coding agents</title>
   <meta name="description" content="Run Claude Code, Codex, and your shells side by side on macOS. Every pane shows whether its agent is working, done, or blocked. Free, notarized, with its source on GitHub.">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3ece1"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7ead7"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/">
   <meta property="og:title" content="Zurafa: a macOS terminal for running coding agents"><meta property="og:description" content="Run every coding agent and see which one needs you."><meta property="og:type" content="website"><meta property="og:image" content="https://zurafa-website.vercel.app/assets/zurafa-workspace.png"><meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="/assets/zurafa-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
@@ -15,6 +15,7 @@
     {"@type":"Question","name":"Is Zurafa free?","acceptedAnswer":{"@type":"Answer","text":"Yes. Zurafa is free, and its source is public on GitHub."}},
     {"@type":"Question","name":"Does it run on Intel Macs?","acceptedAnswer":{"@type":"Answer","text":"Not yet. The current build needs an Apple Silicon Mac running macOS 14 or newer."}},
     {"@type":"Question","name":"How does Zurafa know an agent is blocked?","acceptedAnswer":{"@type":"Answer","text":"The agent tells it. A program reports working, done, blocked, or error over OSC 7501, usually with one zurafa report line in a hook. Zurafa never guesses by reading terminal text."}},
+    {"@type":"Question","name":"How do I connect Claude Code?","acceptedAnswer":{"@type":"Answer","text":"Add four hooks to ~/.claude/settings.json that call zurafa report. The Connect your agents guide in the docs has the block to paste and covers other agents too."}},
     {"@type":"Question","name":"Can I keep my Ghostty theme?","acceptedAnswer":{"@type":"Answer","text":"Yes. Zurafa imports Ghostty themes, colors, and fonts."}},
     {"@type":"Question","name":"What happens to my panes when the app restarts?","acceptedAnswer":{"@type":"Answer","text":"The Rust daemon keeps your processes running and the app restores pane content after a restart or update. Sessions do not yet survive a restart of the daemon itself."}},
     {"@type":"Question","name":"How do updates work?","acceptedAnswer":{"@type":"Answer","text":"Zurafa checks for new releases through Sparkle and installs them from inside the app."}},
@@ -22,10 +23,16 @@
   ]}</script>
 </head>
 <body class="home">
+  <svg class="paint-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <filter id="wash-lg" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".008" numOctaves="4" seed="7"/><feDisplacementMap in="SourceGraphic" scale="110" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="smoke" x="-50%" y="-50%" width="200%" height="200%"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation="2"/></filter>
+    <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" seed="2"/><feColorMatrix values="0 0 0 0 .35  0 0 0 0 .25  0 0 0 0 .15  0 0 0 .14 0"/></filter>
+    <radialGradient id="fire"><stop offset="0" stop-color="#ffd27a" stop-opacity=".9"/><stop offset=".45" stop-color="#ff8a3d" stop-opacity=".45"/><stop offset="1" stop-color="#ff6a2b" stop-opacity="0"/></radialGradient>
+  </svg>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home" aria-current="page"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
-    <nav aria-label="Main navigation"><a href="#features">Preview</a><a href="#how">How it works</a><a href="/docs/">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
+    <nav aria-label="Main navigation"><a href="#features">Product</a><a href="#how">How it works</a><a href="/docs/">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
     <a class="nav-download" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <main id="main">
@@ -37,83 +44,40 @@
         <a class="button primary" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download for macOS <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
         <a class="button ghost" href="#how">See how it works</a>
       </div>
-      <p class="hero-meta-line">Notarized by Apple · Source on GitHub · Version 0.1.21 · macOS 14 or newer</p>
+      <p class="hero-meta-line">Notarized by Apple · Source on GitHub · <a href="/docs/changelog/">Version 0.1.21</a> · macOS 14 or newer</p>
       <a class="stars" href="https://github.com/devjasha/Zurafa/stargazers" target="_blank" rel="noopener"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M234.29,114.85l-45,38.83L203,211.75a16.4,16.4,0,0,1-24.5,17.82L128,198.49,77.47,229.57A16.4,16.4,0,0,1,53,211.75l13.76-58.07-45-38.83A16.46,16.46,0,0,1,31.08,86l59-4.76,22.76-55.08a16.36,16.36,0,0,1,30.27,0l22.75,55.08,59,4.76a16.46,16.46,0,0,1,9.37,28.86Z"/></svg><span><span id="star-count">Star us</span> on GitHub</span></a>
     </div>
       <div class="hero-visual">
-        <svg class="scene" viewBox="0 0 640 540" role="img" aria-labelledby="scene-title">
-          <title id="scene-title">A watercolor painting of the Zurafa mascot in a chef hat beside a terminal window. Steam rises from the panes while one pane asks for permission and the mascot says one agent needs you.</title>
-          <defs>
-            <filter id="wash" x="-25%" y="-25%" width="150%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".018" numOctaves="4" seed="7"/><feDisplacementMap in="SourceGraphic" scale="48" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation="2.5"/></filter>
-            <filter id="smoke" x="-50%" y="-20%" width="200%" height="140%"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation="2"/></filter>
-            <filter id="ink" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".04" numOctaves="2" seed="11"/><feDisplacementMap in="SourceGraphic" scale="3.5" xChannelSelector="R" yChannelSelector="G"/></filter>
-            <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" seed="2"/><feColorMatrix values="0 0 0 0 .35  0 0 0 0 .25  0 0 0 0 .15  0 0 0 .14 0"/></filter>
-            <mask id="torn"><rect x="34" y="34" width="572" height="472" rx="40" fill="#fff" filter="url(#wash)"/></mask>
-          </defs>
+        <svg class="scene" viewBox="0 0 1448 1086" role="img" aria-labelledby="scene-title">
+          <title id="scene-title">A watercolor painting of the Zurafa unicorn in a chef hat, tossing fried rice in a wok over a gas flame while steam rises from a pot beside it. A notification says the Fix pane restore agent is blocked and needs approval.</title>
+          <mask id="torn"><rect x="40" y="40" width="1368" height="1006" rx="80" fill="#fff" filter="url(#wash-lg)"/></mask>
           <g mask="url(#torn)">
-            <rect width="640" height="540" fill="#f7efe3"/>
-            <g filter="url(#wash)">
-              <path d="M290 50C420 30 600 60 610 190C620 300 560 340 470 330C390 320 350 250 300 210C250 170 200 70 290 50Z" fill="#5d8796" opacity=".6"/>
-              <ellipse cx="160" cy="420" rx="190" ry="95" fill="#e9b46a" opacity=".55"/>
-              <ellipse cx="120" cy="140" rx="95" ry="75" fill="#ec8a4f" opacity=".35"/>
-              <ellipse cx="560" cy="470" rx="120" ry="60" fill="#5d8796" opacity=".35"/>
-              <ellipse cx="320" cy="290" rx="200" ry="150" fill="#fbf5ea" opacity=".6"/>
-            </g>
-            <g fill="#2b2520" opacity=".5"><circle cx="70" cy="300" r="3"/><circle cx="84" cy="318" r="1.6"/><circle cx="590" cy="120" r="2.4"/><circle cx="560" cy="96" r="1.4"/><circle cx="250" cy="480" r="2"/></g>
-            <g fill="#e8743b" opacity=".6"><circle cx="60" cy="210" r="4"/><circle cx="610" cy="300" r="3"/><circle cx="380" cy="70" r="2.4"/></g>
+            <image href="/assets/zurafa-kitchen.jpg" width="1448" height="1086"/>
+            <g class="glow"><ellipse cx="565" cy="790" rx="170" ry="80" fill="url(#fire)"/><ellipse style="--d:-.7s" cx="250" cy="600" rx="70" ry="50" fill="url(#fire)"/><ellipse style="--d:-1.3s" cx="270" cy="675" rx="90" ry="34" fill="url(#fire)"/></g>
             <g class="steam" filter="url(#smoke)" fill="none" stroke-linecap="round">
-              <path d="M150 150C128 120 178 104 156 74C138 50 172 34 160 12" stroke="#e8743b" stroke-width="12" opacity=".75"/>
-              <path d="M196 150C214 126 176 108 200 84C222 62 190 44 204 22" stroke="#f3b27c" stroke-width="9" opacity=".7"/>
-              <path d="M380 150C362 128 398 112 380 90C364 70 392 56 384 36" stroke="#f7efe3" stroke-width="14" opacity=".8"/>
-              <path d="M424 150C440 130 410 114 430 94" stroke="#e8743b" stroke-width="7" opacity=".55"/>
+              <path d="M560 640C530 590 600 560 570 510C548 470 596 440 580 400" stroke="#fff8ec" stroke-width="22" opacity=".7"/>
+              <path style="--d:-1.5s" d="M650 630C680 590 630 560 660 520C690 480 650 450 668 410" stroke="#fff8ec" stroke-width="16" opacity=".6"/>
+              <path style="--d:-3s" d="M600 650C584 610 624 590 604 556" stroke="#ffd9a8" stroke-width="12" opacity=".6"/>
+              <path style="--d:-.8s" d="M250 420C228 380 280 356 258 316C240 284 276 262 266 230" stroke="#f3a25a" stroke-width="18" opacity=".55"/>
+              <path style="--d:-2.4s" d="M300 420C320 388 288 366 308 336" stroke="#fff3e2" stroke-width="14" opacity=".6"/>
             </g>
-            <g class="window">
-              <g filter="url(#ink)">
-                <rect x="90" y="150" width="400" height="280" rx="14" fill="#fffaf2" stroke="#2b2520" stroke-width="3"/>
-                <path d="M92 184H488M300 184V428M300 306H488" stroke="#2b2520" stroke-width="2.5" fill="none"/>
-              </g>
-              <circle cx="112" cy="167" r="5" fill="#e8743b"/><circle cx="130" cy="167" r="5" fill="#e9b46a"/><circle cx="148" cy="167" r="5" fill="#7fa36b"/>
-              <g fill="#2b2520" opacity=".72">
-                <rect class="ln" style="--d:.2s" x="122" y="206" width="120" height="7" rx="3.5"/>
-                <rect class="ln" style="--d:.7s" x="122" y="226" width="150" height="7" rx="3.5"/>
-                <rect class="ln" style="--d:1.2s" x="122" y="246" width="96" height="7" rx="3.5"/>
-                <rect class="ln" style="--d:1.8s" x="122" y="274" width="140" height="7" rx="3.5"/>
-                <rect class="ln" style="--d:2.3s" x="122" y="294" width="110" height="7" rx="3.5"/>
-                <rect class="ln" style="--d:2.8s" x="122" y="314" width="132" height="7" rx="3.5"/>
-              </g>
-              <g fill="#e8743b"><circle class="ln" style="--d:.2s" cx="110" cy="209.5" r="4"/><circle class="ln" style="--d:1.8s" cx="110" cy="277.5" r="4"/></g>
-              <g class="ask">
-                <rect x="106" y="344" width="178" height="68" rx="10" fill="#fdf0dc" stroke="#e19a2c" stroke-width="2.5"/>
-                <text x="120" y="370" font-family="Geist, sans-serif" font-size="14" font-weight="600" fill="#a85a17">Allow cargo test?</text>
-                <text x="120" y="394" font-family="ui-monospace, monospace" font-size="12" fill="#7a6a58">❯ 1. Yes   2. No</text>
-              </g>
-              <circle class="dot-working" cx="282" cy="167" r="6" fill="#e8743b"/>
-              <circle class="dot-blocked" cx="282" cy="167" r="6" fill="#e19a2c" stroke="#fdf0dc" stroke-width="3"/>
-              <g fill="#7fa36b"><circle class="ln" style="--d:.9s" cx="322" cy="208" r="4"/><circle class="ln" style="--d:1.9s" cx="322" cy="228" r="4"/><circle class="ln" style="--d:2.9s" cx="322" cy="248" r="4"/></g>
-              <g fill="#2b2520" opacity=".55"><rect class="ln" style="--d:.9s" x="334" y="204.5" width="110" height="7" rx="3.5"/><rect class="ln" style="--d:1.9s" x="334" y="224.5" width="86" height="7" rx="3.5"/><rect class="ln" style="--d:2.9s" x="334" y="244.5" width="120" height="7" rx="3.5"/></g>
-              <rect x="318" y="274" width="152" height="8" rx="4" fill="#efe3d0"/><rect class="bar" x="318" y="274" width="152" height="8" rx="4" fill="#7fa36b"/>
-              <circle cx="474" cy="167" r="6" fill="#7fa36b"/>
-              <text x="318" y="336" font-family="ui-monospace, monospace" font-size="13" fill="#7a6a58">~/zurafa $</text>
-              <rect class="cursor" x="400" y="325" width="8" height="14" fill="#e8743b"/>
+            <g class="sparks">
+              <circle style="--d:0s;--x:-30px" cx="540" cy="770" r="5" fill="#ffc35c"/>
+              <circle style="--d:-.4s;--x:24px" cx="575" cy="780" r="4" fill="#ff8a3d"/>
+              <circle style="--d:-.9s;--x:-12px" cx="600" cy="775" r="3.5" fill="#ffd27a"/>
+              <circle style="--d:-1.3s;--x:36px" cx="520" cy="785" r="3" fill="#ff8a3d"/>
+              <circle style="--d:-1.7s;--x:-40px" cx="620" cy="770" r="4.5" fill="#ffc35c"/>
+              <circle style="--d:-.6s;--x:14px" cx="200" cy="610" r="3" fill="#ffc35c"/>
+              <circle style="--d:-1.5s;--x:-18px" cx="300" cy="665" r="3.5" fill="#ff8a3d"/>
             </g>
-            <ellipse cx="520" cy="488" rx="96" ry="16" fill="#2b2520" opacity=".14" filter="url(#smoke)"/>
-            <g class="mascot">
-              <image href="/assets/zurafa-mascot.png" x="400" y="256" width="230" height="226"/>
-              <g class="hat" transform="rotate(-9 500 280) translate(4 18)" filter="url(#ink)" stroke="#2b2520" stroke-width="2.5" stroke-linejoin="round">
-                <path d="M456 274C440 258 444 226 468 222C470 198 500 188 518 202C538 192 562 212 552 236C566 250 556 270 542 274Z" fill="#fffdf8"/>
-                <path d="M478 238C482 252 482 262 480 272M512 230C514 246 514 260 512 272" fill="none" opacity=".45"/>
-                <rect x="452" y="266" width="94" height="24" rx="6" fill="#fffdf8"/>
-              </g>
-            </g>
-            <g class="bubble" transform="translate(-44 0)">
-              <path d="M444 104H594A22 22 0 0 1 594 148H520L504 166L500 148H444A22 22 0 0 1 444 104Z" fill="#fffaf2" stroke="#2b2520" stroke-width="2.5" filter="url(#ink)"/>
-              <circle cx="448" cy="126" r="6" fill="#e19a2c"/>
-              <text x="462" y="131" font-family="Geist, sans-serif" font-size="14" font-weight="600" fill="#2b2520">1 agent needs you</text>
-            </g>
-            <image class="spark" href="/assets/zurafa-star.png" x="560" y="40" width="44" height="44"/>
-            <image class="spark" style="--d:-1.4s" href="/assets/zurafa-star.png" x="56" y="240" width="26" height="26"/>
-            <image class="spark" style="--d:-2.6s" href="/assets/zurafa-star.png" x="372" y="452" width="22" height="22"/>
-            <rect width="640" height="540" filter="url(#paper)"/>
+            <rect width="1448" height="1086" filter="url(#paper)"/>
+          </g>
+          <filter id="lift" x="-20%" y="-30%" width="140%" height="180%"><feDropShadow dy="14" stdDeviation="18" flood-color="#2b2520" flood-opacity=".22"/></filter>
+          <g class="bubble">
+            <rect x="770" y="44" width="580" height="140" rx="28" fill="#fffaf2" stroke="#2b2520" stroke-opacity=".12" stroke-width="2" filter="url(#lift)"/>
+            <circle class="bubble-dot" cx="828" cy="114" r="13" fill="#e19a2c"/>
+            <text x="864" y="104" font-family="Geist, sans-serif" font-size="36" font-weight="600" fill="#1c1814">Fix pane restore</text>
+            <text x="864" y="150" font-family="Geist, sans-serif" font-size="30" fill="#6a6158">Blocked · needs your approval</text>
           </g>
         </svg>
       </div>
@@ -122,21 +86,6 @@
     <section class="band shell problem reveal" aria-labelledby="problem-title">
       <h2 id="problem-title">Four agents, four windows, and no idea which one is waiting on you.</h2>
       <p>Agents stall on a permission prompt while you watch a different tab. Zurafa puts every agent, build, and shell in one window and marks the pane that needs an answer, so a blocked agent never sits idle for twenty minutes.</p>
-    </section>
-
-    <section class="band shell reveal" aria-labelledby="benefits-title">
-      <p class="kicker">Why agent developers switch</p>
-      <h2 id="benefits-title">Less tab hunting, more shipped work</h2>
-      <ul class="benefits">
-        <li><span class="badge"><span class="dot amber"></span> blocked</span><strong>Know who is waiting</strong><p>Agents report working, done, blocked, or error, and the sidebar counts them for each workspace.</p></li>
-        <li><span class="badge"><span class="dot green"></span> 3 panes</span><strong>Keep context in one window</strong><p>Sessions, tabs, and even splits keep an agent, its build, and a shell in view together.</p></li>
-        <li><span class="badge"><span class="dot pink"></span> restored</span><strong>Survive app restarts</strong><p>A Rust daemon owns every process, so pane content comes back after the app restarts or updates.</p></li>
-        <li><span class="badge"><span class="dot"></span> tailnet</span><strong>Work on any machine</strong><p>Open tabs on saved SSH hosts and local VMs, or connect straight to Tailscale machines without SSH.</p></li>
-      </ul>
-    </section>
-
-    <section class="tagline shell" aria-label="Zurafa in one sentence">
-      <p id="tagline">Stop checking every tab.<br>Zurafa tells you which agent<br>needs you next.</p>
     </section>
 
     <section class="section shell" id="features"><div class="section-intro"><p class="kicker">See it working</p><h2>One window,<br>every agent in view</h2><p>The sidebar counts which agents are working, done, or blocked in each workspace, and the pane that needs you says so.</p></div>
@@ -191,10 +140,25 @@
       </div>
     </section>
 
+    <section class="band shell reveal" aria-labelledby="benefits-title">
+      <p class="kicker">Why agent developers switch</p>
+      <h2 id="benefits-title">Less tab hunting, more shipped work</h2>
+      <ul class="benefits">
+        <li><span class="badge"><span class="dot amber"></span> blocked</span><strong>Know who is waiting</strong><p>Agents report working, done, blocked, or error, and the sidebar counts them for each workspace.</p></li>
+        <li><span class="badge"><span class="dot green"></span> 3 panes</span><strong>Keep context in one window</strong><p>Sessions, tabs, and even splits keep an agent, its build, and a shell in view together.</p></li>
+        <li><span class="badge"><span class="dot pink"></span> restored</span><strong>Survive app restarts</strong><p>A Rust daemon owns every process, so pane content comes back after the app restarts or updates.</p></li>
+        <li><span class="badge"><span class="dot"></span> tailnet</span><strong>Work on any machine</strong><p>Open tabs on saved SSH hosts and local VMs, or connect straight to Tailscale machines without SSH.</p></li>
+      </ul>
+    </section>
+
+    <section class="tagline shell" aria-label="Zurafa in one sentence">
+      <p id="tagline">Stop checking every tab.<br>Zurafa tells you which agent<br>needs you next.</p>
+    </section>
+
     <section class="section rhythm reveal" id="how" aria-labelledby="how-title"><div class="shell rhythm-grid"><div><p class="kicker">How it works</p><h2 id="how-title">Three steps<br>to a calm workspace</h2></div><div class="steps">
-      <div><b>01</b><span><strong>Open a session for each line of work.</strong><small>Give the refactor, the bug, and the review their own place.</small></span></div>
-      <div><b>02</b><span><strong>Have your agent report its status.</strong><small>One <code>zurafa report</code> line in a hook lights up the pane icon.</small></span></div>
-      <div><b>03</b><span><strong>Glance at the sidebar and answer.</strong><small>Jump straight to the pane that is blocked and get it moving again.</small></span></div>
+      <div><b>01</b><span><strong>Open a session for each line of work.</strong><small>Give the refactor, the bug, and the review their own place. <a class="text-link" href="/docs/sessions/">Sessions guide</a></small></span></div>
+      <div><b>02</b><span><strong>Have your agent report its status.</strong><small>One <code>zurafa report</code> line in a hook lights up the pane icon. <a class="text-link" href="/docs/agents/">Set up Claude Code</a></small></span></div>
+      <div><b>03</b><span><strong>Glance at the sidebar and answer.</strong><small>Press <code>⌘J</code> to jump straight to the pane that is blocked and get it moving again.</small></span></div>
     </div></div></section>
 
     <section class="section shell reveal" aria-labelledby="proof-title">
@@ -214,15 +178,23 @@ $ zurafa read review -n 3</code></pre></div></div>
       <details><summary>Is Zurafa free?</summary><p>Yes. Zurafa is free, and its source is public on <a href="https://github.com/devjasha/Zurafa">GitHub</a>.</p></details>
       <details><summary>Does it run on Intel Macs?</summary><p>Not yet. The current build needs an Apple Silicon Mac running macOS 14 or newer.</p></details>
       <details><summary>How does Zurafa know an agent is blocked?</summary><p>The agent tells it. A program reports working, done, blocked, or error over OSC 7501, usually with one <code>zurafa report</code> line in a hook. Zurafa never guesses by reading terminal text. <a href="/docs/status/">Read the status guide</a>.</p></details>
+      <details><summary>How do I connect Claude Code?</summary><p>Add four hooks to <code>~/.claude/settings.json</code> that call <code>zurafa report</code>. The <a href="/docs/agents/">Connect your agents guide</a> has the block to paste and covers other agents too.</p></details>
       <details><summary>Can I keep my Ghostty theme?</summary><p>Yes. Zurafa imports Ghostty themes, colors, and fonts. <a href="/docs/appearance/">See appearance settings</a>.</p></details>
       <details><summary>What happens to my panes when the app restarts?</summary><p>The Rust daemon keeps your processes running and the app restores pane content after a restart or update. Sessions do not yet survive a restart of the daemon itself.</p></details>
-      <details><summary>How do updates work?</summary><p>Zurafa checks for new releases through Sparkle and installs them from inside the app.</p></details>
+      <details><summary>How do updates work?</summary><p>Zurafa checks for new releases through Sparkle and installs them from inside the app. The <a href="/docs/changelog/">changelog</a> lists what changed in each one.</p></details>
       <details><summary>Can I work on remote machines?</summary><p>Yes. Open tabs on saved SSH hosts and local VMs, or connect directly to machines on your tailnet. <a href="/docs/remote-access/">See remote access</a>.</p></details>
     </section>
 
-    <section class="download-section reveal" aria-labelledby="cta-title"><div class="shell download-inner"><div><p class="kicker">Free to download</p><h2 id="cta-title">Your agents are waiting.<br>Now you will know it.</h2><p>No account, no trial, no credit card. Zurafa is notarized by Apple and updates itself through Sparkle.</p><div class="hero-actions"><a class="button primary" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download for macOS</a></div><small>Open the DMG and drag Zurafa into Applications. <a class="text-link" href="/docs/install/">Install guide</a></small></div><div class="download-art" aria-hidden="true"><svg class="wash" viewBox="0 0 400 360"><g filter="url(#wash)"><ellipse cx="200" cy="190" rx="150" ry="120" fill="#5d8796" opacity=".45"/><ellipse cx="130" cy="250" rx="110" ry="70" fill="#e9b46a" opacity=".55"/><ellipse cx="280" cy="110" rx="70" ry="55" fill="#ec8a4f" opacity=".4"/></g></svg><img class="download-mascot" src="/assets/zurafa-mascot.png" width="900" height="885" alt="" loading="lazy"><img class="sparkle s1" src="/assets/zurafa-star.png" width="240" height="240" alt="" loading="lazy"><img class="sparkle s2" src="/assets/zurafa-star.png" width="240" height="240" alt="" loading="lazy"></div></div></section>
+    <section class="download-section reveal" aria-labelledby="cta-title"><div class="shell download-inner"><div><p class="kicker">Free to download</p><h2 id="cta-title">Your agents are waiting.<br>Now you will know it.</h2><p>No account, no trial, no credit card. Zurafa is notarized by Apple and updates itself through Sparkle.</p><div class="hero-actions"><a class="button primary" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download for macOS <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a></div><small>Open the DMG, drag Zurafa into Applications, then <a class="text-link" href="/docs/agents/">connect your agents</a>.</small></div><div class="download-art" aria-hidden="true"><img class="download-mascot" src="/assets/zurafa-mascot.png" width="900" height="885" alt="" loading="lazy"></div></div></section>
   </main>
-  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <aside class="next-steps" id="next-steps" aria-labelledby="next-title" hidden>
+    <button type="button" class="next-close" aria-label="Close next steps"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg></button>
+    <p class="kicker">Download started</p>
+    <h2 id="next-title">Three steps to your first agent pane</h2>
+    <ol><li>Open the DMG and drag Zurafa into Applications.</li><li>Launch Zurafa and accept the CLI install.</li><li>Add one hook line so your agents report their status.</li></ol>
+    <a class="button primary" href="/docs/agents/">Connect your agents <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+  </aside>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
   <script src="/assets/home.js" defer></script>
 </body>

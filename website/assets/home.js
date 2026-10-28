@@ -33,6 +33,29 @@
     update();
   }
 
+  // Hero painting tilts toward the pointer.
+  const visual = document.querySelector('.hero-visual');
+  if (visual && matchMedia('(pointer: fine) and (prefers-reduced-motion: no-preference)').matches) {
+    visual.addEventListener('pointermove', event => {
+      const box = visual.getBoundingClientRect();
+      visual.style.setProperty('--ry', `${((event.clientX - box.left) / box.width - 0.5) * 4}deg`);
+      visual.style.setProperty('--rx', `${((event.clientY - box.top) / box.height - 0.5) * -4}deg`);
+    });
+    visual.addEventListener('pointerleave', () => { visual.style.removeProperty('--rx'); visual.style.removeProperty('--ry'); });
+  }
+
+  // After a download starts, show what to do next instead of leaving the visitor on the same page.
+  const next = document.getElementById('next-steps');
+  if (next) {
+    const close = () => { next.classList.remove('in'); setTimeout(() => { next.hidden = true; }, 500); };
+    document.querySelectorAll('a[download]').forEach(link => link.addEventListener('click', () => {
+      next.hidden = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => next.classList.add('in')));
+    }));
+    next.querySelector('.next-close').addEventListener('click', close);
+    addEventListener('keydown', event => { if (event.key === 'Escape' && !next.hidden) close(); });
+  }
+
   const stars = document.getElementById('star-count');
   if (stars) {
     fetch('https://api.github.com/repos/devjasha/Zurafa')

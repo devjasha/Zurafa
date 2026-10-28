@@ -4,5 +4,12 @@
   "installCommand": null,
   "framework": null,
   "cleanUrls": true,
-  "trailingSlash": true
+  "trailingSlash": true,
+  "redirects": [
+    {
+      "source": "/changelog",
+      "destination": "/docs/changelog/",
+      "permanent": true
+    }
+  ]
 }

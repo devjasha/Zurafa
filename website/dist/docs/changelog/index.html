@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changelog · Zurafa Docs</title><meta name="description" content="What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7ead7"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/changelog/">
+  <link rel="icon" href="/assets/zurafa-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
+  <link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/docs.css">
+</head>
+<body class="docs-page" data-page="changelog">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation</a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Reference</div><h1>Changelog</h1><div class="prose"><p>What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on <a href="https://github.com/devjasha/Zurafa/releases">GitHub releases</a>.</p>
+<h2 id="0-1-21">0.1.21</h2>
+<p><strong>October 28, 2026</strong></p>
+<ul>
+<li>Zurafa notifies you when an agent needs you, fails, or finishes while its pane is out of view. Click the notification to go straight to that pane.</li>
+<li>The Dock icon shows how many panes are waiting on you.</li>
+<li>Press ⌘J to jump to the next pane that needs you, across every workspace. When nothing is waiting, it cycles through finished panes.</li>
+<li>New CLI commands let agents drive other panes: <code>zurafa send</code>, <code>key</code>, <code>read</code>, <code>wait</code>, <code>prompt</code>, <code>events</code>, and <code>report</code>. Run <code>zurafa help</code> for details.</li>
+</ul>
+<h2 id="0-1-20">0.1.20</h2>
+<p><strong>October 28, 2026</strong></p>
+<ul>
+<li>Panes keep their content after Zurafa restarts or installs an update, instead of showing up blank until you resize them.</li>
+<li>An agent status indicator shows how many agents in the current workspace need attention, are working, or are done. It sits at the bottom of the vertical sidebar, or at the top right with horizontal tabs.</li>
+<li>The vertical sidebar can sit on the right: use &quot;Move Sidebar to Right&quot; in the command palette, or set <code>sidebar-position = right</code> in config.zurafa.</li>
+<li>Splitting a pane shares space evenly across every pane in that row or column.</li>
+</ul>
+<h2 id="0-1-19">0.1.19</h2>
+<p><strong>October 27, 2026</strong></p>
+<ul>
+<li>The vertical sidebar shows every workspace as a section, with its tabs listed underneath. Click any tab to jump straight to it, even in another workspace.</li>
+<li>Sidebar tabs are more compact, and the workspace switcher moved to the button at the bottom of the sidebar.</li>
+<li>Add Host lists VMs on your Mac&#x27;s shared network (UTM, Tart, Apple Virtualization) next to tailnet machines. VM tabs get a VM icon, and Kali VMs show the Kali Linux logo.</li>
+</ul>
+<h2 id="0-1-18">0.1.18</h2>
+<p><strong>October 26, 2026</strong></p>
+<ul>
+<li>Direct connections over Tailscale: click the bolt button next to a saved Linux host to install a Zurafa service there. Its tabs then connect straight to the host over your tailnet, without SSH, and only your Tailscale account can get in.</li>
+<li>Tabs try HTTPS through Tailscale Serve first, then the tailnet port 7297, then SSH as before. A tab keeps its route when it reconnects.</li>
+<li>New login server for shared hosts: <code>sudo zurafa-daemon install-login-server</code> gives each Tailscale caller the local account <code>/etc/zurafa/accounts.jsonc</code> allows. Save a host as <code>root@host</code> to ask for root.</li>
+<li>Zurafa shows when an update is available, in the command picker and the bar.</li>
+<li>Terminal Emacs (Doom) shows its icons instead of <code>?</code>, and Emacs panes get the Doom icon.</li>
+<li>New guide with diagrams: <a href="https://zurafa-website.vercel.app/docs/remote-access/">Direct over Tailscale</a>.</li>
+</ul>
+<h2 id="0-1-17">0.1.17</h2>
+<p><strong>October 22, 2026</strong></p>
+<ul>
+<li>Delete saved remote hosts from the session picker with the trash button or ⌘⌫.</li>
+<li>New panes take keyboard focus reliably.</li>
+<li>Tabs show the working directory and fade long titles instead of cutting them off; the active tab uses clear glass.</li>
+<li>The sidebar toggle button is gone from the tab bar; ⌥⌘T still switches layouts.</li>
+</ul>
+<h2 id="0-1-16">0.1.16</h2>
+<p><strong>October 21, 2026</strong></p>
+<ul>
+<li>Fix: Add Remote Host now lists your Tailscale machines again. With the Tailscale app from tailscale.com or the App Store, the list stayed empty.</li>
+</ul>
+<h2 id="0-1-15">0.1.15</h2>
+<p><strong>October 21, 2026</strong></p>
+<ul>
+<li>Add Remote Host lists your online Linux and Mac Tailscale machines; pick one to save it and connect.</li>
+<li>Tailnet machines work even when &quot;Use Tailscale DNS&quot; is off: Zurafa falls back to their Tailscale IP.</li>
+<li>The SSH docs now explain remote sessions that survive dropped connections.</li>
+</ul>
+<h2 id="0-1-14">0.1.14</h2>
+<p><strong>October 21, 2026</strong></p>
+<ul>
+<li>Switch workspaces with ⇧⌘] (next) and ⇧⌘[ (previous).</li>
+<li>The top bar now lines up with the window buttons and is a little shorter.</li>
+</ul>
+<h2 id="0-1-13">0.1.13</h2>
+<p><strong>October 19, 2026</strong></p>
+<ul>
+<li>Remote shells keep running in a Zurafa daemon on the remote host, so they survive dropped connections and sleep.</li>
+<li>Theme picker: ⌘K › Change Theme… previews themes live as you move through the list. Includes your Ghostty themes, 14 bundled themes and Ghostty.app&#x27;s.</li>
+<li>Cleaner top bar: lighter controls, a sidebar toggle and a command palette button.</li>
+<li>New split panes slide in from the side they open on.</li>
+<li>The command palette no longer shows a scrollbar.</li>
+</ul>
+<h2 id="0-1-12">0.1.12</h2>
+<p><strong>October 15, 2026</strong></p>
+<ul>
+<li>New app icon: Zurafa&#x27;s rainbow-maned unicorn.</li>
+</ul>
+<h2 id="0-1-11">0.1.11</h2>
+<p><strong>October 15, 2026</strong></p>
+<ul>
+<li>HTML files open as live pages in the preview, so coding agents can show explanations you interact with: step-through animations, updating charts, Mermaid diagrams.</li>
+<li>Clicking an element on such a page can put a follow-up question in the agent&#x27;s prompt, ready for you to edit and send. Nothing is submitted until you press Enter.</li>
+<li>Preview pages run offline: they cannot reach the network or navigate away, and can only read files in their own folder.</li>
+</ul>
+<h2 id="0-1-10">0.1.10</h2>
+<p><strong>October 15, 2026</strong></p>
+<ul>
+<li>Fixes a crash when opening a preview after updating to 0.1.9: the in-app update left out the math fonts the preview needs.</li>
+</ul>
+<h2 id="0-1-9">0.1.9</h2>
+<p><strong>October 15, 2026</strong></p>
+<ul>
+<li>Markdown and Org previews render LaTeX math: <code>$…$</code>, <code>\(…\)</code>, <code>$$…$$</code>, <code>\[…\]</code>, and <code>equation</code>/<code>align</code>/<code>gather</code> environments.</li>
+<li>Previews blend into the pane instead of sitting on a separate dark page, with a body size that fits the side pane.</li>
+<li>Each workspace keeps its own preview; switching workspaces no longer carries it along.</li>
+</ul>
+<h2 id="0-1-8">0.1.8</h2>
+<p><strong>October 15, 2026</strong></p>
+<ul>
+<li><code>zurafa preview &lt;file&gt;</code> opens a file in the preview pane from the command line.</li>
+<li>⌘-click opens bare file names like <code>README.md</code> in terminal output, not just paths.</li>
+<li>Emacs Org files (<code>.org</code>) preview as formatted documents.</li>
+</ul>
+<h2 id="0-1-7">0.1.7</h2>
+<p><strong>October 13, 2026</strong></p>
+<ul>
+<li>File previews render Markdown with headings, lists, tables, and highlighted code blocks.</li>
+<li>Code and text previews are syntax highlighted and scroll horizontally instead of wrapping.</li>
+<li>Previews of files in a git repository show a status badge (modified, untracked, …) with added and removed line counts.</li>
+<li>Fixes installing the <code>zurafa</code> command-line tool when macOS needs your password.</li>
+</ul>
+<h2 id="0-1-6">0.1.6</h2>
+<p><strong>October 13, 2026</strong></p>
+<ul>
+<li>New configuration file: press ⌘, to open <code>~/.config/config.zurafa</code> and set a theme, accent color, window opacity, pane spacing and more. Changes apply when you save.</li>
+<li>Imported Ghostty and configured themes now color the whole app, including the command palette and workspace picker.</li>
+<li>Vertical tabs take the full window height, with the new-tab button in the sidebar; panes reach the top edge.</li>
+<li>Tabs show stacked icons for every program open in their panes again.</li>
+<li>Redesigned workspace picker, with ⌘1–⌘9 to switch workspaces while it is open.</li>
+<li>Cleaner command palette with a solid background and a single tab-layout switch.</li>
+<li>⇧⌘A now switches between light and dark in one press.</li>
+</ul>
+<h2 id="0-1-5">0.1.5</h2>
+<p><strong>October 13, 2026</strong></p>
+<ul>
+<li>Offers to install the <code>zurafa</code> command-line tool on first launch.</li>
+<li>Opens file previews from paths in terminal output.</li>
+<li>Tabs are simpler: a smaller icon, the title, and a close button.</li>
+<li>New panes fade in, and panes you are not using fade into the background.</li>
+</ul>
+<h2 id="0-1-4">0.1.4</h2>
+<p><strong>October 13, 2026</strong></p>
+<ul>
+<li>Fixes a bug introduced in 0.1.3 where the app would not launch: the bundled <code>zurafa</code> CLI binary was overwriting the app&#x27;s own executable on case-insensitive filesystems, so opening Zurafa.app ran the CLI instead of the GUI. The CLI now ships at <code>Zurafa.app/Contents/Resources/zurafa</code>.</li>
+</ul>
+<h2 id="0-1-3">0.1.3</h2>
+<p><strong>October 13, 2026</strong></p>
+<ul>
+<li>Shows the Pi app icon in tab tiles when Pi is launched through Node or the pi-coding-agent package.</li>
+<li>Adds the early <code>zurafa</code> CLI to app bundles for daemon/session/pane automation.</li>
+<li>Documents the CLI and updates the IPC/build documentation for the bundled command-line tool.</li>
+</ul>
+<h2 id="0-1-2">0.1.2</h2>
+<p><strong>October 13, 2026</strong></p>
+<ul>
+<li>Adds image paste support: pasted clipboard images are saved as temporary PNG files and inserted as paths in the terminal.</li>
+<li>Shows branded agent icons in tabs and status badges when available.</li>
+</ul>
+<h2 id="0-1-1">0.1.1</h2>
+<p><strong>October 12, 2026</strong></p>
+<ul>
+<li>Adds Sparkle in-app updates.</li>
+<li>Ships as a signed and notarized DMG for first install.</li>
+<li>Refreshes the website download flow so new users get the current DMG.</li>
+</ul>
+<h2 id="0-1-0-beta-2">0.1.0 beta 2</h2>
+<p><strong>October 12, 2026</strong></p>
+<ul>
+<li>Keyboard shortcuts for renaming a workspace (<code>⇧⌘E</code>), deleting a workspace (<code>⌥⇧⌘W</code>), and toggling the tab layout (<code>⌥⌘T</code>).</li>
+<li>The command picker and the docs list the new shortcuts.</li>
+<li>Terminal transparency stays inside Zurafa&#x27;s own window, so panes no longer reveal the desktop or other Zurafa windows behind them.</li>
+</ul>
+<h2 id="0-1-0-beta-1">0.1.0 beta 1</h2>
+<p><strong>October 11, 2026</strong></p>
+<ul>
+<li>The first public beta: a Rust backed terminal workspace with tabs, split panes, sessions, system SSH remote hosts, an event driven UI, Ghostty settings import, and an optional dithered background image.</li>
+<li>Built for Apple Silicon Macs on macOS 14 or newer.</li>
+</ul></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/troubleshooting/"><small>← Previous</small><strong>Troubleshooting &amp; limits</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#0-1-21">0.1.21</a><a href="#0-1-20">0.1.20</a><a href="#0-1-19">0.1.19</a><a href="#0-1-18">0.1.18</a><a href="#0-1-17">0.1.17</a><a href="#0-1-16">0.1.16</a><a href="#0-1-15">0.1.15</a><a href="#0-1-14">0.1.14</a><a href="#0-1-13">0.1.13</a><a href="#0-1-12">0.1.12</a><a href="#0-1-11">0.1.11</a><a href="#0-1-10">0.1.10</a><a href="#0-1-9">0.1.9</a><a href="#0-1-8">0.1.8</a><a href="#0-1-7">0.1.7</a><a href="#0-1-6">0.1.6</a><a href="#0-1-5">0.1.5</a><a href="#0-1-4">0.1.4</a><a href="#0-1-3">0.1.3</a><a href="#0-1-2">0.1.2</a><a href="#0-1-1">0.1.1</a><a href="#0-1-0-beta-2">0.1.0 beta 2</a><a href="#0-1-0-beta-1">0.1.0 beta 1</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

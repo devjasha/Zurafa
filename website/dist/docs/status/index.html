@@ -3,24 +3,27 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Program status · Zurafa Docs</title><meta name="description" content="Zurafa supports structured program-status reports through OSC 7501. Compatible programs can report `idle`, `working`, `done`, `blocked`, or `error`; a `clear` report removes a record. The Rust terminal reader parses these sequences, manages per-terminal records, and emits status events. Zurafa does not infer an agent&#x27;s state by scraping ordinary terminal text.">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f6f4"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1114"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/status/">
-  <link rel="icon" href="/assets/zurafa-icon.png"><link rel="stylesheet" href="/assets/style.css">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7ead7"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/status/">
+  <link rel="icon" href="/assets/zurafa-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
+  <link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/docs.css">
 </head>
 <body class="docs-page" data-page="status">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
-    <nav aria-label="Main navigation"><a href="/#features">Features</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa/releases" target="_blank" rel="noopener">Releases ↗</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download for Mac</a>
+    <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
-      <a class="docs-home" href="/docs/">Documentation <span>↗</span></a>
+      <a class="docs-home" href="/docs/">Documentation</a>
       <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
       <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
 <a href="/docs/" data-page="overview">Overview</a>
 <a href="/docs/install/" data-page="install">Install on macOS</a>
 <a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
 </div>
 <div class="nav-group"><p>Workspace</p>
 <a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
@@ -32,19 +35,21 @@
 <div class="nav-group"><p>Personalization</p>
 <a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
 <a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
-<a href="/docs/status/" data-page="status">Program status</a>
 </div>
 <div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
 <a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
 <a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
 <a href="/docs/cli/" data-page="cli">CLI</a>
 <a href="/docs/build/" data-page="build">Build from source</a>
 <a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
 </div></details>
       <div class="nav-group"><p>Start here</p>
 <a href="/docs/" data-page="overview">Overview</a>
 <a href="/docs/install/" data-page="install">Install on macOS</a>
 <a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
 </div>
 <div class="nav-group"><p>Workspace</p>
 <a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
@@ -56,17 +61,18 @@
 <div class="nav-group"><p>Personalization</p>
 <a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
 <a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
-<a href="/docs/status/" data-page="status">Program status</a>
 </div>
 <div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
 <a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
 <a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
 <a href="/docs/cli/" data-page="cli">CLI</a>
 <a href="/docs/build/" data-page="build">Build from source</a>
 <a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
 </div>
     </div></aside>
-    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Personalization</div><h1>Program status</h1><div class="prose"><p>Zurafa supports structured program-status reports through OSC 7501. Compatible programs can report <code>idle</code>, <code>working</code>, <code>done</code>, <code>blocked</code>, or <code>error</code>; a <code>clear</code> report removes a record. The Rust terminal reader parses these sequences, manages per-terminal records, and emits status events. Zurafa does not infer an agent&#x27;s state by scraping ordinary terminal text.</p>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Reference</div><h1>Program status</h1><div class="prose"><p>Zurafa supports structured program-status reports through OSC 7501. Compatible programs can report <code>idle</code>, <code>working</code>, <code>done</code>, <code>blocked</code>, or <code>error</code>; a <code>clear</code> report removes a record. The Rust terminal reader parses these sequences, manages per-terminal records, and emits status events. Zurafa does not infer an agent&#x27;s state by scraping ordinary terminal text.</p>
 <h2 id="what-you-see">What you see</h2>
 <p>The macOS app shows a small status indicator for a terminal or tab when a supported report is active. Multiple records can coexist within one terminal, so a program can represent nested tasks. The frontend receives <code>terminal.program_status_changed</code> and <code>terminal.program_status_removed</code> events and refreshes after reconnecting from the Rust snapshot.</p>
 <h2 id="notifications">Notifications</h2>
@@ -79,9 +85,9 @@
 <p>Clear removes a record and its descendants. Full terminal reset removes all records. A shell-prompt marker or child exit removes active <code>working</code> and <code>blocked</code> records; stable <code>idle</code>, <code>done</code>, and <code>error</code> records can remain until another lifecycle operation removes them. The daemon publishes changed and removed events only after the record store actually changes.</p>
 <h2 id="distinct-terminal-reports">Distinct terminal reports</h2>
 <p>OSC 9;4 terminal progress reports are a separate <code>terminal.progress_report</code> event. They are not OSC 7501 records. Terminal title, working directory, bell, notification, process, and exit reports also have their own event types. See <a href="/docs/architecture/">Architecture &amp; events</a>.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/backgrounds/"><small>← Previous</small><strong>Dithered backgrounds</strong></a><a href="/docs/architecture/"><small>Next →</small><strong>Architecture &amp; events</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#what-you-see">What you see</a><a href="#notifications">Notifications</a><a href="#send-a-report">Send a report</a><a href="#lifecycle">Lifecycle</a><a href="#distinct-terminal-reports">Distinct terminal reports</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#what-you-see">What you see</a><a href="#notifications">Notifications</a><a href="#send-a-report">Send a report</a><a href="#lifecycle">Lifecycle</a><a href="#distinct-terminal-reports">Distinct terminal reports</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
-  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
 </body>
 </html>

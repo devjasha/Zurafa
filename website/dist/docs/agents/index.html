@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connect your agents · Zurafa Docs</title><meta name="description" content="Zurafa shows whether each pane&#x27;s agent is working, done, or blocked, but only once the agent tells it. Each agent needs one `zurafa report` line in its hooks. This takes about two minutes for Claude Code.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7ead7"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/agents/">
+  <link rel="icon" href="/assets/zurafa-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
+  <link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/docs.css">
+</head>
+<body class="docs-page" data-page="agents">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.21-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation</a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Start here</div><h1>Connect your agents</h1><div class="prose"><p>Zurafa shows whether each pane&#x27;s agent is working, done, or blocked, but only once the agent tells it. Each agent needs one <code>zurafa report</code> line in its hooks. This takes about two minutes for Claude Code.</p>
+<h2 id="before-you-start">Before you start</h2>
+<p>On first launch Zurafa offers to install its CLI as <code>/usr/local/bin/zurafa</code>. Accept it, then check that it works from any Zurafa pane:</p>
+<pre><code>zurafa report blocked &quot;Testing the status icon&quot;</code></pre>
+<p>The pane&#x27;s icon turns amber and the sidebar counts one pane that needs you. Run <code>zurafa report clear</code> to reset it. If you skipped the install, see the <a href="/docs/cli/">CLI guide</a>.</p>
+<h2 id="claude-code">Claude Code</h2>
+<p>Add these hooks to <code>~/.claude/settings.json</code>. If the file already has a <code>hooks</code> object, merge the four entries into it.</p>
+<pre><code>{
+  &quot;hooks&quot;: {
+    &quot;UserPromptSubmit&quot;: [
+      {
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa report working&quot; }
+        ]
+      }
+    ],
+    &quot;PostToolUse&quot;: [
+      {
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa report working&quot; }
+        ]
+      }
+    ],
+    &quot;Notification&quot;: [
+      {
+        &quot;matcher&quot;: &quot;permission_prompt&quot;,
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa report blocked --kind permission&quot; }
+        ]
+      }
+    ],
+    &quot;Stop&quot;: [
+      {
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa report done&quot; }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+<p>Restart Claude Code in a Zurafa pane. The pane now turns <strong>working</strong> when you send a prompt, <strong>blocked</strong> when Claude asks for permission, back to <strong>working</strong> once you answer, and <strong>done</strong> when it finishes.</p>
+<h2 id="other-agents">Other agents</h2>
+<p>Any agent that can run a command on an event works the same way. Map its events to these reports:</p>
+<ul>
+<li><strong>Started work:</strong> <code>zurafa report working</code></li>
+<li><strong>Waiting on you:</strong> <code>zurafa report blocked --kind permission</code></li>
+<li><strong>Finished:</strong> <code>zurafa report done</code></li>
+<li><strong>Failed:</strong> <code>zurafa report error</code></li>
+</ul>
+<p>Messages are optional, so <code>zurafa report blocked &quot;Approve the deploy?&quot;</code> shows the question in the notification too.</p>
+<h2 id="when-an-agent-needs-you">When an agent needs you</h2>
+<p>A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. The Dock icon counts the panes waiting on you, and <code>⌘J</code> jumps to the next one.</p>
+<h2 id="how-it-works">How it works</h2>
+<p><code>zurafa report</code> writes an OSC 7501 sequence straight to the pane&#x27;s terminal, so it works from hooks whose output the agent captures. Outside Zurafa the sequence is ignored. The <a href="/docs/status/">Program status</a> page covers the protocol, nested tasks, and when reports clear themselves.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/quickstart/"><small>← Previous</small><strong>Quick start</strong></a><a href="/docs/sessions/"><small>Next →</small><strong>Sessions, tabs &amp; panes</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#other-agents">Other agents</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

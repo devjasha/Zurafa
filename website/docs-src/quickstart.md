@@ -21,3 +21,7 @@ Choose **New Session** from the command picker or press `⇧⌘N`. Click the wor
 ## Connect to another machine
 
 Choose **Add Remote Host** from `⌘K`, enter a host or SSH address, and create a remote session. Zurafa uses the system SSH client, so your SSH configuration and keys remain in use. See [Remote SSH](/docs/ssh/).
+
+## Connect your agents
+
+Running Claude Code, Codex, or another agent? Add one `zurafa report` line to its hooks and its pane shows when it is working, done, or blocked. See [Connect your agents](/docs/agents/).

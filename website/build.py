@@ -11,10 +11,10 @@ ROOT = Path(__file__).parent
 DIST = ROOT / "dist"
 ORIGIN = "https://zurafa-website.vercel.app"
 GROUPS = [
-    ("Start here", [("overview", "Overview"), ("install", "Install on macOS"), ("quickstart", "Quick start")]),
+    ("Start here", [("overview", "Overview"), ("install", "Install on macOS"), ("quickstart", "Quick start"), ("agents", "Connect your agents")]),
     ("Workspace", [("sessions", "Sessions, tabs & panes"), ("shortcuts", "Commands & shortcuts"), ("previews", "Files & images"), ("ssh", "Remote SSH"), ("remote-access", "Direct over Tailscale")]),
-    ("Personalization", [("appearance", "Appearance, config & Ghostty"), ("backgrounds", "Dithered backgrounds"), ("status", "Program status")]),
-    ("Reference", [("architecture", "Architecture & events"), ("ipc-reference", "IPC protocol"), ("cli", "CLI"), ("build", "Build from source"), ("troubleshooting", "Troubleshooting & limits")]),
+    ("Personalization", [("appearance", "Appearance, config & Ghostty"), ("backgrounds", "Dithered backgrounds")]),
+    ("Reference", [("status", "Program status"), ("architecture", "Architecture & events"), ("ipc-reference", "IPC protocol"), ("cli", "CLI"), ("build", "Build from source"), ("troubleshooting", "Troubleshooting & limits"), ("changelog", "Changelog")]),
 ]
 PAGES = [(slug, title, group) for group, items in GROUPS for slug, title in items]
 
@@ -113,7 +113,7 @@ def markdown(source):
 def main():
     DIST.mkdir(exist_ok=True)
     (DIST / 'assets').mkdir(exist_ok=True)
-    for name in ('style.css', 'home.css', 'site.js', 'home.js', 'zurafa-local-vm.png', 'zurafa-icon.png', 'zurafa-mascot.png', 'zurafa-star.png', 'zurafa-workspace.png', 'zurafa-interactive-preview.png'):
+    for name in ('style.css', 'home.css', 'docs.css', 'site.js', 'home.js', 'zurafa-local-vm.png', 'zurafa-icon.png', 'zurafa-mascot.png', 'zurafa-star.png', 'zurafa-workspace.png', 'zurafa-interactive-preview.png', 'zurafa-kitchen.jpg'):
         shutil.copy2(ROOT / 'assets' / name, DIST / 'assets' / name)
     (DIST / 'index.html').write_text((ROOT / 'home.html').read_text(), encoding='utf-8')
     (DIST / '404.html').write_text((ROOT / '404.html').read_text(), encoding='utf-8')

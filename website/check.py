@@ -32,7 +32,7 @@ def target(path):
 
 def main():
     pages = list(DIST.rglob('*.html'))
-    assert len(pages) == 18, f'expected homepage, 404, and 16 guides, found {len(pages)}'
+    assert len(pages) == 20, f'expected homepage, 404, and 18 guides, found {len(pages)}'
     errors = []
     for page in pages:
         source = page.read_text(encoding='utf-8')
@@ -55,7 +55,7 @@ def main():
                 if url.fragment not in other.ids:
                     errors.append(f'{page}: missing anchor {link}')
     search = json.loads((DIST / 'assets/search.json').read_text(encoding='utf-8'))
-    if len(search) != 16:
+    if len(search) != 18:
         errors.append('search index does not contain all guides')
     if errors:
         raise SystemExit('\n'.join(errors))

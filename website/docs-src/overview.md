@@ -6,13 +6,14 @@ Zurafa is a terminal workspace for macOS. The SwiftUI app renders terminals and 
 
 - [Install on macOS](/docs/install/) covers the download, first launch, and security prompt.
 - [Quick start](/docs/quickstart/) walks through a local session, a tab, a split, and the command picker.
+- [Connect your agents](/docs/agents/) sets up Claude Code and other agents so their panes show working, done, or blocked.
 - [Sessions, tabs & panes](/docs/sessions/) explains the workspace model and what persists.
 - [Files & images](/docs/previews/) covers file previews, image paste, and program icons.
 - [Remote SSH](/docs/ssh/) shows how saved hosts and system SSH work.
 - [Direct over Tailscale](/docs/remote-access/) connects tabs to tailnet hosts without SSH.
 - [Appearance, config & Ghostty](/docs/appearance/) and [Dithered backgrounds](/docs/backgrounds/) cover visual settings.
-- [Program status](/docs/status/) explains structured OSC 7501 reports.
-- [Architecture & events](/docs/architecture/), the [IPC protocol](/docs/ipc-reference/), and the [CLI](/docs/cli/) document automation surfaces.
+- [Program status](/docs/status/), [Architecture & events](/docs/architecture/), the [IPC protocol](/docs/ipc-reference/), and the [CLI](/docs/cli/) document automation surfaces.
+- The [Changelog](/docs/changelog/) lists what changed in each release.
 
 ## What the beta includes
 
@@ -20,4 +21,4 @@ Multiple sessions, tabs, split panes, focus and zoom controls, file previews, im
 
 ## Current limits
 
-This is an Apple Silicon build only. It is signed with Developer ID and notarized by Apple. Open sessions live in daemon memory and do not survive a daemon restart. Zurafa does not yet include Lua scripting, mosh transport, or a native Tailscale integration. [Read the full limits and troubleshooting guide](/docs/troubleshooting/).
+This is an Apple Silicon build only. It is signed with Developer ID and notarized by Apple. Open sessions live in daemon memory and do not survive a daemon restart. Zurafa does not yet include Lua scripting or mosh transport. [Read the full limits and troubleshooting guide](/docs/troubleshooting/).

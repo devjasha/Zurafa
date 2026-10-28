@@ -1,0 +1,63 @@
+/* Docs only. Same rules as the homepage: Tailwind type scale, the fixed spacing set, flat backgrounds, one easing curve. */
+.docs-page h1,.docs-page h2,.docs-page h3{text-wrap:balance}.docs-page p{text-wrap:pretty}
+.docs-layout{gap:48px;padding-block:48px 96px}
+.docs-sidebar,.docs-toc{top:112px;max-height:calc(100vh - 128px);overflow-x:hidden;scrollbar-width:none}
+.docs-sidebar::-webkit-scrollbar,.docs-toc::-webkit-scrollbar{display:none}
+
+/* sidebar */
+.docs-home{font-size:18px;line-height:28px;font-weight:600;letter-spacing:-.02em;margin-bottom:16px;transition:color .3s var(--ease)}
+.docs-home:hover{color:var(--accent)}
+.docs-search-wrap input{height:40px;padding:8px 32px 8px 12px;border-radius:12px;font-size:14px;line-height:20px;transition:border-color .3s var(--ease),box-shadow .3s var(--ease)}
+.docs-search-wrap kbd{top:12px;font-size:12px;line-height:16px}
+.search-results{top:48px;padding:8px;border-radius:12px}
+.search-results a{padding:8px;border-radius:4px;font-size:14px;line-height:20px;transition:background-color .3s var(--ease)}
+.search-results small,.search-empty{font-size:12px;line-height:16px}
+.nav-group{margin-top:24px}
+.nav-group p{margin:0 0 8px 12px;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.08em}
+.nav-group a{padding:8px 12px;font-size:14px;line-height:20px;border-radius:8px;transition:background-color .3s var(--ease),color .3s var(--ease)}
+.nav-group a[aria-current]{font-weight:600}
+
+/* article */
+.doc-breadcrumb{gap:8px;margin-bottom:16px;font-size:12px;line-height:16px}
+.docs-article h1{margin:0 0 24px;font-size:48px;line-height:1;font-weight:700;letter-spacing:-.04em}
+.prose{font-size:16px;line-height:24px}
+.prose p{margin:0 0 16px}
+.prose h2,.prose h3,.prose h4,.prose h5{font-weight:600;letter-spacing:-.02em}
+.prose h2{margin:48px 0 16px;padding-top:8px;font-size:30px;line-height:36px}
+.prose h3{margin:32px 0 12px;font-size:24px;line-height:32px}
+.prose h4{margin:24px 0 8px;font-size:20px;line-height:28px}
+.prose h5{margin:16px 0 8px;font-size:18px;line-height:28px}
+.prose ul,.prose ol{margin:0 0 24px;padding-left:24px}
+.prose li{margin:4px 0}
+.prose a{text-underline-offset:4px;transition:text-decoration-color .3s var(--ease)}
+.prose a:hover{text-decoration-color:var(--accent)}
+.prose code{padding:2px 4px;font-size:14px}
+.prose pre{margin:16px 0 24px;padding:16px 24px;border-radius:12px;font-size:14px;line-height:20px}
+.prose .table-scroll{margin:16px 0 24px;border-radius:12px}
+.prose table{font-size:14px;line-height:20px}
+.prose th,.prose td{padding:8px 12px}
+.prose th{font-weight:600}
+.prose h2+p>strong:only-child{color:var(--faint);font-size:14px;line-height:20px;font-weight:500}
+.note{margin:16px 0;padding:16px;border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:12px}
+.diagram{margin:24px 0;padding:16px 16px 12px;border-radius:16px}
+.diagram figcaption{margin-top:8px;font-size:14px;line-height:20px}
+
+/* on this page and next/previous */
+.docs-toc{padding-top:8px}
+.docs-toc p{font-size:12px;line-height:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.docs-toc a{margin:12px 0;font-size:14px;line-height:20px;transition:color .3s var(--ease)}
+.docs-toc .edit-link{margin-top:24px;padding-top:16px}
+.page-adjacent{gap:16px;margin-top:64px;padding-top:24px}
+.page-adjacent a{gap:4px;padding:16px;border-radius:12px;transition:border-color .3s var(--ease),transform .5s var(--ease)}
+.page-adjacent a:hover{transform:translateY(-2px)}
+.page-adjacent a:active{transform:scale(.98)}
+.page-adjacent small{font-size:12px;line-height:16px}
+.page-adjacent strong{font-size:16px;line-height:24px;font-weight:600}
+
+@media(max-width:690px){
+  .docs-layout{padding-top:24px}
+  .docs-sidebar{margin-bottom:24px;padding-bottom:16px}
+  .docs-article h1{font-size:36px;line-height:40px}
+  .mobile-docs-menu summary{padding:8px 0;font-size:14px;line-height:20px;font-weight:600}
+  .page-adjacent a{margin-bottom:8px}
+}
