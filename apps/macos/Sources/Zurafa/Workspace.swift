@@ -126,7 +126,9 @@ enum EditorKind: String, Identifiable {
 @MainActor final class Workspace: ObservableObject {
     @Published private(set) var tabs: [Tab] = []
     @Published private(set) var selected = 0
-    @Published private(set) var metas: [String: PaneMeta] = [:]
+    @Published private(set) var metas: [String: PaneMeta] = [:] {
+        didSet { Attention.shared.setBadge(metas.values.filter { $0.status == "blocked" }.count) }
+    }
     @Published private(set) var sessionID = "default"
     @Published private(set) var hosts: [RemoteHost] = []
     /// Online tailnet machines not saved yet, offered by Add Host.
@@ -183,6 +185,7 @@ enum EditorKind: String, Identifiable {
     init() {
         TerminalStore.shared.onFocus = { [weak self] id in self?.focus(id) }
         TerminalStore.shared.onOpenLink = { [weak self] id, link in self?.openPreview(link, from: id) ?? false }
+        Attention.shared.start { [weak self] pane in self?.jump(to: pane) }
         loadZurafaConfig()
         syncTerminalAppearance()
         // shortcut: polls the config's modification date once a second; catches every editor's save style. Switch to FSEvents if it ever shows up in profiles.
@@ -284,7 +287,9 @@ enum EditorKind: String, Identifiable {
                let value = event.payload.object?["record"],
                let data = try? JSONEncoder().encode(value),
                let record = try? JSONDecoder().decode(ProgramStatus.self, from: data) {
+                let before = metas[id]?.status
                 metas[id]?.statuses[key] = record
+                if let after = metas[id]?.status, after != before, after == "blocked" || after == "completed" { notify(id) }
             }
         case "terminal.program_status_removed":
             if let id = event.blockID, case .array(let keys)? = event.payload.object?["ids"] {
@@ -358,6 +363,40 @@ enum EditorKind: String, Identifiable {
         let owner = snapshot?.sessions.first(where: { $0.value.blocks[id] != nil })?.key ?? sessionID
         command(["op": .string("focus"), "session": .string(owner), "block": .string(id)])
     }
+    /// Shows a pane in whichever workspace holds it.
+    func jump(to pane: String) {
+        guard let owner = snapshot?.sessions.first(where: { $0.value.blocks[pane] != nil })?.key else { return }
+        if owner != sessionID { selectSession(owner) }
+        focus(pane)
+    }
+
+    /// Panes waiting on you, or else finished ones, in workspace, tab and pane order.
+    var panesNeedingYou: [String] {
+        let all = orderedSessions.flatMap { tabs(in: $0).flatMap(\.layout.panes) }
+        let waiting = all.filter { meta($0).status == "blocked" }
+        return waiting.isEmpty ? all.filter { meta($0).status == "completed" } : waiting
+    }
+
+    /// Each press goes to the next pane needing you, after the one in view.
+    func jumpToAttention() {
+        let panes = panesNeedingYou
+        guard !panes.isEmpty else { return }
+        jump(to: panes.firstIndex(of: tab.focus).map { panes[($0 + 1) % panes.count] } ?? panes[0])
+    }
+
+    /// Notifies you of a pane that came to need you or finished, unless it is in front of you.
+    private func notify(_ pane: String) {
+        guard let session = snapshot?.sessions.first(where: { $0.value.blocks[pane] != nil })?.value else { return }
+        if NSApp.isActive && session.sessionID == sessionID && tab.layout.panes.contains(pane) { return }
+        let m = meta(pane)
+        let failed = m.statuses.values.contains { $0.state == "error" }
+        let verb = m.status == "completed" ? "finished" : failed ? "failed" : "needs you"
+        let tabLabel = tabs(in: session).first { $0.layout.panes.contains(pane) }?.label
+        Attention.shared.notify(pane: pane, title: "\(m.program.title) \(verb)",
+                                subtitle: [session.label, tabLabel].compactMap { $0 }.joined(separator: " · "),
+                                body: m.statusMessage ?? m.title)
+    }
+
     func selectTab(_ i: Int) { if tabs.indices.contains(i) { focus(tabs[i].focus) } }
     func resize(_ path: [Int], _ ratio: Double) {
         guard !tab.id.isEmpty else { return }
@@ -728,6 +767,7 @@ struct Command: Identifiable {
         Command(title: "Next Workspace", key: "}", mods: [.command, .shift]) { $0.workspaceStep(1) },
         Command(title: "Previous Workspace", key: "{", mods: [.command, .shift]) { $0.workspaceStep(-1) },
         Command(title: "Command Palette", key: "k") { $0.paletteOpen = true },
+        Command(title: "Jump to Pane Needing You", key: "j") { $0.jumpToAttention() },
     ] + (1...9).map { n in
         Command(title: "Select Tab \(n)", key: KeyEquivalent(Character("\(n)"))) { ws in
             if ws.sessionPickerOpen {

@@ -83,6 +83,25 @@ zurafa tab new --label Build      # create a new tab in the current session
 zurafa split --axis vertical      # split the current pane
 zurafa preview README.md          # open a file in the preview beside the current pane</code></pre>
 <p>Run <code>zurafa help</code> for the full command list.</p>
+<h2 id="driving-panes-from-agents">Driving panes from agents</h2>
+<p>Agents running in a Zurafa pane can use the CLI the way you would: start a test run beside themselves, type into another agent, wait for it and read its screen.</p>
+<pre><code>zurafa send review &quot;npm run migrate&quot; --enter   # type text, then press Enter
+zurafa send review -e &#x27;y\n&#x27;                     # interpret \n \r \t \e \xHH escapes
+zurafa key review ctrl+c                       # press keys: enter, tab, escape, up, ctrl+c…
+zurafa read review -n 40                       # the last 40 lines, scrollback included
+zurafa wait review                             # until it stops working
+zurafa wait review --for blocked,error -t 10m  # until it reaches one of these statuses
+zurafa prompt review &quot;summarize the diff&quot;      # send + Enter, wait, print the screen
+zurafa events --for blocked                    # print status changes as they happen</code></pre>
+<p>A target is a pane, or a session for its focused pane. Without <code>-s</code>, agent commands search every session. <code>read</code>, <code>wait</code> and <code>events</code> default to the current pane inside Zurafa.</p>
+<p><code>wait</code> prints the pane&#x27;s status when it returns: <code>idle</code>, <code>working</code>, <code>blocked</code>, <code>done</code>, <code>error</code> or <code>exited</code>. A pane whose program reports nothing is <code>idle</code>, so <code>wait</code> and <code>prompt</code> rely on <a href="/docs/status/">status reports</a>. <code>prompt</code> treats a program that doesn&#x27;t start working within 10 seconds as answered. <code>--timeout</code> (<code>30s</code>, <code>10m</code>, <code>1h</code>) makes <code>wait</code>, <code>prompt</code> and <code>events</code> exit with status 5.</p>
+<p><code>zurafa events --json</code> prints one daemon event per line. <code>--once</code> exits after the first matching event.</p>
+<p>Programs and agents report their own status with <code>zurafa report</code>, which writes an OSC 7501 sequence to the terminal:</p>
+<pre><code>zurafa report working &quot;Migrating the database&quot; --progress 40
+zurafa report blocked &quot;Approve the production deploy?&quot; --kind permission
+zurafa report done &quot;Deployed to staging&quot;
+zurafa report clear</code></pre>
+<p><code>--id</code> and <code>--title</code> report one of several tasks in a pane, and <code>--app</code> names the program.</p>
 <h2 id="taxonomy">Taxonomy</h2>
 <p>Zurafa&#x27;s public UI uses these names:</p>
 <ul>
@@ -126,8 +145,9 @@ zurafa --json pane inspect t1</code></pre>
 <tr><td>2</td><td>The command line was invalid</td></tr>
 <tr><td>3</td><td>A target was not found or was ambiguous</td></tr>
 <tr><td>4</td><td>The daemon could not be reached</td></tr>
+<tr><td>5</td><td><code>--timeout</code> passed</td></tr>
 </table></div></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/ipc-reference/"><small>← Previous</small><strong>IPC protocol</strong></a><a href="/docs/build/"><small>Next →</small><strong>Build from source</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#try-it">Try it</a><a href="#commands">Commands</a><a href="#taxonomy">Taxonomy</a><a href="#command-targets">Command targets</a><a href="#machine-readable-output">Machine-readable output</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>ON THIS PAGE</p><a href="#try-it">Try it</a><a href="#commands">Commands</a><a href="#driving-panes-from-agents">Driving panes from agents</a><a href="#taxonomy">Taxonomy</a><a href="#command-targets">Command targets</a><a href="#machine-readable-output">Machine-readable output</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement ↗</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A thoughtful workspace for the terminal on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="https://github.com/devjasha/Zurafa/releases">Releases</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>

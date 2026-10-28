@@ -6,7 +6,13 @@ Zurafa supports structured program-status reports through OSC 7501. Compatible p
 
 The macOS app shows a small status indicator for a terminal or tab when a supported report is active. Multiple records can coexist within one terminal, so a program can represent nested tasks. The frontend receives `terminal.program_status_changed` and `terminal.program_status_removed` events and refreshes after reconnecting from the Rust snapshot.
 
+## Notifications
+
+When a pane comes to need you (`blocked` or `error`) or finishes (`done`) while you're looking at another app, workspace or tab, Zurafa sends a macOS notification. Click it to go to that pane. The Dock icon counts the panes waiting on you, and `⌘J` jumps to the next one, or to the next finished pane when none is waiting.
+
 ## Send a report
+
+`zurafa report working "Building" --progress 40` sends a report from a shell or an agent. See the [CLI](/docs/cli/).
 
 The current wire format is `ESC ] 7501 ; key=value (: key=value)* ST`. Here `ST` can be BEL or `ESC` followed by `\`. Fields include `state`, `id`, base64-encoded `msg` and `title`, optional `kind`, `progress`, and `app`. IDs form a bounded slash-separated hierarchy; omitting `id` targets the root record. Each report replaces that record rather than merging missing fields.
 

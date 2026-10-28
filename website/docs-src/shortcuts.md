@@ -7,6 +7,7 @@ The command picker is the quickest way to discover an action. Press `⌘K`, type
 | Action | Shortcut |
 | --- | --- |
 | Command picker | `⌘K` |
+| Jump to the next pane needing you | `⌘J` |
 | New tab | `⌘T` |
 | Close focused pane | `⌘W` |
 | Close tab | `⌥⌘W` |
