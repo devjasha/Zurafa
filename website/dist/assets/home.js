@@ -37,7 +37,7 @@
   if (stars) {
     fetch('https://api.github.com/repos/devjasha/Zurafa')
       .then(response => response.ok ? response.json() : Promise.reject())
-      .then(repo => { if (Number.isFinite(repo.stargazers_count)) stars.textContent = repo.stargazers_count.toLocaleString('en-US'); })
+      .then(repo => { if (Number.isFinite(repo.stargazers_count)) stars.textContent = `${repo.stargazers_count.toLocaleString('en-US')} ${repo.stargazers_count === 1 ? 'star' : 'stars'}`; })
       .catch(() => {}); // Keep "Star on GitHub" when the API is rate limited or offline.
   }
 })();
