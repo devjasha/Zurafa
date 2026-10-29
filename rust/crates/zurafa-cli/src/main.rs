@@ -153,6 +153,9 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
     if args[0] == "report" {
         return cmd_report(&args[1..]);
     }
+    if args[0] == "hook" {
+        return cmd_hook(&args[1..]);
+    }
     if args[0] == "setup" {
         return cmd_setup(&args[1..]);
     }
@@ -1269,6 +1272,11 @@ fn cmd_report(args: &[String]) -> Result<(), (i32, String)> {
     if !msg.is_empty() {
         fields.push(format!("msg={}", B64.encode(msg.join(" "))));
     }
+    write_report(&fields)
+}
+
+/// Sends OSC 7501 `fields` to the terminal of the pane this runs in.
+fn write_report(fields: &[String]) -> Result<(), (i32, String)> {
     // An agent's command output is captured, so write to the terminal itself.
     let open = |path: &str| std::fs::OpenOptions::new().write(true).open(path);
     let mut tty = open("/dev/tty")
@@ -1299,22 +1307,247 @@ fn ancestor_tty() -> Option<String> {
     None
 }
 
-/// The hooks the agents guide lists: (event, matcher, command).
-type Hooks = [(&'static str, Option<&'static str>, &'static str); 4];
+/// An agent whose own subagents Zurafa shows and steers: the differences between Claude Code and Codex.
+struct AgentHooks {
+    /// Its program name, for `zurafa spawn` and as the report's app.
+    name: &'static str,
+    /// The tool that starts a subagent, and the argument naming the subagent's type.
+    tool: &'static str,
+    type_arg: &'static str,
+    default_type: &'static str,
+    /// Subagent types that only read, and so may stay out of sight.
+    lookups: &'static [&'static str],
+}
 
-const CLAUDE_HOOKS: Hooks = [
+const CLAUDE: AgentHooks = AgentHooks {
+    name: "claude",
+    tool: "Agent",
+    type_arg: "subagent_type",
+    default_type: "general-purpose",
+    lookups: &["Explore", "Plan", "claude-code-guide"],
+};
+
+const CODEX: AgentHooks = AgentHooks {
+    name: "codex",
+    tool: "spawn_agent",
+    type_arg: "agent_type",
+    default_type: "default",
+    lookups: &["explorer"],
+};
+
+impl AgentHooks {
+    /// Told to the agent at session start in a Zurafa pane, so orchestration goes through panes the user can see.
+    fn orchestration(&self) -> String {
+        format!(
+            "This {name} session runs in a Zurafa terminal pane. \
+             Agents started with `zurafa spawn` get their own live terminal, grouped under this pane, that the user can watch, type into and stop; \
+             the built-in {tool} tool runs subagents out of the user's sight, so here it only takes the read-only lookup types ({lookups}). \
+             For any other agent, parallel or long-running work, work in its own git worktree, or work by another agent (claude, codex, pi), \
+             use `zurafa spawn {name} \"TASK\" -l LABEL [--worktree BRANCH]`, which prints the new pane id, \
+             then `zurafa wait PANE` and `zurafa read PANE -n 200` for its result. \
+             An agent started with `zurafa spawn` does its task itself unless the task says to delegate. \
+             Grey text in an idle agent's prompt box is the agent's own suggestion, not typed input.",
+            name = self.name,
+            tool = self.tool,
+            lookups = self.lookups.join(", ")
+        )
+    }
+
+    /// The subagent's task, for its row in the card. Neither agent puts it in the hook event.
+    fn title(&self, event: &Value, id: &str) -> String {
+        let text = |key: &str| event[key].as_str().unwrap_or("");
+        let task = match self.name {
+            "claude" => subagent_meta(text("transcript_path"), id)["description"].as_str().unwrap_or("").to_owned(),
+            // Codex names the subagent's own transcript, whose first line holds its path, like /root/find_report_text.
+            _ => {
+                let transcript = [text("agent_transcript_path"), text("transcript_path")].into_iter().find(|t| !t.is_empty()).unwrap_or("");
+                codex_agent_path(transcript).rsplit('/').next().unwrap_or("").replace('_', " ")
+            }
+        };
+        let task = report_text(&task, 120);
+        if task.is_empty() { report_text(text("agent_type"), 120) } else { task }
+    }
+}
+
+/// `zurafa hook claude|codex`: the agent hooks that need the event's JSON, which arrives on stdin.
+fn cmd_hook(args: &[String]) -> Result<(), (i32, String)> {
+    let agent = match positionals(args).first().map(String::as_str) {
+        Some("claude") => &CLAUDE,
+        Some("codex") => &CODEX,
+        _ => return Err((2, "usage: zurafa hook claude|codex".into())),
+    };
+    if env::var_os("ZURAFA_PANE").is_none() {
+        return Ok(()); // outside Zurafa there is no card to show, nor reason to steer the agent
+    }
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input).map_err(|e| (1, e.to_string()))?;
+    let event: Value = serde_json::from_str(&input).map_err(|e| (1, format!("hook input is not JSON: {e}")))?;
+    let (output, fields) = agent_hook(agent, &event);
+    if let Some(output) = output {
+        println!("{output}");
+    }
+    // Agents drop a hook's output when it fails, and a missing card row matters less than the context.
+    if let Some(fields) = fields {
+        if write_report(&fields).is_err() {
+            if let Err(e) = socket_report(agent.name, event["cwd"].as_str().unwrap_or(""), &fields) {
+                eprintln!("zurafa: {e}");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Sends a report through the daemon, for hooks without the pane's terminal: Codex runs them in a
+/// background server that every Codex session shares, started from whichever pane ran Codex first.
+fn socket_report(agent: &str, cwd: &str, fields: &[String]) -> Result<(), String> {
+    let mut client = Client::connect(None)?;
+    let (session, block) = agent_pane(&client.snapshot()?, agent, cwd, env::var("ZURAFA_PANE").ok().as_deref())
+        .ok_or("no single pane runs this agent here")?;
+    client.request(json!({"type": "status.report", "session": session, "block": block, "body": fields.join(":")}))?;
+    Ok(())
+}
+
+/// The running local pane whose program is `agent`, working in `cwd`: `hint` if it is one of them, else the only one.
+fn agent_pane(snapshot: &Value, agent: &str, cwd: &str, hint: Option<&str>) -> Option<(String, String)> {
+    // shortcut: two panes running the same agent in one folder can't be told apart, so neither gets the report.
+    let mut found = vec![];
+    for (sid, session) in snapshot["sessions"].as_object()? {
+        if !session["remote"].is_null() {
+            continue;
+        }
+        for (bid, block) in session["blocks"].as_object()? {
+            let fg = &block["foreground"];
+            let argv: Vec<&str> = fg["argv"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+            // A spawned agent shows as `fish -li -c "codex <task>; exec fish -l"`, so read what -c runs.
+            let run = match argv.iter().position(|a| *a == "-c") {
+                Some(c) => argv.get(c + 1).and_then(|cmd| cmd.split([' ', ';']).next()),
+                None => argv.first().copied(),
+            };
+            let program = run.unwrap_or("").rsplit('/').next().unwrap_or("");
+            if block["running"] == true && fg["cwd"] == cwd && (fg["name"] == agent || program == agent) {
+                found.push((sid.clone(), bid.clone()));
+            }
+        }
+    }
+    match found.iter().position(|(_, b)| Some(b.as_str()) == hint) {
+        Some(i) => Some(found.swap_remove(i)),
+        None if found.len() == 1 => found.pop(),
+        None => None,
+    }
+}
+
+/// What an agent's hook event prints for the agent, and the OSC 7501 report it makes.
+/// Native subagents are reported on their parent's pane as `agent/<agent_id>`.
+fn agent_hook(agent: &AgentHooks, event: &Value) -> (Option<String>, Option<Vec<String>>) {
+    let text = |key: &str| event[key].as_str().unwrap_or("");
+    let raw_id = text("agent_id");
+    // Codex ids are UUIDs, 36 characters with dashes; report ids allow up to 32.
+    let id = raw_id.replace('-', "");
+    let valid_id = !id.is_empty() && id.len() <= 32 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b"_.+".contains(&b));
+    match text("hook_event_name") {
+        // Compaction keeps the session and its subagents, but the context has to be given again.
+        "SessionStart" if text("source") == "compact" => (Some(agent.orchestration()), None),
+        "SessionStart" => (Some(agent.orchestration()), Some(vec!["state=clear".into(), "id=agent".into()])),
+        // The agent's own status, for Codex, whose hooks have no terminal to run `zurafa report` in.
+        "UserPromptSubmit" | "PostToolUse" => (None, Some(vec!["state=working".into()])),
+        "PermissionRequest" => (None, Some(vec!["state=blocked".into(), "kind=permission".into()])),
+        "Stop" => (None, Some(vec!["state=done".into()])),
+        // Codex prefixes its tool's namespace (collaborationspawn_agent); Claude Code once called its tool Task.
+        "PreToolUse" if text("tool_name").ends_with(agent.tool) || (agent.name == "claude" && text("tool_name") == "Task") => {
+            // Both run every subagent in the background, so only the type tells a lookup from work.
+            let kind = event["tool_input"][agent.type_arg].as_str().unwrap_or(agent.default_type);
+            if agent.lookups.contains(&kind) {
+                return (None, None);
+            }
+            let reason = format!(
+                "In a Zurafa pane, agents that do work run in a terminal the user can watch and steer. \
+                 Start this {kind} agent with `zurafa spawn {} \"TASK\" -l LABEL` (add `--worktree BRANCH` for its own checkout), \
+                 then `zurafa wait PANE` and `zurafa read PANE -n 200` for its result. \
+                 The built-in {} tool here takes only {}.",
+                agent.name,
+                agent.tool,
+                agent.lookups.join(", ")
+            );
+            let deny = json!({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}});
+            (Some(deny.to_string()), None)
+        }
+        event_name @ ("SubagentStart" | "SubagentStop") if valid_id => {
+            let start = event_name == "SubagentStart";
+            // Claude's own helpers (titles, summaries) come without a type, at start and stop alike.
+            if report_text(text("agent_type"), 120).is_empty() {
+                return (None, None);
+            }
+            let mut fields = vec![
+                format!("state={}", if start { "working" } else { "done" }),
+                format!("id=agent/{id}"),
+                format!("app={}", agent.name),
+                format!("title={}", B64.encode(agent.title(event, raw_id))),
+            ];
+            let last = text("last_assistant_message");
+            if !start && !last.is_empty() {
+                fields.push(format!("msg={}", B64.encode(report_text(last, 1200))));
+            }
+            (None, Some(fields))
+        }
+        _ => (None, None),
+    }
+}
+
+/// Claude's `<session>/subagents/agent-<id>.meta.json` beside the session transcript, which holds
+/// the Agent call's description. It is written after the start hook runs, so only a stop finds it;
+/// meanwhile the app takes the title from Claude's own status record for the agent.
+fn subagent_meta(transcript: &str, id: &str) -> Value {
+    // shortcut: reads Claude Code's undocumented transcript layout; falls back to agent_type when it moves.
+    let Some(session) = transcript.strip_suffix(".jsonl") else { return Value::Null };
+    let path = format!("{session}/subagents/agent-{id}.meta.json");
+    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null)
+}
+
+/// The `agent_path` in the session_meta line that starts a Codex subagent's transcript.
+fn codex_agent_path(transcript: &str) -> String {
+    // shortcut: reads Codex's undocumented rollout layout; falls back to agent_type when it moves.
+    use std::io::BufRead;
+    let Ok(file) = std::fs::File::open(transcript) else { return String::new() };
+    let mut line = String::new();
+    let _ = std::io::BufReader::new(file).read_line(&mut line);
+    serde_json::from_str::<Value>(&line).ok().and_then(|v| v["payload"]["agent_path"].as_str().map(str::to_owned)).unwrap_or_default()
+}
+
+/// `s` on one line and cut to at most `max` bytes, as OSC 7501 rejects control characters.
+fn report_text(s: &str, max: usize) -> String {
+    let line = s.replace(char::is_control, " ").split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut end = line.len().min(max);
+    while !line.is_char_boundary(end) {
+        end -= 1;
+    }
+    line[..end].trim_end().to_owned()
+}
+
+/// The hooks the agents guide lists: (event, matcher, command).
+type Hooks = [(&'static str, Option<&'static str>, &'static str)];
+
+const CLAUDE_HOOKS: &Hooks = &[
     ("UserPromptSubmit", None, "zurafa report working"),
     ("PostToolUse", None, "zurafa report working"),
     ("Notification", Some("permission_prompt"), "zurafa report blocked --kind permission"),
     ("Stop", None, "zurafa report done"),
+    ("SessionStart", None, "zurafa hook claude"),
+    ("SubagentStart", None, "zurafa hook claude"),
+    ("SubagentStop", None, "zurafa hook claude"),
+    ("PreToolUse", Some("Agent|Task"), "zurafa hook claude"),
 ];
 
-/// Codex reads Claude's hook format from $CODEX_HOME/hooks.json, with its own event for approvals.
-const CODEX_HOOKS: Hooks = [
-    ("UserPromptSubmit", None, "zurafa report working"),
-    ("PostToolUse", None, "zurafa report working"),
-    ("PermissionRequest", None, "zurafa report blocked --kind permission"),
-    ("Stop", None, "zurafa report done"),
+/// Codex reads Claude's hook format from $CODEX_HOME/hooks.json, with its own event for approvals. Its hooks run in a background
+/// server without the pane's terminal, so every one goes through `zurafa hook codex`.
+const CODEX_HOOKS: &Hooks = &[
+    ("UserPromptSubmit", None, "zurafa hook codex"),
+    ("PostToolUse", None, "zurafa hook codex"),
+    ("PermissionRequest", None, "zurafa hook codex"),
+    ("Stop", None, "zurafa hook codex"),
+    ("SessionStart", None, "zurafa hook codex"),
+    ("SubagentStart", None, "zurafa hook codex"),
+    ("SubagentStop", None, "zurafa hook codex"),
+    ("PreToolUse", Some("spawn_agent"), "zurafa hook codex"),
 ];
 
 fn cmd_setup(args: &[String]) -> Result<(), (i32, String)> {
@@ -1323,13 +1556,13 @@ fn cmd_setup(args: &[String]) -> Result<(), (i32, String)> {
     match positionals(args).first().map(String::as_str) {
         Some("claude") => setup_hooks(
             config_dir("CLAUDE_CONFIG_DIR", ".claude")?.join("settings.json"),
-            &CLAUDE_HOOKS,
+            CLAUDE_HOOKS,
             "Claude Code",
             "Restart Claude Code in a Zurafa pane.",
         ),
         Some("codex") => setup_hooks(
             config_dir("CODEX_HOME", ".codex")?.join("hooks.json"),
-            &CODEX_HOOKS,
+            CODEX_HOOKS,
             "Codex",
             "Restart Codex in a Zurafa pane, then trust them in /hooks: Codex skips hooks you have not reviewed.",
         ),
@@ -1551,7 +1784,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
 }
 
 #[cfg(test)]
@@ -1584,26 +1817,98 @@ mod tests {
     }
 
     #[test]
+    fn claude_subagents_report_on_their_parent_pane() {
+        let dir = env::temp_dir().join(format!("zurafa-hook-{}", process::id()));
+        std::fs::create_dir_all(dir.join("s1/subagents")).unwrap();
+        std::fs::write(dir.join("s1/subagents/agent-a1b2.meta.json"), r#"{"agentType":"Explore","description":"Find the parser"}"#).unwrap();
+        let transcript = dir.join("s1.jsonl").display().to_string();
+        let event = |name: &str, extra: Value| {
+            let mut e = json!({"hook_event_name": name, "agent_id": "a1b2", "agent_type": "Explore", "transcript_path": transcript});
+            e.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            agent_hook(&CLAUDE, &e)
+        };
+        let title = format!("title={}", B64.encode("Find the parser"));
+        assert_eq!(event("SubagentStart", json!({})).1.unwrap(), ["state=working", "id=agent/a1b2", "app=claude", &title]);
+        let done = event("SubagentStop", json!({"last_assistant_message": "Found it\nin lexer.rs"})).1.unwrap();
+        assert_eq!(done[..4], ["state=done", "id=agent/a1b2", "app=claude", &title]);
+        assert_eq!(done[4], format!("msg={}", B64.encode("Found it in lexer.rs")));
+        assert!(event("SubagentStart", json!({"agent_id": "bad/id"})).1.is_none());
+        assert!(event("SubagentStart", json!({"agent_id": "helper", "agent_type": ""})).1.is_none());
+        let (context, fields) = event("SessionStart", json!({"source": "startup"}));
+        assert!(context.unwrap().contains("zurafa spawn"));
+        assert_eq!(fields.unwrap(), ["state=clear", "id=agent"]);
+        assert_eq!(event("SessionStart", json!({"source": "compact"})), (Some(CLAUDE.orchestration()), None));
+        let agent = |kind: &str| event("PreToolUse", json!({"tool_name": "Agent", "tool_input": {"subagent_type": kind}}));
+        assert_eq!(agent("Explore"), (None, None));
+        let deny: Value = serde_json::from_str(&agent("general-purpose").0.unwrap()).unwrap();
+        assert_eq!(deny["hookSpecificOutput"]["permissionDecision"], "deny");
+        assert!(deny["hookSpecificOutput"]["permissionDecisionReason"].as_str().unwrap().contains("zurafa spawn"));
+        assert_eq!(report_text(" a \u{1}\u{1b} b ", 9), "a b");
+        assert_eq!(report_text("héllo wörld", 7), "héllo");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn codex_subagents_are_named_from_their_transcript_and_work_goes_to_spawn() {
+        let dir = env::temp_dir().join(format!("zurafa-codex-hook-{}", process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let rollout = dir.join("rollout-01a1884a-6dc5-75f2-9d65-27001bb15bc5.jsonl");
+        std::fs::write(&rollout, "{\"type\":\"session_meta\",\"payload\":{\"agent_path\":\"/root/find_report_text\"}}\n{}\n").unwrap();
+        let start = json!({"hook_event_name": "SubagentStart", "agent_id": "01a1884a-6dc5-75f2-9d65-27001bb15bc5",
+                           "agent_type": "default", "transcript_path": rollout.display().to_string()});
+        let title = format!("title={}", B64.encode("find report text"));
+        assert_eq!(agent_hook(&CODEX, &start).1.unwrap(), ["state=working", "id=agent/01a1884a6dc575f29d6527001bb15bc5", "app=codex", &title]);
+        let spawn = |kind: Value| agent_hook(&CODEX, &json!({"hook_event_name": "PreToolUse", "tool_name": "collaborationspawn_agent",
+                                                              "tool_input": {"task_name": "x", "agent_type": kind}}));
+        assert_eq!(spawn(json!("explorer")), (None, None));
+        assert!(spawn(Value::Null).0.unwrap().contains("zurafa spawn codex"));
+        assert_eq!(agent_hook(&CODEX, &json!({"hook_event_name": "PermissionRequest"})).1.unwrap(), ["state=blocked", "kind=permission"]);
+        let other = json!({"hook_event_name": "PreToolUse", "tool_name": "collaborationwait_agent", "tool_input": {}});
+        assert_eq!(agent_hook(&CODEX, &other), (None, None));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn hooks_without_a_terminal_find_the_one_pane_running_their_agent() {
+        let pane = |name: &str, cwd: &str| json!({"running": true, "foreground": {"name": name, "cwd": cwd, "argv": [name]}});
+        let snapshot = json!({"sessions": {
+            "default": {"remote": null, "blocks": {"t1": pane("codex", "/a"), "t2": pane("codex", "/b"), "t3": pane("fish", "/a")}},
+            "vm": {"remote": {"id": "h"}, "blocks": {"t9": pane("codex", "/a")}}
+        }});
+        let found = |cwd: &str, hint: Option<&str>| agent_pane(&snapshot, "codex", cwd, hint).map(|(_, b)| b);
+        assert_eq!(found("/a", None).as_deref(), Some("t1"));
+        let spawned = json!({"running": true, "foreground": {"name": "fish", "cwd": "/b", "argv": ["fish", "-li", "-c", "codex 'fix it'; exec fish -l"]}});
+        let mut two = snapshot.clone();
+        two["sessions"]["default"]["blocks"]["t5"] = spawned;
+        assert_eq!(agent_pane(&two, "codex", "/b", None), None, "t2 and the spawned t5 both run codex in /b");
+        assert_eq!(found("/c", None), None);
+        let mut twice = snapshot.clone();
+        twice["sessions"]["default"]["blocks"]["t4"] = pane("codex", "/a");
+        assert_eq!(agent_pane(&twice, "codex", "/a", None), None);
+        assert_eq!(agent_pane(&twice, "codex", "/a", Some("t4")).map(|(_, b)| b).as_deref(), Some("t4"));
+    }
+
+    #[test]
     fn claude_hooks_merge_once_and_keep_user_hooks() {
         let mut settings = json!({
             "model": "opus",
             "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] }
         });
-        assert_eq!(add_hooks(&mut settings, &CLAUDE_HOOKS).unwrap(), 4);
+        assert_eq!(add_hooks(&mut settings, CLAUDE_HOOKS).unwrap(), 8);
         assert_eq!(settings["model"], "opus");
         assert_eq!(settings["hooks"]["Stop"][0]["hooks"][0]["command"], "say done");
         assert_eq!(settings["hooks"]["Stop"][1]["hooks"][0]["command"], "zurafa report done");
         assert_eq!(settings["hooks"]["Notification"][0]["matcher"], "permission_prompt");
-        assert_eq!(add_hooks(&mut settings, &CLAUDE_HOOKS).unwrap(), 0);
+        assert_eq!(add_hooks(&mut settings, CLAUDE_HOOKS).unwrap(), 0);
 
         let mut odd = json!({ "hooks": { "Stop": "nope" } });
-        assert!(add_hooks(&mut odd, &CLAUDE_HOOKS).is_err());
+        assert!(add_hooks(&mut odd, CLAUDE_HOOKS).is_err());
         assert_eq!(odd, json!({ "hooks": { "Stop": "nope" } }));
-        assert!(add_hooks(&mut json!([]), &CLAUDE_HOOKS).is_err());
+        assert!(add_hooks(&mut json!([]), CLAUDE_HOOKS).is_err());
 
         let mut codex = json!({});
-        assert_eq!(add_hooks(&mut codex, &CODEX_HOOKS).unwrap(), 4);
-        assert_eq!(codex["hooks"]["PermissionRequest"][0]["hooks"][0]["command"], "zurafa report blocked --kind permission");
+        assert_eq!(add_hooks(&mut codex, CODEX_HOOKS).unwrap(), 8);
+        assert_eq!(codex["hooks"]["PermissionRequest"][0]["hooks"][0]["command"], "zurafa hook codex");
     }
 
     #[test]

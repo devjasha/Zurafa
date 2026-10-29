@@ -93,6 +93,13 @@ enum AgentIcon {
             ?? ZurafaResources.image(named: name)
     }
 
+    /// Monochrome brand glyph as a template image, so SwiftUI tints it.
+    static func brandGlyph(_ program: Program) -> NSImage? {
+        guard let name = program.brand?.glyph, let image = ZurafaResources.image(named: name, subdirectory: "brands") else { return nil }
+        image.isTemplate = true
+        return image
+    }
+
     static func assetName(for app: String?) -> String? {
         guard let app else { return nil }
         let key = app.lowercased().filter { $0.isLetter || $0.isNumber }
@@ -113,7 +120,9 @@ struct ProgramGlyph: View {
     let program: Program
     @Environment(\.colorScheme) private var colorScheme
     var body: some View {
-        if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
+        if let glyph = AgentIcon.brandGlyph(program) {
+            Image(nsImage: glyph).resizable().scaledToFit()
+        } else if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
             Image(nsImage: icon).resizable().scaledToFit()
         } else {
             Image(systemName: program.icon).resizable().scaledToFit()
@@ -131,7 +140,16 @@ struct Tile: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
-        if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
+        if let brand = program.brand, let glyph = AgentIcon.brandGlyph(program) {
+            // Brands without a color (black marks) invert with the theme instead of vanishing on a dark tab bar.
+            let fill = brand.color.map { Color(red: Double($0 >> 16 & 0xFF) / 255, green: Double($0 >> 8 & 0xFF) / 255, blue: Double($0 & 0xFF) / 255) } ?? (colorScheme == .dark ? .white : .black)
+            let ink: Color = brand.color == nil && colorScheme == .dark ? .black : .white
+            shape.fill(fill.gradient)
+                .overlay(shape.strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+                .overlay(Image(nsImage: glyph).resizable().scaledToFit().foregroundStyle(ink).frame(width: size * 0.6, height: size * 0.6))
+                .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+        } else if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
             Image(nsImage: icon)
                 .resizable()
                 .scaledToFill()
@@ -369,7 +387,7 @@ struct TopBar: View {
                     if k > 0 { // hairline between two inactive tabs only
                         Rectangle().fill(Color.black.opacity(i == ws.selected || shown[k - 1] == ws.selected ? 0 : 0.12)).frame(width: 1, height: 16)
                     }
-                    TabItem(tab: ws.tabs[i], on: i == ws.selected, agents: family.agents(of: ws.tabs[i]))
+                    TabItem(tab: ws.tabs[i], on: i == ws.selected, agents: family.agents(of: ws.tabs[i]), natives: family.natives(of: ws.tabs[i]))
                         .onTapGesture { ws.selectTab(i) }
                 }
             }
@@ -483,7 +501,7 @@ struct VerticalTabSidebar: View {
                                 if !current { ws.selectSession(session.sessionID) }
                                 ws.focus(tab.focus)
                             }
-                            if family.agents(of: tab).isEmpty {
+                            if family.agents(of: tab).isEmpty && family.natives(of: tab).isEmpty {
                                 SidebarTabRow(tab: tab, on: current && tab.id == ws.tab.id, select: select)
                             } else {
                                 AgentCard(tab: tab, family: family, local: session.remote == nil,
@@ -651,7 +669,7 @@ struct Spinner: View {
 struct TabItem: View {
     let tab: Tab, on: Bool
     /// The agents spawned from this tab, which open beside it from the hover popover.
-    let agents: [String]
+    let agents: [String], natives: [NativeAgent]
     @EnvironmentObject var ws: Workspace
     @State private var hovering = false
 
@@ -675,19 +693,20 @@ struct TabItem: View {
                 .clipped()
                 // fade the overflow instead of an ellipsis
                 .mask(LinearGradient(stops: [.init(color: .black, location: 0.82), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
-                if state.working || agents.contains(where: { ws.meta($0).status == "working" }) { Spinner().frame(width: 13, height: 13) }
+                if state.working || agents.contains(where: { ws.meta($0).status == "working" }) || natives.contains(where: { $0.record.state == "working" }) { Spinner().frame(width: 13, height: 13) }
             }
             .frame(minWidth: 50, maxWidth: 150, alignment: .leading)
-            if !agents.isEmpty {
+            let count = agents.count + natives.count
+            if count > 0 {
                 HStack(spacing: 3) {
                     OrchestratorMark(size: 11)
-                    Text("\(agents.count)")
+                    Text("\(count)")
                         .font(.system(size: 11, weight: .semibold)).monospacedDigit()
                         .foregroundStyle(Theme.inkSoft)
                 }
                 .padding(.horizontal, 6).frame(height: 18)
                 .background(Theme.activeTab.opacity(0.6), in: Capsule())
-                .help(agents.count == 1 ? "1 agent" : "\(agents.count) agents")
+                .help(count == 1 ? "1 agent" : "\(count) agents")
             }
             Button { ws.closeTab(tab) } label: {
                 Image(systemName: "xmark").font(.system(size: 11, weight: .medium))
@@ -711,10 +730,11 @@ struct TabItem: View {
             let family = AgentFamily(tabs: ws.tabs, meta: ws.meta)
             let local = ws.currentSession?.remote == nil
             VStack(alignment: .leading, spacing: 4) {
-                Text(agents.count == 1 ? "1 agent" : "\(agents.count) agents")
+                let count = agents.count + natives.count
+                Text(count == 1 ? "1 agent" : "\(count) agents")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.inkSoft)
-                AgentList(agents: agents, family: family, focusedPane: ws.peek,
+                AgentList(agents: agents, natives: natives, family: family, focusedPane: ws.peek,
                           head: local ? GitHead.describe(m.pwd) : nil, local: local) { pane in
                     showAgents = false
                     ws.openPeek(pane)
@@ -735,7 +755,7 @@ struct TabItem: View {
         let wanted = hovering || overAgents
         DispatchQueue.main.asyncAfter(deadline: .now() + (wanted ? 0.4 : 0.25)) {
             guard wanted == (hovering || overAgents) else { return }
-            showAgents = wanted && !agents.isEmpty
+            showAgents = wanted && !(agents.isEmpty && natives.isEmpty)
         }
     }
 }

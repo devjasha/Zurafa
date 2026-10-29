@@ -329,6 +329,13 @@ fn v2_layout_commands_and_validation() {
     }
     assert_eq!(c.request(json!({"id":15,"type":"layout.preview","session":"default","block":a,"path":"/tmp/a.md"}))["type"],"ok");
     assert_eq!(c.request(json!({"id":16,"type":"layout.preview","session":"default","block":"nope","path":"/tmp/a.md"}))["type"],"error");
+    // A report sent over the socket lands on the pane like one its program printed.
+    let mut report = |id: u64, block: &str, body: &str| c.request(json!({"id":id,"type":"status.report","session":"default","block":block,"body":body}))["type"].clone();
+    assert_eq!(report(30, a, "state=working:id=agent/x1:app=codex"), "ok");
+    assert_eq!(report(31, "nope", "state=done"), "error");
+    assert_eq!(report(32, a, "state=bogus"), "error");
+    let snap = c.request(json!({"id":33,"type":"events.snapshot"}));
+    assert_eq!(snap["snapshot"]["sessions"]["default"]["blocks"][a]["statuses"]["records"]["agent/x1"]["state"], "working");
     assert_eq!(
         c.request(
             json!({"id":17,"type":"layout.preview","session":"default","block":a,"path":"a.md"})

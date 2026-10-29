@@ -37,6 +37,24 @@ struct AgentFamily {
         }
     }
 
+    /// Native subagents of this tab's agents and the agents they spawned, while those agents run.
+    func natives(of tab: Tab) -> [NativeAgent] {
+        // An agent split beside its parent is in both lists.
+        (tab.layout.panes + agents(of: tab).filter { !tab.layout.panes.contains($0) }).flatMap { pane -> [NativeAgent] in
+            let m = meta(pane)
+            // Finished subagents outlive the agent that ran them; the daemon clears only working records.
+            guard m.ended == nil, m.program != .shell else { return [] }
+            return m.subagents.map { key, record in
+                // Claude Code reports a running subagent itself, under its bare id and with its task as title.
+                var record = record
+                if let own = m.statuses[String(key.dropFirst("agent/".count))]?.title, !own.isEmpty { record.title = own }
+                return NativeAgent(pane: pane, key: key, record: record)
+            }
+                // shortcut: records carry no start time, so they sort by id to hold still; add one if order matters.
+                .sorted { $0.key < $1.key }
+        }
+    }
+
     /// A spawned tab is named "agent: task" or by its -l label; the row's icon already shows the agent.
     func label(of pane: String) -> String {
         if let tab = tabOfPane[pane], tab.layout.panes.first == pane {
@@ -56,9 +74,16 @@ struct AgentFamily {
     }
 }
 
+/// A subagent an agent runs inside itself, like Claude's Agent tool: a status record on its pane.
+struct NativeAgent: Identifiable {
+    let pane: String, key: String, record: ProgramStatus
+    var id: String { "\(pane) \(key)" }
+    var label: String { record.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Subagent" }
+}
+
 /// One row per spawned agent, shared by the sidebar card and the tab bar's hover popover.
 struct AgentList: View {
-    let agents: [String], family: AgentFamily, focusedPane: String?
+    let agents: [String], natives: [NativeAgent], family: AgentFamily, focusedPane: String?
     /// The parent's "repo/branch", or nil for a remote workspace, whose paths are not on this Mac.
     let head: String?, local: Bool
     /// What clicking a row does; nil jumps to the agent's pane.
@@ -68,6 +93,9 @@ struct AgentList: View {
         ForEach(agents, id: \.self) { pane in
             AgentRow(pane: pane, label: family.label(of: pane), on: pane == focusedPane,
                      branch: local ? family.branch(of: pane, besides: head) : nil, open: open)
+        }
+        ForEach(natives) { agent in
+            AgentRow(pane: agent.pane, label: agent.label, on: false, native: agent.record, open: open)
         }
     }
 }
@@ -116,8 +144,9 @@ struct AgentCard: View {
 
     var body: some View {
         let meta = ws.meta(tab.focus)
-        let agents = family.agents(of: tab)
-        let done = agents.filter { ws.meta($0).status == "completed" }.count
+        let agents = family.agents(of: tab), natives = family.natives(of: tab)
+        let total = agents.count + natives.count
+        let done = agents.filter { ws.meta($0).status == "completed" }.count + natives.filter { $0.record.state == "done" }.count
         VStack(alignment: .leading, spacing: 4) {
             Button(action: select) {
                 VStack(alignment: .leading, spacing: 5) {
@@ -134,9 +163,9 @@ struct AgentCard: View {
                         .foregroundStyle(Theme.ink)
                         .lineLimit(1)
                     HStack {
-                        Text(agents.count == 1 ? "1 agent" : "\(agents.count) agents")
+                        Text(total == 1 ? "1 agent" : "\(total) agents")
                         Spacer(minLength: 6)
-                        Text("\(done)/\(agents.count) done").monospacedDigit()
+                        Text("\(done)/\(total) done").monospacedDigit()
                     }
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.inkSoft)
@@ -146,7 +175,7 @@ struct AgentCard: View {
             }
             .buttonStyle(.plain)
             let head = local ? GitHead.describe(meta.pwd) : nil
-            AgentList(agents: agents, family: family, focusedPane: focusedPane, head: head, local: local)
+            AgentList(agents: agents, natives: natives, family: family, focusedPane: focusedPane, head: head, local: local)
             HStack {
                 if let head {
                     Label(head, systemImage: "arrow.triangle.branch")
@@ -190,11 +219,13 @@ struct AgentRow: View {
     let pane: String, label: String, on: Bool
     /// Shown when the agent works on another branch than its parent, as in its own worktree.
     var branch: String? = nil
+    /// A native subagent of `pane`'s agent, shown from its record; it has no terminal, so clicking opens `pane`.
+    var native: ProgramStatus? = nil
     var open: ((String) -> Void)? = nil
     @EnvironmentObject var ws: Workspace
 
     var body: some View {
-        let meta = ws.meta(pane)
+        let meta = native.map { PaneMeta(program: ws.meta(pane).program, statuses: ["": $0]) } ?? ws.meta(pane)
         let (state, color) = Self.state(meta)
         Button { if let open { open(pane) } else { ws.jump(to: pane) } } label: {
             HStack(spacing: 8) {

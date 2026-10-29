@@ -12,7 +12,9 @@ When a pane comes to need you (`blocked` or `error`) or finishes (`done`) while 
 
 ## Send a report
 
-`zurafa report working "Building" --progress 40` sends a report from a shell or an agent. See the [CLI](/docs/cli/).
+`zurafa report working "Building" --progress 40` sends a report from a shell or an agent. See the [CLI](/docs/cli/). A program without the pane's terminal can send the same report through the daemon's `status.report` request instead; see the [IPC reference](/docs/ipc-reference/).
+
+Agents report the subagents they run inside themselves as `agent/<id>` records on their own pane. Zurafa shows those records as rows in the agent's card rather than as the pane's own status. See [Subagents](/docs/agents/#subagents).
 
 The current wire format is `ESC ] 7501 ; key=value (: key=value)* ST`. Here `ST` can be BEL or `ESC` followed by `\`. Fields include `state`, `id`, base64-encoded `msg` and `title`, optional `kind`, `progress`, and `app`. IDs form a bounded slash-separated hierarchy; omitting `id` targets the root record. Each report replaces that record rather than merging missing fields.
 

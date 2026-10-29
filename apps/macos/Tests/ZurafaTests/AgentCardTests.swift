@@ -28,6 +28,27 @@ final class AgentCardTests: XCTestCase {
         XCTAssertTrue(family.agents(of: tabs[4]).isEmpty)
     }
 
+    func testNativeSubagentsJoinTheCardWithoutStandingForTheirPane() {
+        var parent = PaneMeta(program: .claude)
+        parent.setStatus("", ProgramStatus(state: "done"))
+        parent.setStatus("agent/b2", ProgramStatus(state: "working", app: "claude", title: "general-purpose"))
+        parent.setStatus("agent/a1", ProgramStatus(state: "done", app: "claude", title: "Find the parser"))
+        XCTAssertEqual(parent.status, "completed")
+        parent.setStatus("b2", ProgramStatus(state: "working", app: "claude-code", title: "Run tests"))
+        var split = PaneMeta(program: .claude, parent: "t1") // spawned beside its parent
+        split.setStatus("agent/c3", ProgramStatus(state: "done", title: "Read docs"))
+        var quit = PaneMeta(parent: "t1") // its agent has quit back to the shell
+        quit.setStatus("agent/d4", ProgramStatus(state: "done", title: "Old"))
+        let metas = ["t1": parent, "t2": split, "t3": quit]
+        let tabs = [tab("w1", "Shell", "t1", "t2"), tab("w2", "claude: old", "t3")]
+        let family = AgentFamily(tabs: tabs, meta: { metas[$0] ?? PaneMeta() })
+
+        XCTAssertEqual(family.natives(of: tabs[0]).map(\.label), ["Find the parser", "Run tests", "Read docs"])
+        XCTAssertEqual(family.natives(of: tabs[0]).map(\.pane), ["t1", "t1", "t2"])
+        parent.setStatus("agent/b2", nil)
+        XCTAssertEqual(parent.subagents.keys.sorted(), ["agent/a1"])
+    }
+
     func testAgentRowsUseTheSpawnLabelAndNameAnotherBranch() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: base) }

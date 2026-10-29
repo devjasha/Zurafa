@@ -12,7 +12,7 @@ use tokio::{
     sync::{broadcast::error::RecvError, mpsc},
     task::JoinHandle,
 };
-use zurafa_events::{Axis, Command, Filter, RemoteHost, TerminalEvent};
+use zurafa_events::{status, Axis, Command, Filter, RemoteHost, TerminalEvent};
 async fn recv<R: AsyncRead + Unpin>(r: &mut R) -> Option<Value> {
     let v: Value = serde_json::from_slice(&read_frame(r).await.ok()?).ok()?;
     v.is_object().then_some(v)
@@ -134,6 +134,15 @@ enum Request {
         block: String,
         path: String,
     },
+    /// An OSC 7501 report for a pane, from a program that cannot write to the pane's terminal,
+    /// like hooks Codex runs in its own background server.
+    #[serde(rename = "status.report")]
+    StatusReport {
+        id: u64,
+        session: String,
+        block: String,
+        body: String,
+    },
 }
 fn label() -> String {
     "Terminal".into()
@@ -221,7 +230,7 @@ async fn request(
 ) -> Option<Value> {
     let id = v.get("id").cloned();
     let ty = v.get("type").and_then(Value::as_str).unwrap_or("");
-    if !ty.starts_with("events.") && !ty.starts_with("layout.") && !ty.starts_with("hosts.") {
+    if !ty.starts_with("events.") && !ty.starts_with("layout.") && !ty.starts_with("hosts.") && !ty.starts_with("status.") {
         let t = terms.clone();
         return match serde_json::from_value::<Msg>(v) {
             Ok(m) => tokio::task::spawn_blocking(move || reply(m, &t))
@@ -415,6 +424,19 @@ async fn request(
                 Err(e) => error(id, e),
             }
         }
+        Request::StatusReport {
+            id,
+            session,
+            block,
+            body,
+        } => match (terms.dispatcher.validate_target(&session, Some(&block)), status::parse(&body)) {
+            (Err(e), _) => error(id, e),
+            (Ok(()), None) => error(id, "not a valid OSC 7501 report"),
+            (Ok(()), Some(report)) => {
+                terms.dispatcher.report(&block, report);
+                json!({"id":id,"type":"ok"})
+            }
+        },
     })
 }
 fn spawn_reply(id: u64, result: Result<Result<String, String>, tokio::task::JoinError>) -> Value {
@@ -525,7 +547,7 @@ where
             v=incoming.recv()=>match v {
                 None=>break,
                 Some(v)=>{
-                    if version==1 && v["type"].as_str().is_some_and(|s|s.starts_with("events.")||s.starts_with("layout.")||s.starts_with("hosts.")) {
+                    if version==1 && v["type"].as_str().is_some_and(|s|s.starts_with("events.")||s.starts_with("layout.")||s.starts_with("hosts.")||s.starts_with("status.")) {
                         Some(error(v.get("id"),"requires protocol 2").to_string())
                     }else{
                         let narrows = v["type"]=="attach" || (v["type"]=="spawn" && v["raw"]==true);

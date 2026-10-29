@@ -17,8 +17,22 @@ enum TabStripLayout: String {
     case horizontal, vertical
 }
 
-enum Program {
+enum Program: Equatable {
     case claude, codex, gemini, pi, emacs, git, dev, ssh, vm, kali, shell
+    /// A tool with a brand glyph, keyed by its process name in `Program.tools`.
+    case tool(String)
+    /// Process name → title, glyph in Resources/brands (Simple Icons via gorex, CC0) and brand color; nil color follows the theme.
+    static let tools: [String: (title: String, glyph: String, color: UInt32?)] = [
+        "git": ("Git", "git", 0xF05032), "node": ("Node.js", "nodedotjs", 0x5FA04E), "bun": ("Bun", "bun", nil),
+        "deno": ("Deno", "deno", nil), "npm": ("npm", "npm", 0xCB3837), "pnpm": ("pnpm", "pnpm", 0xF69220),
+        "yarn": ("Yarn", "yarn", 0x2C8EBF), "python": ("Python", "python", 0x3776AB), "python3": ("Python", "python", 0x3776AB),
+        "ruby": ("Ruby", "ruby", 0xCC342D), "irb": ("Ruby", "ruby", 0xCC342D), "go": ("Go", "go", 0x00ADD8),
+        "cargo": ("Rust", "rust", nil), "rustc": ("Rust", "rust", nil), "lua": ("Lua", "lua", 0x2C2D72),
+        "php": ("PHP", "php", 0x777BB4), "swift": ("Swift", "swift", 0xF05138), "kotlin": ("Kotlin", "kotlin", 0x7F52FF),
+        "docker": ("Docker", "docker", 0x2496ED), "mysql": ("MySQL", "mysql", 0x4479A1), "psql": ("PostgreSQL", "postgresql", 0x4169E1),
+        "redis-cli": ("Redis", "redis", 0xFF4438), "vim": ("Vim", "vim", 0x019733), "nvim": ("Neovim", "neovim", 0x57A143),
+        "hx": ("Helix", "helix", 0x281733), "htop": ("htop", "htop", 0x009020), "tmux": ("tmux", "tmux", 0x1BB91F),
+    ]
     static func detect(_ name: String?, executable: String? = nil, argv: [String]? = nil, remote: Bool, remoteShell: Program = .ssh) -> Program {
         guard let name else { return remote ? remoteShell : .shell }
         let base = name.lowercased()
@@ -39,16 +53,17 @@ enum Program {
         if commands.contains(where: { URL(fileURLWithPath: $0).lastPathComponent == "pi" || $0.contains("pi-coding-agent") }) { return .pi }
         // Homebrew builds run as `emacs` or `emacs-31.1`; any Emacs gets the Doom icon.
         if base.hasPrefix("emacs") { return .emacs }
-        if base == "git" || base == "lazygit" { return .git }
         if base == "ssh" { return .ssh }
-        if ["node", "npm", "pnpm", "bun", "deno", "vite"].contains(base) { return .dev }
+        if tools[base] != nil { return .tool(base) }
+        if base == "lazygit" { return .git }
+        if base == "vite" { return .dev }
         return remote ? remoteShell : .shell
     }
     var title: String {
-        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .emacs: "Emacs"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .vm: "VM"; case .kali: "Kali Linux"; case .shell: "Shell" }
+        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .emacs: "Emacs"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .vm: "VM"; case .kali: "Kali Linux"; case .shell: "Shell"; case .tool(let n): Program.tools[n]?.title ?? n }
     }
     var icon: String {
-        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "brain.head.profile"; case .emacs: "text.cursor"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .vm, .kali: "desktopcomputer"; case .shell: "terminal" }
+        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "brain.head.profile"; case .emacs: "text.cursor"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .vm, .kali: "desktopcomputer"; case .shell, .tool: "terminal" }
     }
     var iconAssetName: String? {
         switch self { case .claude: "Claude"; case .codex: "Codex"; case .pi: "Pi"; case .emacs: "Doom"; case .kali: "Kali Linux"; case .shell: "Terminal"; default: nil }
@@ -64,7 +79,17 @@ enum Program {
         case .dev: [Color(red: 0.33, green: 0.34, blue: 0.38), Color(red: 0.11, green: 0.12, blue: 0.14)]
         case .ssh: [Color(red: 0.28, green: 0.47, blue: 0.57)]
         case .vm, .kali: [Color(red: 0.24, green: 0.38, blue: 0.72), Color(red: 0.12, green: 0.18, blue: 0.40)]
-        case .shell: [Color(red: 0.20, green: 0.20, blue: 0.22), Color(red: 0.03, green: 0.03, blue: 0.04)]
+        case .shell, .tool: [Color(red: 0.20, green: 0.20, blue: 0.22), Color(red: 0.03, green: 0.03, blue: 0.04)]
+        }
+    }
+    /// Brand glyph and its tile color; Claude and Codex use their brand marks here too.
+    var brand: (glyph: String, color: UInt32?)? {
+        switch self {
+        case .claude: ("claude", 0xD97757)
+        case .codex: ("openai", nil)
+        case .git: ("git", 0xF05032)
+        case .tool(let n): Program.tools[n].map { ($0.glyph, $0.color) }
+        default: nil
         }
     }
 }
@@ -80,6 +105,12 @@ struct PaneMeta {
     /// The pane that spawned this one, and when this one started.
     var parent: String?
     var started: Date?
+    /// Native subagents of the pane's agent, reported as "agent/<id>". They run inside it with no
+    /// pane of their own, so they show in its agent card and never stand for the pane's own state.
+    var subagents: [String: ProgramStatus] = [:]
+    mutating func setStatus(_ key: String, _ record: ProgramStatus?) {
+        if key.hasPrefix("agent/") { subagents[key] = record } else { statuses[key] = record }
+    }
     var statusItems: [StatusItem] {
         statuses.map { StatusItem(id: $0.key, record: $0.value) }
             .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
@@ -280,7 +311,9 @@ enum EditorKind: String, Identifiable {
         m.cwd = displayPath(pwd)
         m.pwd = URL(string: pwd ?? "")?.isFileURL == true ? URL(string: pwd!)!.path : pwd
         m.ended = block.running ? nil : "exited"
-        m.statuses = block.statuses.records
+        m.statuses = [:]
+        m.subagents = [:]
+        for (key, record) in block.statuses.records { m.setStatus(key, record) }
         m.parent = block.parent
         m.started = block.started.map { Date(timeIntervalSince1970: $0 / 1000) }
         m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
@@ -324,12 +357,12 @@ enum EditorKind: String, Identifiable {
                let data = try? JSONEncoder().encode(value),
                let record = try? JSONDecoder().decode(ProgramStatus.self, from: data) {
                 let before = metas[id]?.status
-                metas[id]?.statuses[key] = record
+                metas[id]?.setStatus(key, record)
                 if let after = metas[id]?.status, after != before, after == "blocked" || after == "completed" { notify(id) }
             }
         case "terminal.program_status_removed":
             if let id = event.blockID, case .array(let keys)? = event.payload.object?["ids"] {
-                for key in keys.compactMap(\.string) { metas[id]?.statuses[key] = nil }
+                for key in keys.compactMap(\.string) { metas[id]?.setStatus(key, nil) }
             }
         case "terminal.clipboard_written":
             if let text = event.payload.object?["text"]?.string {

@@ -122,7 +122,7 @@ zurafa panes                                   # every pane: tab, program, statu
 zurafa report blocked &quot;Approve the production deploy?&quot; --kind permission
 zurafa report done &quot;Deployed to staging&quot;
 zurafa report clear</code></pre>
-<p><code>zurafa setup claude</code> and <code>zurafa setup codex</code> add these reports to the agent&#x27;s hooks for you; Pi sends them on its own. See <a href="/docs/agents/">Connect your agents</a>.</p>
+<p><code>zurafa setup claude</code> and <code>zurafa setup codex</code> add these reports to the agent&#x27;s hooks for you; Pi sends them on its own. The hooks also run <code>zurafa hook claude</code> or <code>zurafa hook codex</code>, which read the hook event from stdin. They show the agent&#x27;s own subagents in its card and point agents that do work to <code>zurafa spawn</code>. See <a href="/docs/agents/#subagents">Connect your agents</a>.</p>
 <p><code>--id</code> and <code>--title</code> report one of several tasks in a pane, and <code>--app</code> names the program.</p>
 <h2 id="taxonomy">Taxonomy</h2>
 <p>Zurafa&#x27;s public UI uses these names:</p>

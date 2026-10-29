@@ -176,6 +176,15 @@ absolute; the reply is `ok` and subscribers receive `terminal.preview_requested`
 {"id":12,"type":"layout.preview","session":"default","block":"t1","path":"/tmp/notes.md"}
 ```
 
+Set a status record on a block for a program that can't write to the block's
+terminal, such as hooks Codex runs in its own background server. `body` is an
+OSC 7501 report body, validated and applied as if the block's program had printed
+it. The reply is `ok`, or an error for an unknown block or an invalid body:
+
+```json
+{"id":13,"type":"status.report","session":"default","block":"t1","body":"state=working:id=agent/a1:app=codex"}
+```
+
 Other changes use `{id,type:"layout.command",command:<one of the following>}`
 and reply with `ok`:
 
@@ -391,7 +400,7 @@ enums; clients should ignore unfamiliar events before typed decoding.
 | `progress_report` | `state`, `progress` | OSC 9;4 (state 0–4, progress 0–100 or null) |
 | `clipboard_written` | `text` | Valid UTF-8 base64 OSC 52 write; queries ignored |
 | `preview_requested` | `path` | `layout.preview` request |
-| `program_status_changed` | `id`, `record`, `reason` | Valid OSC 7501 report |
+| `program_status_changed` | `id`, `record`, `reason` | Valid OSC 7501 report, from the PTY or `status.report` |
 | `program_status_removed` | `ids`, `reason` | Clear, capacity eviction, prompt, reset, child exit |
 
 `child_exited` appears once for a retained block. Successful exit omits `error`;

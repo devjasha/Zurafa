@@ -91,7 +91,7 @@ zurafa report done "Deployed to staging"
 zurafa report clear
 ```
 
-`zurafa setup claude` and `zurafa setup codex` add these reports to the agent's hooks for you; Pi sends them on its own. See [Connect your agents](/docs/agents/).
+`zurafa setup claude` and `zurafa setup codex` add these reports to the agent's hooks for you; Pi sends them on its own. The hooks also run `zurafa hook claude` or `zurafa hook codex`, which read the hook event from stdin. They show the agent's own subagents in its card and point agents that do work to `zurafa spawn`. See [Connect your agents](/docs/agents/#subagents).
 
 `--id` and `--title` report one of several tasks in a pane, and `--app` names the program.
 

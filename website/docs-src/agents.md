@@ -20,7 +20,7 @@ Run this once from any terminal:
 zurafa setup claude
 ```
 
-It adds the four hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`), keeps your other settings and hooks, and saves the old file as `settings.json.zurafa-backup`. Running it again changes nothing. To set it up by hand instead, add these hooks to `~/.claude/settings.json`. If the file already has a `hooks` object, merge the four entries into it.
+It adds the eight hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`), keeps your other settings and hooks, and saves the old file as `settings.json.zurafa-backup`. Running it again changes nothing. To set it up by hand instead, add these hooks to `~/.claude/settings.json`. If the file already has a `hooks` object, merge the eight entries into it.
 
 ```
 {
@@ -53,6 +53,35 @@ It adds the four hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DI
           { "type": "command", "command": "zurafa report done" }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "zurafa hook claude" }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "zurafa hook claude" }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "zurafa hook claude" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          { "type": "command", "command": "zurafa hook claude" }
+        ]
+      }
     ]
   }
 }
@@ -68,7 +97,7 @@ Run this once:
 zurafa setup codex
 ```
 
-It adds the same reports to `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`), using Codex's `PermissionRequest` event for **blocked**, and keeps a backup like the Claude setup. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open `/hooks`, and trust the four Zurafa hooks.
+It adds eight hooks to `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`), all running `zurafa hook codex`, and keeps a backup like the Claude setup. They report the same states, using Codex's `PermissionRequest` event for **blocked**, and give Codex the same [subagent](#subagents) handling as Claude: `explorer` subagents show in the card, and other subagents go to `zurafa spawn`. Codex runs hooks in a background server that all its sessions share, so they reach Zurafa through its daemon and find the pane running Codex in the hook's folder. Two Codex panes in the same folder can't be told apart, so neither gets those reports. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open `/hooks`, and trust the Zurafa hooks. If you set up Codex before this release, remove its old `zurafa report` hooks from `hooks.json`.
 
 ## Pi
 
@@ -94,6 +123,10 @@ claude mcp add --scope user zurafa -- zurafa mcp
 ```
 
 Other agents that support MCP servers over stdio take the same command, `zurafa mcp`. Then ask, for example, "spawn a Codex agent to write tests for this module and tell me when it's done". The tools are `list_panes`, `spawn`, `send`, `key`, `read`, `wait`, and `prompt`; each does what the [CLI command](/docs/cli/) of the same name does. `wait` and `prompt` give up after 10 minutes unless the agent asks for longer. `spawn` takes a `worktree` branch to put the new agent in [its own worktree](/docs/cli/#worktrees).
+
+### Subagents
+
+In a Zurafa pane, agents that do work get a terminal of their own: when Claude reaches for its built-in Agent tool with a general-purpose or custom agent, Zurafa turns the call down and Claude starts it with `zurafa spawn` instead, so it shows in the parent's card where you can watch it, type into it and stop it. Read-only lookups (Explore, Plan and claude-code-guide) stay inside Claude. They have no terminal, so they show in the same card by their task, as **Working** and then **Done**. Hover one for its last answer, or click it to go to the Claude that runs it. Codex gets the same through `zurafa setup codex`, with `explorer` as its lookup type. Outside Zurafa, both agents' subagent tools work as usual. If you set up Claude before this release, run `zurafa setup claude` again to add the four new hooks.
 
 ## When an agent needs you
 

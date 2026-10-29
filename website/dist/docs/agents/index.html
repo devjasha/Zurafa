@@ -80,7 +80,7 @@
 <h2 id="claude-code">Claude Code</h2>
 <p>Run this once from any terminal:</p>
 <pre><code>zurafa setup claude</code></pre>
-<p>It adds the four hooks below to <code>~/.claude/settings.json</code> (or <code>$CLAUDE_CONFIG_DIR/settings.json</code>), keeps your other settings and hooks, and saves the old file as <code>settings.json.zurafa-backup</code>. Running it again changes nothing. To set it up by hand instead, add these hooks to <code>~/.claude/settings.json</code>. If the file already has a <code>hooks</code> object, merge the four entries into it.</p>
+<p>It adds the eight hooks below to <code>~/.claude/settings.json</code> (or <code>$CLAUDE_CONFIG_DIR/settings.json</code>), keeps your other settings and hooks, and saves the old file as <code>settings.json.zurafa-backup</code>. Running it again changes nothing. To set it up by hand instead, add these hooks to <code>~/.claude/settings.json</code>. If the file already has a <code>hooks</code> object, merge the eight entries into it.</p>
 <pre><code>{
   &quot;hooks&quot;: {
     &quot;UserPromptSubmit&quot;: [
@@ -111,6 +111,35 @@
           { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa report done&quot; }
         ]
       }
+    ],
+    &quot;SessionStart&quot;: [
+      {
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa hook claude&quot; }
+        ]
+      }
+    ],
+    &quot;SubagentStart&quot;: [
+      {
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa hook claude&quot; }
+        ]
+      }
+    ],
+    &quot;SubagentStop&quot;: [
+      {
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa hook claude&quot; }
+        ]
+      }
+    ],
+    &quot;PreToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Agent|Task&quot;,
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa hook claude&quot; }
+        ]
+      }
     ]
   }
 }</code></pre>
@@ -118,7 +147,7 @@
 <h2 id="codex">Codex</h2>
 <p>Run this once:</p>
 <pre><code>zurafa setup codex</code></pre>
-<p>It adds the same reports to <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>), using Codex&#x27;s <code>PermissionRequest</code> event for <strong>blocked</strong>, and keeps a backup like the Claude setup. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open <code>/hooks</code>, and trust the four Zurafa hooks.</p>
+<p>It adds eight hooks to <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>), all running <code>zurafa hook codex</code>, and keeps a backup like the Claude setup. They report the same states, using Codex&#x27;s <code>PermissionRequest</code> event for <strong>blocked</strong>, and give Codex the same [subagent](#subagents) handling as Claude: <code>explorer</code> subagents show in the card, and other subagents go to <code>zurafa spawn</code>. Codex runs hooks in a background server that all its sessions share, so they reach Zurafa through its daemon and find the pane running Codex in the hook&#x27;s folder. Two Codex panes in the same folder can&#x27;t be told apart, so neither gets those reports. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open <code>/hooks</code>, and trust the Zurafa hooks. If you set up Codex before this release, remove its old <code>zurafa report</code> hooks from <code>hooks.json</code>.</p>
 <h2 id="pi">Pi</h2>
 <p>Pi 1.1 and later report their status to Zurafa without any setup, including <strong>blocked</strong> when an extension dialog or login waits for you. Set <code>PI_PROGRAM_STATUS=0</code> to turn that off.</p>
 <h2 id="other-agents">Other agents</h2>
@@ -134,11 +163,13 @@
 <p><code>zurafa mcp</code> serves Zurafa&#x27;s agent commands as MCP tools, so an agent can find them on its own: start other agents on tasks, list every pane and its status, type into a pane, read its screen, and wait for it to finish. Add it to Claude Code once:</p>
 <pre><code>claude mcp add --scope user zurafa -- zurafa mcp</code></pre>
 <p>Other agents that support MCP servers over stdio take the same command, <code>zurafa mcp</code>. Then ask, for example, &quot;spawn a Codex agent to write tests for this module and tell me when it&#x27;s done&quot;. The tools are <code>list_panes</code>, <code>spawn</code>, <code>send</code>, <code>key</code>, <code>read</code>, <code>wait</code>, and <code>prompt</code>; each does what the <a href="/docs/cli/">CLI command</a> of the same name does. <code>wait</code> and <code>prompt</code> give up after 10 minutes unless the agent asks for longer. <code>spawn</code> takes a <code>worktree</code> branch to put the new agent in <a href="/docs/cli/#worktrees">its own worktree</a>.</p>
+<h3 id="subagents">Subagents</h3>
+<p>In a Zurafa pane, agents that do work get a terminal of their own: when Claude reaches for its built-in Agent tool with a general-purpose or custom agent, Zurafa turns the call down and Claude starts it with <code>zurafa spawn</code> instead, so it shows in the parent&#x27;s card where you can watch it, type into it and stop it. Read-only lookups (Explore, Plan and claude-code-guide) stay inside Claude. They have no terminal, so they show in the same card by their task, as <strong>Working</strong> and then <strong>Done</strong>. Hover one for its last answer, or click it to go to the Claude that runs it. Codex gets the same through <code>zurafa setup codex</code>, with <code>explorer</code> as its lookup type. Outside Zurafa, both agents&#x27; subagent tools work as usual. If you set up Claude before this release, run <code>zurafa setup claude</code> again to add the four new hooks.</p>
 <h2 id="when-an-agent-needs-you">When an agent needs you</h2>
 <p>A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. When Claude Code asks for permission, hover the notification and choose <strong>Approve</strong> or <strong>Deny</strong> to answer without leaving what you&#x27;re doing. If the prompt was already answered or changed, Zurafa takes you to the pane instead of pressing anything. The Dock icon counts the panes waiting on you, and <code>⌘J</code> jumps to the next one.</p>
 <h2 id="how-it-works">How it works</h2>
 <p><code>zurafa report</code> writes an OSC 7501 sequence straight to the pane&#x27;s terminal, so it works from hooks whose output the agent captures. Outside Zurafa the sequence is ignored. The <a href="/docs/status/">Program status</a> page covers the protocol, nested tasks, and when reports clear themselves.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/quickstart/"><small>← Previous</small><strong>Quick start</strong></a><a href="/docs/sessions/"><small>Next →</small><strong>Sessions, tabs &amp; panes</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#codex">Codex</a><a href="#pi">Pi</a><a href="#other-agents">Other agents</a><a href="#let-agents-drive-zurafa">Let agents drive Zurafa</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#codex">Codex</a><a href="#pi">Pi</a><a href="#other-agents">Other agents</a><a href="#let-agents-drive-zurafa">Let agents drive Zurafa</a><a href="#subagents">Subagents</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
