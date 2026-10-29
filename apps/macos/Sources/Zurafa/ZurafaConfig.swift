@@ -7,9 +7,11 @@ struct ZurafaConfig: Equatable {
     var style = ZurafaStyle()
     var backgroundImage: String?
     var backgroundImageEnabled: Bool?
+    var backgroundImageFilter: BackgroundFilter?
 
     var count: Int {
         terminal.count + (backgroundImage == nil ? 0 : 1) + (backgroundImageEnabled == nil ? 0 : 1)
+            + (backgroundImageFilter == nil ? 0 : 1)
     }
 }
 
@@ -82,6 +84,8 @@ struct ZurafaConfigLoader {
             else if let directory { config.backgroundImage = directory.appendingPathComponent(expanded).path }
             else { config.backgroundImage = expanded }
         case "background-image-enabled": config.backgroundImageEnabled = bool(value)
+        // Unknown values, like the earlier ASCII filters, fall back to no filter.
+        case "background-image-filter": config.backgroundImageFilter = BackgroundFilter(rawValue: value.lowercased()) ?? BackgroundFilter.none
         case "theme": config.theme = value.isEmpty ? nil : value
         case "accent-color": config.style.accent = GhosttyConfigLoader.hex(value)
         case "window-opacity": number(value, in: 0...1).map { config.style.windowOpacity = $0 }
@@ -183,6 +187,8 @@ struct ZurafaConfigLoader {
     # Background image
     # background-image = ~/Pictures/wallpaper.png
     # background-image-enabled = true
+    # Dither filter: none, floyd-steinberg, atkinson, bayer, pico-8 or c64.
+    # background-image-filter = none
 
     """
 

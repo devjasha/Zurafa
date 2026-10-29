@@ -145,6 +145,10 @@ private struct AppearancePane: View {
                 Toggle("Show background image", isOn: Binding(get: { ws.backgroundImageEnabled && ws.backgroundImage != nil },
                                                               set: { _ in ws.toggleBackgroundImage() }))
                 Button("Choose Image…") { ws.chooseBackgroundImage() }
+                Picker("Filter", selection: Binding(get: { ws.backgroundFilter },
+                                                    set: { ws.writeConfig("background-image-filter", $0.rawValue) })) {
+                    ForEach(BackgroundFilter.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
             }
         }
     }

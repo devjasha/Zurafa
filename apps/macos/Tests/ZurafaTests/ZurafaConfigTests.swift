@@ -16,6 +16,7 @@ final class ZurafaConfigTests: XCTestCase {
         palette = 2=#23ab67
         background-image = images/wall.png
         background-image-enabled = no
+        background-image-filter = PICO-8
         """, relativeTo: base)
 
         XCTAssertEqual(config.terminal.fontFamily, "JetBrains Mono")
@@ -29,6 +30,8 @@ final class ZurafaConfigTests: XCTestCase {
         XCTAssertEqual(config.terminal.dark.palette[2], 0x23ab67)
         XCTAssertEqual(config.backgroundImage, "/tmp/zurafa-config/images/wall.png")
         XCTAssertEqual(config.backgroundImageEnabled, false)
+        XCTAssertEqual(config.backgroundImageFilter, .pico8)
+        XCTAssertEqual(ZurafaConfigLoader.parse("background-image-filter = braille").backgroundImageFilter, BackgroundFilter.none)
     }
 
     func testTerminalSettingsOverrideOnlyConfiguredFields() {

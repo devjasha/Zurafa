@@ -605,12 +605,12 @@ struct AgentSummary: View {
         HStack(spacing: 10) {
             if attention > 0 {
                 count(attention) {
-                    Image(systemName: "smallcircle.filled.circle").foregroundStyle(StatusDot.colors["working"]!)
+                    Image(systemName: "smallcircle.filled.circle").foregroundStyle(.yellow)
                 }.help("\(attention) need attention")
             }
             if working > 0 { count(working) { Spinner() }.help("\(working) working") }
             if done > 0 {
-                count(done) { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.ink) }.help("\(done) done")
+                count(done) { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }.help("\(done) done")
             }
         }
         .font(.system(size: 12, weight: .medium))

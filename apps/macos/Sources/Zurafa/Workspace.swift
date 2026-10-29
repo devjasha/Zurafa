@@ -204,6 +204,13 @@ enum EditorKind: String, Identifiable {
     }
     @Published private(set) var backgroundImage = BackgroundImageStore.load()
     @Published private(set) var backgroundImageEnabled = UserDefaults.standard.object(forKey: "backgroundImageEnabled") as? Bool ?? true
+    private(set) var backgroundFilter = BackgroundFilter.none
+    /// The unfiltered image and the original it came from; filters render from the original.
+    private var backgroundPlain = BackgroundImageStore.load()
+    private var backgroundSource = (BackgroundImageStore.loadSource() ?? BackgroundImageStore.load())?
+        .cgImage(forProposedRect: nil, context: nil, hints: nil)
+    private var backgroundRender: Task<Void, Never>?
+    private var backgroundPath: String?
 
     private let daemon = DaemonClient.shared
     private var snapshot: EventSnapshot?
@@ -596,7 +603,17 @@ enum EditorKind: String, Identifiable {
             applyTerminalConfig()
             style = config.style
             Theme.customAccent = config.style.accent
-            if let path = config.backgroundImage { backgroundImage = NSImage(contentsOfFile: path) ?? backgroundImage }
+            // Only re-render when the image or filter changes; every settings slider step reloads the config.
+            let filter = config.backgroundImageFilter ?? .none
+            if config.backgroundImage != backgroundPath || filter != backgroundFilter {
+                if let path = config.backgroundImage, let image = NSImage(contentsOfFile: path) {
+                    backgroundPlain = image
+                    backgroundSource = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                }
+                backgroundPath = config.backgroundImage
+                backgroundFilter = filter
+                renderBackground()
+            }
             if let enabled = config.backgroundImageEnabled { backgroundImageEnabled = enabled }
             refreshTheme()
         } catch { commandError = error.localizedDescription }
@@ -658,11 +675,28 @@ enum EditorKind: String, Identifiable {
         panel.prompt = "Set Background"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            backgroundImage = try BackgroundImageStore.saveDithered(from: url)
+            backgroundPlain = try BackgroundImageStore.saveDithered(from: url)
+            backgroundSource = (BackgroundImageStore.loadSource() ?? backgroundPlain)?
+                .cgImage(forProposedRect: nil, context: nil, hints: nil)
+            renderBackground()
             backgroundImageEnabled = true
             UserDefaults.standard.set(true, forKey: "backgroundImageEnabled")
             showNotice("Dithered background image set")
         } catch { commandError = error.localizedDescription }
+    }
+
+    /// Dithers off the main thread; a newer filter choice cancels the older render.
+    private func renderBackground() {
+        backgroundRender?.cancel()
+        let filter = backgroundFilter
+        guard filter != .none, let source = backgroundSource else { backgroundImage = backgroundPlain; return }
+        backgroundRender = Task {
+            let filtered = await Task.detached(priority: .userInitiated) {
+                BackgroundImageStore.dithered(source, filter: filter)
+            }.value
+            guard !Task.isCancelled else { return }
+            backgroundImage = filtered.map { NSImage(cgImage: $0, size: .zero) } ?? backgroundPlain
+        }
     }
 
     func toggleBackgroundImage() {
