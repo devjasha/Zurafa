@@ -266,7 +266,12 @@ impl Records {
                     .collect();
                 self.remove(ids, "clear")
             }
-            Report::Set(id, record) => {
+            Report::Set(id, mut record) => {
+                // Claude Code reports done itself right after its Stop hook reported done with the
+                // answer; a report that only repeats the state keeps the message it would wipe.
+                if let Some(old) = self.records.get(&id).filter(|o| o.state == record.state) {
+                    record.msg = record.msg.or_else(|| old.msg.clone());
+                }
                 let mut events = vec![];
                 if !self.records.contains_key(&id) && self.records.len() >= 256 {
                     // Deserialized snapshots omit update order; treat their untouched
@@ -317,6 +322,16 @@ mod tests {
         assert_eq!(r.records.len(), 2);
         r.apply(parse("state=clear").unwrap());
         assert!(r.records.is_empty());
+    }
+    #[test]
+    fn repeating_a_state_keeps_its_message() {
+        let mut r = Records::default();
+        r.apply(parse(&format!("state=done:msg={}", STANDARD.encode("Fixed it"))).unwrap());
+        r.apply(parse("state=done:app=claude-code").unwrap());
+        assert_eq!(r.records[""].msg.as_deref(), Some("Fixed it"));
+        r.apply(parse("state=working").unwrap());
+        r.apply(parse("state=done").unwrap());
+        assert_eq!(r.records[""].msg, None, "a new turn starts without it");
     }
     #[test]
     fn the_turn_counts_each_time_the_root_leaves_working() {
