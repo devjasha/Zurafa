@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.24-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.25-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -115,6 +115,12 @@
   }
 }</code></pre>
 <p>Restart Claude Code in a Zurafa pane. The pane now turns <strong>working</strong> when you send a prompt, <strong>blocked</strong> when Claude asks for permission, back to <strong>working</strong> once you answer, and <strong>done</strong> when it finishes.</p>
+<h2 id="codex">Codex</h2>
+<p>Run this once:</p>
+<pre><code>zurafa setup codex</code></pre>
+<p>It adds the same reports to <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>), using Codex&#x27;s <code>PermissionRequest</code> event for <strong>blocked</strong>, and keeps a backup like the Claude setup. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open <code>/hooks</code>, and trust the four Zurafa hooks.</p>
+<h2 id="pi">Pi</h2>
+<p>Pi 1.1 and later report their status to Zurafa without any setup, including <strong>blocked</strong> when an extension dialog or login waits for you. Set <code>PI_PROGRAM_STATUS=0</code> to turn that off.</p>
 <h2 id="other-agents">Other agents</h2>
 <p>Any agent that can run a command on an event works the same way. Map its events to these reports:</p>
 <ul>
@@ -132,7 +138,7 @@
 <p>A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. When Claude Code asks for permission, hover the notification and choose <strong>Approve</strong> or <strong>Deny</strong> to answer without leaving what you&#x27;re doing. If the prompt was already answered or changed, Zurafa takes you to the pane instead of pressing anything. The Dock icon counts the panes waiting on you, and <code>⌘J</code> jumps to the next one.</p>
 <h2 id="how-it-works">How it works</h2>
 <p><code>zurafa report</code> writes an OSC 7501 sequence straight to the pane&#x27;s terminal, so it works from hooks whose output the agent captures. Outside Zurafa the sequence is ignored. The <a href="/docs/status/">Program status</a> page covers the protocol, nested tasks, and when reports clear themselves.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/quickstart/"><small>← Previous</small><strong>Quick start</strong></a><a href="/docs/sessions/"><small>Next →</small><strong>Sessions, tabs &amp; panes</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#other-agents">Other agents</a><a href="#let-agents-drive-zurafa">Let agents drive Zurafa</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#codex">Codex</a><a href="#pi">Pi</a><a href="#other-agents">Other agents</a><a href="#let-agents-drive-zurafa">Let agents drive Zurafa</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
