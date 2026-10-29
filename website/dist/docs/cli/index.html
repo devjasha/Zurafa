@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.22-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.23-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -91,6 +91,11 @@ zurafa preview README.md          # open a file in the preview beside the curren
 <p>Run <code>zurafa help</code> for the full command list.</p>
 <h2 id="driving-panes-from-agents">Driving panes from agents</h2>
 <p>Agents running in a Zurafa pane can use the CLI the way you would: start a test run beside themselves, type into another agent, wait for it and read its screen.</p>
+<p><code>zurafa spawn</code> starts an agent with a task in a new tab, named after the task, and prints the new pane:</p>
+<pre><code>p=$(zurafa spawn claude &quot;fix the flaky login test&quot;)
+zurafa wait $p &amp;&amp; zurafa read $p -n 40
+zurafa spawn codex &quot;review the diff&quot; --split   # beside the current pane instead</code></pre>
+<p>The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass <code>--cwd</code>. <code>-s</code> picks the workspace, <code>-l</code> names the tab, and <code>--split</code> takes <code>-b</code> and <code>--axis</code>. Spawning into a remote workspace isn&#x27;t supported yet.</p>
 <pre><code>zurafa send review &quot;npm run migrate&quot; --enter   # type text, then press Enter
 zurafa send review -e &#x27;y\n&#x27;                     # interpret \n \r \t \e \xHH escapes
 zurafa key review ctrl+c                       # press keys: enter, tab, escape, up, ctrl+c…
@@ -98,15 +103,18 @@ zurafa read review -n 40                       # the last 40 lines, scrollback i
 zurafa wait review                             # until it stops working
 zurafa wait review --for blocked,error -t 10m  # until it reaches one of these statuses
 zurafa prompt review &quot;summarize the diff&quot;      # send + Enter, wait, print the screen
-zurafa events --for blocked                    # print status changes as they happen</code></pre>
+zurafa events --for blocked                    # print status changes as they happen
+zurafa panes                                   # every pane: tab, program, status, directory</code></pre>
 <p>A target is a pane, or a session for its focused pane. Without <code>-s</code>, agent commands search every session. <code>read</code>, <code>wait</code> and <code>events</code> default to the current pane inside Zurafa.</p>
 <p><code>wait</code> prints the pane&#x27;s status when it returns: <code>idle</code>, <code>working</code>, <code>blocked</code>, <code>done</code>, <code>error</code> or <code>exited</code>. A pane whose program reports nothing is <code>idle</code>, so <code>wait</code> and <code>prompt</code> rely on <a href="/docs/status/">status reports</a>. <code>prompt</code> treats a program that doesn&#x27;t start working within 10 seconds as answered. <code>--timeout</code> (<code>30s</code>, <code>10m</code>, <code>1h</code>) makes <code>wait</code>, <code>prompt</code> and <code>events</code> exit with status 5.</p>
-<p><code>zurafa events --json</code> prints one daemon event per line. <code>--once</code> exits after the first matching event.</p>
+<p><code>zurafa events --json</code> prints one daemon event per line. <code>--once</code> exits after the first matching event. <code>zurafa --json panes</code> lists the panes as JSON; your own pane has <code>&quot;current&quot;: true</code>.</p>
+<p><code>zurafa mcp</code> offers these commands to agents as MCP tools. See <a href="/docs/agents/#let-agents-drive-zurafa">Let agents drive Zurafa</a>.</p>
 <p>Programs and agents report their own status with <code>zurafa report</code>, which writes an OSC 7501 sequence to the terminal:</p>
 <pre><code>zurafa report working &quot;Migrating the database&quot; --progress 40
 zurafa report blocked &quot;Approve the production deploy?&quot; --kind permission
 zurafa report done &quot;Deployed to staging&quot;
 zurafa report clear</code></pre>
+<p><code>zurafa setup claude</code> adds these reports to Claude Code&#x27;s hooks for you. See <a href="/docs/agents/">Connect your agents</a>.</p>
 <p><code>--id</code> and <code>--title</code> report one of several tasks in a pane, and <code>--app</code> names the program.</p>
 <h2 id="taxonomy">Taxonomy</h2>
 <p>Zurafa&#x27;s public UI uses these names:</p>

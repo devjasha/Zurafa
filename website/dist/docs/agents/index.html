@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.22-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.23-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -78,7 +78,9 @@
 <pre><code>zurafa report blocked &quot;Testing the status icon&quot;</code></pre>
 <p>The pane&#x27;s icon turns amber and the sidebar counts one pane that needs you. Run <code>zurafa report clear</code> to reset it. If you skipped the install, see the <a href="/docs/cli/">CLI guide</a>.</p>
 <h2 id="claude-code">Claude Code</h2>
-<p>Add these hooks to <code>~/.claude/settings.json</code>. If the file already has a <code>hooks</code> object, merge the four entries into it.</p>
+<p>Run this once from any terminal:</p>
+<pre><code>zurafa setup claude</code></pre>
+<p>It adds the four hooks below to <code>~/.claude/settings.json</code> (or <code>$CLAUDE_CONFIG_DIR/settings.json</code>), keeps your other settings and hooks, and saves the old file as <code>settings.json.zurafa-backup</code>. Running it again changes nothing. To set it up by hand instead, add these hooks to <code>~/.claude/settings.json</code>. If the file already has a <code>hooks</code> object, merge the four entries into it.</p>
 <pre><code>{
   &quot;hooks&quot;: {
     &quot;UserPromptSubmit&quot;: [
@@ -122,11 +124,15 @@
 <li><strong>Failed:</strong> <code>zurafa report error</code></li>
 </ul>
 <p>Messages are optional, so <code>zurafa report blocked &quot;Approve the deploy?&quot;</code> shows the question in the notification too.</p>
+<h2 id="let-agents-drive-zurafa">Let agents drive Zurafa</h2>
+<p><code>zurafa mcp</code> serves Zurafa&#x27;s agent commands as MCP tools, so an agent can find them on its own: start other agents on tasks, list every pane and its status, type into a pane, read its screen, and wait for it to finish. Add it to Claude Code once:</p>
+<pre><code>claude mcp add --scope user zurafa -- zurafa mcp</code></pre>
+<p>Other agents that support MCP servers over stdio take the same command, <code>zurafa mcp</code>. Then ask, for example, &quot;spawn a Codex agent to write tests for this module and tell me when it&#x27;s done&quot;. The tools are <code>list_panes</code>, <code>spawn</code>, <code>send</code>, <code>key</code>, <code>read</code>, <code>wait</code>, and <code>prompt</code>; each does what the <a href="/docs/cli/">CLI command</a> of the same name does. <code>wait</code> and <code>prompt</code> give up after 10 minutes unless the agent asks for longer.</p>
 <h2 id="when-an-agent-needs-you">When an agent needs you</h2>
-<p>A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. The Dock icon counts the panes waiting on you, and <code>⌘J</code> jumps to the next one.</p>
+<p>A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. When Claude Code asks for permission, hover the notification and choose <strong>Approve</strong> or <strong>Deny</strong> to answer without leaving what you&#x27;re doing. If the prompt was already answered or changed, Zurafa takes you to the pane instead of pressing anything. The Dock icon counts the panes waiting on you, and <code>⌘J</code> jumps to the next one.</p>
 <h2 id="how-it-works">How it works</h2>
 <p><code>zurafa report</code> writes an OSC 7501 sequence straight to the pane&#x27;s terminal, so it works from hooks whose output the agent captures. Outside Zurafa the sequence is ignored. The <a href="/docs/status/">Program status</a> page covers the protocol, nested tasks, and when reports clear themselves.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/quickstart/"><small>← Previous</small><strong>Quick start</strong></a><a href="/docs/sessions/"><small>Next →</small><strong>Sessions, tabs &amp; panes</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#other-agents">Other agents</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#other-agents">Other agents</a><a href="#let-agents-drive-zurafa">Let agents drive Zurafa</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
