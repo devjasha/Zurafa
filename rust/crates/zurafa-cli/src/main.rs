@@ -408,7 +408,7 @@ const PASTE_GAP: Duration = Duration::from_millis(200);
 /// program enabled mode 2004), a pause, then Enter as its own write.
 fn submit(client: &mut Client, pane: &str, text: &str, enter: bool) -> Result<(), (i32, String)> {
     if !text.is_empty() {
-        let bytes = paste(attach_parser(client, pane)?.screen().bracketed_paste(), text);
+        let bytes = paste(attach_parser(client, pane)?.0.screen().bracketed_paste(), text);
         input(client, pane, &bytes)?;
     }
     if enter {
@@ -518,14 +518,34 @@ fn unescape(text: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// The pane's screen as text, with up to `lines` lines including scrollback.
-fn screen(client: &mut Client, pane: &str, lines: Option<usize>) -> Result<String, (i32, String)> {
-    Ok(screen_lines(&mut attach_parser(client, pane)?, lines).join("\n"))
+/// The pane's screen as text, with up to `lines` lines including scrollback. A full-screen
+/// app keeps its history to itself, so unless it is `busy` it is scrolled up with the mouse
+/// wheel, its pages glued together, and scrolled back.
+fn screen(
+    client: &mut Client,
+    pane: &str,
+    lines: Option<usize>,
+    busy: bool,
+) -> Result<String, (i32, String)> {
+    let (mut parser, mut end) = attach_parser(client, pane)?;
+    let s = parser.screen();
+    if let Some(n) = lines.filter(|&n| {
+        n > s.size().0 as usize
+            && !busy
+            && s.alternate_screen()
+            && s.mouse_protocol_mode() != vt100::MouseProtocolMode::None
+    }) {
+        let history = stitch(client, pane, &mut parser, &mut end, n).map_err(|e| (1, e))?;
+        if let Some(history) = history {
+            return Ok(last_lines(history, lines).join("\n"));
+        }
+    }
+    Ok(screen_lines(&mut parser, lines).join("\n"))
 }
 
-/// The pane's output replayed into a terminal, for its screen and modes.
+/// The pane's output replayed into a terminal, for its screen and modes, and where the replay ends.
 // shortcut: a replay trimmed by the daemon (`gap`) may miss when a mode was set; track modes in the daemon if that bites.
-fn attach_parser(client: &mut Client, pane: &str) -> Result<vt100::Parser, (i32, String)> {
+fn attach_parser(client: &mut Client, pane: &str) -> Result<(vt100::Parser, u64), (i32, String)> {
     let reply = client
         .request(json!({"type":"attach","terminal":pane}))
         .map_err(|e| (1, e))?;
@@ -538,7 +558,7 @@ fn attach_parser(client: &mut Client, pane: &str) -> Result<vt100::Parser, (i32,
     );
     let mut parser = vt100::Parser::new(rows, cols, 10_000);
     parser.process(&data);
-    Ok(parser)
+    Ok((parser, reply["end"].as_u64().unwrap_or(0)))
 }
 
 fn screen_lines(parser: &mut vt100::Parser, lines: Option<usize>) -> Vec<String> {
@@ -554,11 +574,190 @@ fn screen_lines(parser: &mut vt100::Parser, lines: Option<usize>) -> Vec<String>
         parser.screen_mut().set_scrollback(0);
     }
     out.extend(parser.screen().rows(0, cols));
+    last_lines(out, lines)
+}
+
+/// The last `lines` of `out`, after dropping trailing blank lines.
+fn last_lines(mut out: Vec<String>, lines: Option<usize>) -> Vec<String> {
     while out.last().is_some_and(|l| l.trim().is_empty()) {
         out.pop();
     }
     let keep = lines.unwrap_or(out.len()).min(out.len());
     out.split_off(out.len() - keep)
+}
+
+/// How long the screen must stay unchanged for a redraw to count as done.
+const QUIET: Duration = Duration::from_millis(40);
+/// How long a wheel step may take to start redrawing.
+const STEP: Duration = Duration::from_millis(300);
+const STITCH_MAX: Duration = Duration::from_secs(20);
+
+/// Feeds the pane's output (after byte offset `end`) into `parser` until it is quiet, or until
+/// `wait` passes with nothing printed. Says whether anything printed.
+fn settle(
+    client: &mut Client,
+    pane: &str,
+    parser: &mut vt100::Parser,
+    end: &mut u64,
+    wait: Duration,
+) -> Result<bool, String> {
+    let (mut printed, mut deadline) = (false, Instant::now() + wait);
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Ok(printed);
+        }
+        client
+            .stream
+            .set_read_timeout(Some(left))
+            .map_err(|e| e.to_string())?;
+        let frame = match read_frame(&mut client.stream) {
+            Ok(frame) => frame,
+            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
+                return Ok(printed)
+            }
+            Err(e) => return Err(format!("lost the daemon: {e}")),
+        };
+        let v: Value = serde_json::from_slice(&frame).map_err(|e| e.to_string())?;
+        let at = v["end"].as_u64().unwrap_or(0);
+        if v["type"] != "output" || v["terminal"] != pane || at <= *end {
+            continue;
+        }
+        let data = B64.decode(strv(&v["data"])).map_err(|e| e.to_string())?;
+        parser.process(&data);
+        (*end, printed, deadline) = (at, true, Instant::now() + QUIET);
+    }
+}
+
+/// Scrolls a full-screen app up until its pages hold `want` lines or it reaches the top, then
+/// scrolls it back. None when the pages can't be glued together or it doesn't go back to how it
+/// was: read the plain screen instead.
+fn stitch(
+    client: &mut Client,
+    pane: &str,
+    parser: &mut vt100::Parser,
+    end: &mut u64,
+    want: usize,
+) -> Result<Option<Vec<String>>, String> {
+    let page = |p: &vt100::Parser| -> Vec<String> {
+        let cols = p.screen().size().1;
+        p.screen()
+            .rows(0, cols)
+            .map(|r| r.trim_end().to_owned())
+            .collect()
+    };
+    let height = parser.screen().size().0 as usize;
+    let wheel = |client: &mut Client, parser: &vt100::Parser, up: bool, notches: usize| {
+        let (button, row) = (if up { 64u8 } else { 65 }, height / 2 + 1);
+        let event = match parser.screen().mouse_protocol_encoding() {
+            vt100::MouseProtocolEncoding::Sgr => format!("\x1b[<{button};1;{row}M").into_bytes(),
+            _ => vec![0x1b, b'[', b'M', 32 + button, 33, 32 + row.min(223) as u8],
+        };
+        client
+            .send(json!({"type":"input","terminal":pane,"data":B64.encode(event.repeat(notches))}))
+    };
+    let deadline = Instant::now() + STITCH_MAX;
+    settle(client, pane, parser, end, QUIET)?;
+    let initial = page(parser);
+    // One notch down moves the view only if someone scrolled it up; then "back" is unknown.
+    wheel(client, parser, false, 1)?;
+    settle(client, pane, parser, end, STEP)?;
+    if page(parser) != initial {
+        wheel(client, parser, true, 1)?;
+        settle(client, pane, parser, end, STEP)?;
+        return Ok(None);
+    }
+    let (mut history, mut previous) = (initial.clone(), initial.clone());
+    let (mut notches, mut ups, mut still, mut aligned) = (3, 0, 0, true);
+    while history.len() < want && still < 2 && Instant::now() < deadline {
+        wheel(client, parser, true, notches)?;
+        ups += notches;
+        settle(client, pane, parser, end, STEP)?;
+        let next = page(parser);
+        match merge_up(&mut history, &previous, &next) {
+            // Nothing moved: at the top, or a slow redraw; believe the top after two steps.
+            Some(0) => still += 1,
+            Some(added) => {
+                (previous, still) = (next, 0);
+                // Aim for a quarter to half a screen per step, so pages still overlap.
+                if added < height / 4 {
+                    notches *= 2;
+                } else if added > height / 2 {
+                    notches = (notches / 2).max(1);
+                }
+            }
+            None => {
+                aligned = false;
+                break;
+            }
+        }
+    }
+    // It started at the bottom, so extra notches down are harmless.
+    wheel(client, parser, false, ups)?;
+    let mut back = false;
+    for _ in 0..5 {
+        while settle(client, pane, parser, end, STEP)? {}
+        back = page(parser) == initial;
+        if back {
+            break;
+        }
+        wheel(client, parser, false, height)?;
+    }
+    client
+        .stream
+        .set_read_timeout(None)
+        .map_err(|e| e.to_string())?;
+    Ok((aligned && back).then_some(history))
+}
+
+/// Glues `next`, the page one scroll up from `previous`, onto `history`, which starts with
+/// `previous`, and says how many rows it added. Rows above the proving row are replaced, since
+/// a pinned header may have hidden transcript rows. None: can't tell how far it scrolled.
+fn merge_up(history: &mut Vec<String>, previous: &[String], next: &[String]) -> Option<usize> {
+    if previous == next {
+        return Some(0);
+    }
+    let (shift, anchor) = scrolled(previous, next)?;
+    let at = history
+        .iter()
+        .take(previous.len())
+        .position(|r| *r == previous[anchor])?;
+    let before = history.len();
+    history.splice(0..at, next[..anchor + shift].iter().cloned());
+    Some(history.len().saturating_sub(before))
+}
+
+/// How many rows `next` scrolled up from `previous`, and a row of `previous` that proves it:
+/// non-blank, unique on both pages, and where the shift puts it. None if no shift fits, or two do.
+fn scrolled(previous: &[String], next: &[String]) -> Option<(usize, usize)> {
+    if previous.len() != next.len() {
+        return None;
+    }
+    let unique = |rows: &[String], row: &String| rows.iter().filter(|r| *r == row).count() == 1;
+    let mut found = None;
+    for shift in 1..previous.len() {
+        let pairs: Vec<usize> = (0..previous.len() - shift)
+            .filter(|&i| !previous[i].is_empty() && !next[i + shift].is_empty())
+            .collect();
+        let same: Vec<usize> = pairs
+            .iter()
+            .copied()
+            .filter(|&i| previous[i] == next[i + shift])
+            .collect();
+        let anchor = same
+            .iter()
+            .copied()
+            .find(|&i| unique(previous, &previous[i]) && unique(next, &previous[i]));
+        // Of the rows the pages overlap in, at least 30% must match to trust the shift.
+        let Some(anchor) = anchor.filter(|_| same.len() * 10 >= pairs.len() * 3) else {
+            continue;
+        };
+        if found.is_some() {
+            return None;
+        }
+        found = Some((shift, anchor));
+    }
+    found
 }
 
 fn cmd_read(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
@@ -569,8 +768,15 @@ fn cmd_read(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
         })
         .transpose()?;
     let snapshot = client.snapshot().map_err(|e| (1, e))?;
-    let (_, pane) = target_pane(&snapshot, args, positionals(args).into_iter().next())?;
-    println!("{}", screen(client, &pane, lines)?);
+    let (session, pane) = target_pane(&snapshot, args, positionals(args).into_iter().next())?;
+    let records = snapshot["sessions"][&session]["blocks"][&pane]["statuses"]["records"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(k, r)| (k.clone(), strv(&r["state"])))
+        .collect();
+    let busy = pane_state(&records, true) == "working";
+    println!("{}", screen(client, &pane, lines, busy)?);
     Ok(())
 }
 
@@ -740,7 +946,7 @@ fn cmd_prompt(client: &mut Client, args: &[String]) -> Result<(), (i32, String)>
     {
         return Err((5, format!("timed out; {pane} is still working")));
     }
-    println!("{}", screen(client, &pane, None)?);
+    println!("{}", screen(client, &pane, None, false)?);
     Ok(())
 }
 
@@ -906,7 +1112,7 @@ fn mcp_tools() -> Value {
          "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"enter":{"type":"boolean","description":"Press Enter after the text. Default true."}},"required":["pane","text"]}},
         {"name":"key","description":"Press keys in a pane: enter, tab, escape, up, down, left, right, backspace, ctrl+c and other ctrl+letter keys.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"keys":{"type":"array","items":{"type":"string"}}},"required":["pane","keys"]}},
-        {"name":"read","description":"Read a pane's screen as text, or its last N lines including scrollback.",
+        {"name":"read","description":"Read a pane's screen as text, or its last N lines including scrollback. A full-screen app that isn't working, such as Claude Code, is scrolled up and back to read its history.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"lines":{"type":"integer","minimum":1}},"required":["pane"]}},
         {"name":"wait","description":"Wait until a pane stops working, or reaches one of the given statuses, and return its status. Needs the pane's program to report status.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"for":{"type":"array","items":{"type":"string","enum":["idle","working","blocked","done","error","exited"]}},"timeout":timeout},"required":["pane"]}},
@@ -1827,7 +2033,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
 }
 
 #[cfg(test)]
@@ -2058,5 +2264,18 @@ mod tests {
         parser.process(b"1\r\n2\r\n3\r\n4\r\n5");
         assert_eq!(screen_lines(&mut parser, None), ["3", "4", "5"]);
         assert_eq!(screen_lines(&mut parser, Some(4)), ["2", "3", "4", "5"]);
+    }
+
+    #[test]
+    fn merge_up_glues_scrolled_pages_under_a_pinned_footer() {
+        let rows = |r: &[&str]| r.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let previous = rows(&["c", "d", "e", "> prompt"]);
+        let next = rows(&["a", "b", "c", "> prompt"]);
+        let mut history = previous.clone();
+        assert_eq!(merge_up(&mut history, &previous, &next), Some(2));
+        assert_eq!(history, rows(&["a", "b", "c", "d", "e", "> prompt"]));
+        assert_eq!(merge_up(&mut history, &next, &next), Some(0));
+        let unrelated = rows(&["x", "y", "z", "w"]);
+        assert_eq!(merge_up(&mut history, &next, &unrelated), None);
     }
 }
