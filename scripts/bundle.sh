@@ -35,6 +35,10 @@ bin="$(cd "$root/apps/macos" && swift build -c release --show-bin-path)"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 cp "$bin/Zurafa" "$app/Contents/MacOS/$executable_name"
+# SwiftPM records the deployment target as the SDK version, and macOS keeps apps "built" against
+# an SDK older than 26 on the pre-Liquid Glass look. Record the SDK this was really built with.
+vtool -set-build-version macos 14.0 "$(xcrun --show-sdk-version)" -replace \
+  -output "$app/Contents/MacOS/$executable_name" "$app/Contents/MacOS/$executable_name"
 cp -R "$bin/Sparkle.framework" "$app/Contents/Frameworks/Sparkle.framework"
 if ! otool -l "$app/Contents/MacOS/$executable_name" | grep -q '@executable_path/../Frameworks'; then
   install_name_tool -add_rpath '@executable_path/../Frameworks' "$app/Contents/MacOS/$executable_name"

@@ -116,11 +116,17 @@ struct ZurafaConfigLoader {
     /// Out-of-range values are ignored, like `font-size`, so a typo keeps the default.
     /// `content` with its active `key =` lines replaced by one for `value`; every other line stays as written.
     static func setting(_ key: String, to value: String, in content: String) -> String {
+        // Each palette index is its own setting, so writing color 4 keeps the others.
+        func slot(_ key: String, _ value: Substring) -> String {
+            key == "palette" ? "palette \(value.split(separator: "=").first?.trimmingCharacters(in: .whitespaces) ?? "")" : key
+        }
+        let target = slot(key, Substring(value))
         var replaced = false
         var lines = content.components(separatedBy: "\n").compactMap { line -> String? in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("#"), let equals = trimmed.firstIndex(of: "="),
-                  trimmed[..<equals].trimmingCharacters(in: .whitespaces).lowercased() == key else { return line }
+                  slot(trimmed[..<equals].trimmingCharacters(in: .whitespaces).lowercased(),
+                       trimmed[trimmed.index(after: equals)...]) == target else { return line }
             defer { replaced = true }
             return replaced ? nil : "\(key) = \(value)"
         }

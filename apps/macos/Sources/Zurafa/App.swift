@@ -21,6 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
     func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
         availableUpdate = nil
     }
+    /// Sparkle stores this; objectWillChange refreshes the toggle bound to it.
+    var automaticallyChecksForUpdates: Bool {
+        get { updaterController.updater.automaticallyChecksForUpdates }
+        set { objectWillChange.send(); updaterController.updater.automaticallyChecksForUpdates = newValue }
+    }
     func checkForUpdates() {
         updaterController.checkForUpdates(nil)
     }
@@ -40,9 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
                 // Free Cmd-W and Cmd-T from the stock Close and Show Fonts items.
                 CommandGroup(replacing: .saveItem) {}
                 CommandGroup(replacing: .textFormatting) {}
-                CommandGroup(replacing: .appSettings) {
-                    Button("Settings…") { ws.openConfig() }.keyboardShortcut(",")
-                }
+                CommandGroup(replacing: .appSettings) { SettingsMenuItem() }
                 CommandGroup(after: .appInfo) {
                     Button("Check for Updates…") { delegate.checkForUpdates() }
                 }
@@ -52,5 +55,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
                     }
                 }
             }
+        // A Window, not a Settings scene: the Settings scene gives a split view a doubled title bar.
+        Window("Settings", id: "settings") { SettingsView().environmentObject(ws).environmentObject(delegate) }
+            .windowResizability(.contentSize)
     }
+}
+
+private struct SettingsMenuItem: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View { Button("Settings…") { openWindow(id: "settings") }.keyboardShortcut(",") }
 }

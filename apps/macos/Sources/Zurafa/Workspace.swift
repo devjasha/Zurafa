@@ -154,7 +154,7 @@ enum EditorKind: String, Identifiable {
     @Published var windowControls = CGSize(width: 90, height: 40)
     /// `theme =` from config.zurafa.
     @Published private(set) var themeName: String?
-    private var config = ZurafaConfig()
+    @Published private(set) var config = ZurafaConfig()
     /// Shown while the theme picker's selection moves; config.zurafa is untouched until one is chosen.
     private var previewedTheme: String?
     /// Open preview per workspace, so it stays behind when switching workspaces.
@@ -493,7 +493,7 @@ enum EditorKind: String, Identifiable {
     func toggleSidebarPosition() { writeConfig("sidebar-position", style.sidebarOnRight ? "left" : "right") }
 
     /// Writes `key = value` into config.zurafa, creating it from the template if needed.
-    private func writeConfig(_ key: String, _ value: String) {
+    func writeConfig(_ key: String, _ value: String) {
         let loader = ZurafaConfigLoader()
         let url = loader.fileURL
         do {

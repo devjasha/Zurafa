@@ -106,6 +106,13 @@ final class ZurafaConfigTests: XCTestCase {
                        "theme = A\nsidebar-position = right\n")
     }
 
+    func testSettingPaletteReplacesOnlyThatIndex() {
+        XCTAssertEqual(ZurafaConfigLoader.setting("palette", to: "4=#111111", in: "palette = 1=#ff0000\npalette = 4=#74a0eb\n"),
+                       "palette = 1=#ff0000\npalette = 4=#111111\n")
+        XCTAssertEqual(ZurafaConfigLoader.setting("palette", to: "2=#00ff00", in: "palette = 1=#ff0000\n"),
+                       "palette = 1=#ff0000\npalette = 2=#00ff00\n")
+    }
+
     func testListsThemesInLookupOrderWithoutDuplicates() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

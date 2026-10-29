@@ -111,7 +111,7 @@ enum CLIInstaller {
         URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
-    @MainActor private static func showFailure(_ error: Error) {
+    @MainActor static func showFailure(_ error: Error) {
         let alert = NSAlert(error: error)
         alert.messageText = "Could not install the Zurafa CLI"
         alert.runModal()

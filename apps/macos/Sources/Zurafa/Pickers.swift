@@ -730,6 +730,7 @@ private struct PaletteEntry: Identifiable {
 struct CommandPicker: View {
     @EnvironmentObject var ws: Workspace
     @EnvironmentObject var app: AppDelegate
+    @Environment(\.openWindow) private var openWindow
     @State private var query = ""
     @State private var selection = 0
     @State private var themeMode = false
@@ -774,7 +775,8 @@ struct CommandPicker: View {
                   detail: nil, shortcut: "⌥⌘T") { ws.toggleTabStripLayout() },
             .init(id: "Toggle Sidebar Position", title: ws.style.sidebarOnRight ? "Move Sidebar to Left" : "Move Sidebar to Right",
                   detail: nil, shortcut: nil) { ws.toggleSidebarPosition() },
-            .init(id: "Open Config File", detail: nil, shortcut: "⌘,") { ws.openConfig() },
+            .init(id: "Settings…", detail: nil, shortcut: "⌘,") { openWindow(id: "settings") },
+            .init(id: "Open Config File", detail: nil, shortcut: nil) { ws.openConfig() },
             .init(id: "Import Ghostty Settings", detail: nil, shortcut: nil) { ws.importGhosttySettings() },
             .init(id: "Use Zurafa Terminal Defaults", detail: nil, shortcut: nil) { ws.clearGhosttySettings() },
             .init(id: "Set Background Image…", detail: "Dithered", shortcut: nil) { ws.chooseBackgroundImage() },
