@@ -34,12 +34,12 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(Program.detect("emacs-31.1", remote: false), .emacs)
         XCTAssertEqual(Program.detect("fish", remote: false), .shell)
         XCTAssertEqual(Program.detect("ssh", remote: true), .ssh)
-        XCTAssertEqual(Program.codex.iconAssetName, "Codex")
-        XCTAssertEqual(Program.shell.iconAssetName, "Terminal")
-        XCTAssertEqual(AgentIcon.assetName(for: "pi"), "Pi")
-        XCTAssertEqual(AgentIcon.assetName(for: "github-copilot"), "LobeGithubCopilot")
-        XCTAssertNotNil(ZurafaResources.url(forResource: "Claude", withExtension: "png", subdirectory: "light-icons"))
-        XCTAssertNotNil(ZurafaResources.url(forResource: "Claude", withExtension: "png", subdirectory: "dark-icons"))
+        XCTAssertEqual(Program.detect("nvim", remote: false), .tool("nvim"))
+        XCTAssertEqual(Program.detect("lazygit", remote: false), .git)
+        XCTAssertEqual(Program.tool("python3").title, "Python")
+        for program in [Program.claude, .codex, .gemini, .emacs, .git, .kali, .shell] + Program.tools.keys.map(Program.tool) { XCTAssertNotNil(AgentIcon.brandGlyph(program), "\(program)") }
+        XCTAssertEqual(AgentIcon.program(for: "pi"), .pi)
+        XCTAssertEqual(AgentIcon.program(for: "github-copilot"), .tool("copilot"))
         XCTAssertNil(ZurafaResources.image(named: "MissingAgentIcon"))
     }
     func testDaemonLayoutDecodesAndKeepsPaneOrder() throws {

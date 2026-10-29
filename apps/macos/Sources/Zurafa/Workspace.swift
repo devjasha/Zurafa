@@ -32,6 +32,7 @@ enum Program: Equatable {
         "docker": ("Docker", "docker", 0x2496ED), "mysql": ("MySQL", "mysql", 0x4479A1), "psql": ("PostgreSQL", "postgresql", 0x4169E1),
         "redis-cli": ("Redis", "redis", 0xFF4438), "vim": ("Vim", "vim", 0x019733), "nvim": ("Neovim", "neovim", 0x57A143),
         "hx": ("Helix", "helix", 0x281733), "htop": ("htop", "htop", 0x009020), "tmux": ("tmux", "tmux", 0x1BB91F),
+        "gh": ("GitHub", "github", nil), "copilot": ("GitHub Copilot", "githubcopilot", nil),
     ]
     static func detect(_ name: String?, executable: String? = nil, argv: [String]? = nil, remote: Bool, remoteShell: Program = .ssh) -> Program {
         guard let name else { return remote ? remoteShell : .shell }
@@ -63,33 +64,23 @@ enum Program: Equatable {
         switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .emacs: "Emacs"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .vm: "VM"; case .kali: "Kali Linux"; case .shell: "Shell"; case .tool(let n): Program.tools[n]?.title ?? n }
     }
     var icon: String {
-        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "brain.head.profile"; case .emacs: "text.cursor"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .vm, .kali: "desktopcomputer"; case .shell, .tool: "terminal" }
+        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "pi"; case .emacs: "text.cursor"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .vm, .kali: "desktopcomputer"; case .shell, .tool: "terminal" }
     }
-    var iconAssetName: String? {
-        switch self { case .claude: "Claude"; case .codex: "Codex"; case .pi: "Pi"; case .emacs: "Doom"; case .kali: "Kali Linux"; case .shell: "Terminal"; default: nil }
-    }
-    var tile: [Color] {
-        switch self {
-        case .claude: [Color(red: 0.83, green: 0.52, blue: 0.38)]
-        case .codex: [.black]
-        case .gemini: [Color(red: 0.35, green: 0.55, blue: 0.9)]
-        case .pi: [Color(red: 0.45, green: 0.58, blue: 0.92)]
-        case .emacs: [Color(red: 0.49, green: 0.34, blue: 0.76)]
-        case .git: [Color(red: 0.49, green: 0.83, blue: 0.47), Color(red: 0.22, green: 0.62, blue: 0.32)]
-        case .dev: [Color(red: 0.33, green: 0.34, blue: 0.38), Color(red: 0.11, green: 0.12, blue: 0.14)]
-        case .ssh: [Color(red: 0.28, green: 0.47, blue: 0.57)]
-        case .vm, .kali: [Color(red: 0.24, green: 0.38, blue: 0.72), Color(red: 0.12, green: 0.18, blue: 0.40)]
-        case .shell, .tool: [Color(red: 0.20, green: 0.20, blue: 0.22), Color(red: 0.03, green: 0.03, blue: 0.04)]
-        }
-    }
-    /// Brand glyph and its tile color; Claude and Codex use their brand marks here too.
-    var brand: (glyph: String, color: UInt32?)? {
+    /// Tile badge: an SVG in Resources/brands (else the SF Symbol `icon`) on its color; nil color follows the theme.
+    var badge: (glyph: String?, color: UInt32?) {
         switch self {
         case .claude: ("claude", 0xD97757)
         case .codex: ("openai", nil)
+        case .gemini: ("googlegemini", 0x8E75B2)
+        case .pi: (nil, 0x7394EB)
+        case .emacs: ("gnuemacs", 0x7F5AB6)
         case .git: ("git", 0xF05032)
-        case .tool(let n): Program.tools[n].map { ($0.glyph, $0.color) }
-        default: nil
+        case .dev: (nil, 0x54575F)
+        case .ssh: (nil, 0x487891)
+        case .vm: (nil, 0x3D61B8)
+        case .kali: ("kalilinux", 0x557C94)
+        case .shell: ("terminal", nil)
+        case .tool(let n): (Program.tools[n]?.glyph, Program.tools[n]?.color)
         }
     }
 }
@@ -137,7 +128,7 @@ struct StatusItem: Identifiable {
     let id: String
     let record: ProgramStatus
 
-    var iconAssetName: String? { AgentIcon.assetName(for: record.app) }
+    var program: Program? { AgentIcon.program(for: record.app) }
 
     func label(default fallback: String) -> String {
         if let title = record.title, !title.isEmpty { return title }

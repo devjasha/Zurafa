@@ -86,31 +86,25 @@ struct Backdrop: View {
 }
 
 enum AgentIcon {
-    static func image(named name: String?, colorScheme: ColorScheme) -> NSImage? {
-        guard let name else { return nil }
-        let themedFolder = colorScheme == .dark ? "dark-icons" : "light-icons"
-        return ZurafaResources.image(named: name, subdirectory: themedFolder)
-            ?? ZurafaResources.image(named: name)
-    }
-
     /// Monochrome brand glyph as a template image, so SwiftUI tints it.
     static func brandGlyph(_ program: Program) -> NSImage? {
-        guard let name = program.brand?.glyph, let image = ZurafaResources.image(named: name, subdirectory: "brands") else { return nil }
+        guard let name = program.badge.glyph, let image = ZurafaResources.image(named: name, subdirectory: "brands") else { return nil }
         image.isTemplate = true
         return image
     }
 
-    static func assetName(for app: String?) -> String? {
+    /// The program an OSC 7501 record's `app` names, for its badge.
+    static func program(for app: String?) -> Program? {
         guard let app else { return nil }
-        let key = app.lowercased().filter { $0.isLetter || $0.isNumber }
-        switch key {
-        case "claude", "anthropic": return "Claude"
-        case "codex": return "Codex"
-        case "pi": return "Pi"
-        case "doom", "emacs", "doomemacs": return "Doom"
-        case "terminal", "shell", "zsh", "bash", "fish": return "Terminal"
-        case "github": return "LobeGithub"
-        case "copilot", "githubcopilot": return "LobeGithubCopilot"
+        switch app.lowercased().filter({ $0.isLetter || $0.isNumber }) {
+        case "claude", "anthropic": return .claude
+        case "codex": return .codex
+        case "gemini": return .gemini
+        case "pi": return .pi
+        case "doom", "emacs", "doomemacs": return .emacs
+        case "terminal", "shell", "zsh", "bash", "fish": return .shell
+        case "github": return .tool("gh")
+        case "copilot", "githubcopilot": return .tool("copilot")
         default: return nil
         }
     }
@@ -118,19 +112,16 @@ enum AgentIcon {
 
 struct ProgramGlyph: View {
     let program: Program
-    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         if let glyph = AgentIcon.brandGlyph(program) {
             Image(nsImage: glyph).resizable().scaledToFit()
-        } else if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
-            Image(nsImage: icon).resizable().scaledToFit()
         } else {
             Image(systemName: program.icon).resizable().scaledToFit()
         }
     }
 }
 
-/// Compact glass badge for the process reported by the Rust PTY manager.
+/// Landscape badge in the program's color for the process reported by the Rust PTY manager.
 struct Tile: View {
     static let size: CGFloat = 30
 
@@ -140,30 +131,17 @@ struct Tile: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
-        if let brand = program.brand, let glyph = AgentIcon.brandGlyph(program) {
-            // Brands without a color (black marks) invert with the theme instead of vanishing on a dark tab bar.
-            let fill = brand.color.map { Color(red: Double($0 >> 16 & 0xFF) / 255, green: Double($0 >> 8 & 0xFF) / 255, blue: Double($0 & 0xFF) / 255) } ?? (colorScheme == .dark ? .white : .black)
-            let ink: Color = brand.color == nil && colorScheme == .dark ? .black : .white
-            shape.fill(fill.gradient)
-                .overlay(shape.strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
-                .overlay(Image(nsImage: glyph).resizable().scaledToFit().foregroundStyle(ink).frame(width: size * 0.6, height: size * 0.6))
-                .frame(width: size, height: size)
-                .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
-        } else if let icon = AgentIcon.image(named: program.iconAssetName, colorScheme: colorScheme) {
-            Image(nsImage: icon)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(shape)
-                .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
-        } else {
-            shape.fill(.ultraThinMaterial)
-                .overlay(shape.fill(program.tile[0].opacity(0.16)))
-                .overlay(shape.strokeBorder(.white.opacity(0.45), lineWidth: 0.5))
-                .overlay(ProgramGlyph(program: program).foregroundStyle(Theme.ink).frame(width: size * 0.6, height: size * 0.6))
-                .frame(width: size, height: size)
-                .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
-        }
+        let color = program.badge.color
+        // Badges without a color (black marks) invert with the theme instead of vanishing on a dark tab bar.
+        let fill = color.map { Color(red: Double($0 >> 16 & 0xFF) / 255, green: Double($0 >> 8 & 0xFF) / 255, blue: Double($0 & 0xFF) / 255) } ?? (colorScheme == .dark ? .white : .black)
+        let ink: Color = color == nil && colorScheme == .dark ? .black : .white
+        shape.fill(fill.gradient)
+            .overlay(shape.strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+            .overlay(ProgramGlyph(program: program).foregroundStyle(ink).frame(width: size * 0.48, height: size * 0.48))
+            // Landscape badge, centered in a square slot so rows and stacks keep their layout.
+            .frame(width: size, height: size * 0.68)
+            .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+            .frame(width: size, height: size)
     }
 }
 
@@ -203,12 +181,8 @@ struct StatusIcon: View {
         let stateColor = StatusDot.colors[item.record.state] ?? Theme.inkSoft
         let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
         ZStack(alignment: .bottomTrailing) {
-            if let icon = AgentIcon.image(named: item.iconAssetName, colorScheme: colorScheme) {
-                Image(nsImage: icon)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size)
-                    .clipShape(shape)
+            if let program = item.program {
+                Tile(program: program, size: size)
             } else {
                 shape
                     .fill(.ultraThinMaterial)

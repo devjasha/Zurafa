@@ -42,5 +42,6 @@ enum ZurafaResources {
         if subdirectory == nil, let image = Bundle.main.image(forResource: name) { return image }
         return url(forResource: name, withExtension: "png", subdirectory: subdirectory).flatMap { NSImage(contentsOf: $0) }
             ?? url(forResource: name, withExtension: "icns", subdirectory: subdirectory).flatMap { NSImage(contentsOf: $0) }
+            ?? url(forResource: name, withExtension: "svg", subdirectory: subdirectory).flatMap { NSImage(contentsOf: $0) }
     }
 }
