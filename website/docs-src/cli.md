@@ -44,6 +44,8 @@ zurafa spawn codex "review the diff" --split   # beside the current pane instead
 
 The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass `--cwd`. `-s` picks the workspace, `-l` names the tab, and `--split` takes `-b` and `--axis`. Spawning into a remote workspace isn't supported yet.
 
+When a spawned agent gets blocked, hits an error or exits, Zurafa types a short note into the agent that spawned it, like `<zurafa from="t7 review">is blocked (permission); see zurafa read t7</zurafa>`, once it can take one (it has reported a status and isn't waiting on a dialog itself). Set `agent-notes = false` in `config.zurafa` to turn notes off. Spawned panes close when the pane that spawned them closes or its agent exits; `--outlive-parent` keeps one running.
+
 ### Worktrees
 
 Give each agent its own git worktree, so agents working in the same repository don't edit each other's files:
