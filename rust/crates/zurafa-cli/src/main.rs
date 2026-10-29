@@ -6,7 +6,7 @@ use std::{
     io::{ErrorKind, Read, Write},
     os::unix::net::UnixStream,
     path::PathBuf,
-    process,
+    process, thread,
     time::{Duration, Instant},
 };
 
@@ -400,22 +400,52 @@ fn input(client: &mut Client, pane: &str, bytes: &[u8]) -> Result<(), (i32, Stri
         .map_err(|e| (1, e))
 }
 
+/// Pause between a paste and its Enter: a TUI like Claude Code reads input that
+/// arrives together as one paste, so an Enter sent with the text only adds a newline.
+const PASTE_GAP: Duration = Duration::from_millis(200);
+
+/// Text plus Enter the way a person types it: the text as a paste (bracketed when the
+/// program enabled mode 2004), a pause, then Enter as its own write.
+fn submit(client: &mut Client, pane: &str, text: &str, enter: bool) -> Result<(), (i32, String)> {
+    if !text.is_empty() {
+        let bytes = paste(attach_parser(client, pane)?.screen().bracketed_paste(), text);
+        input(client, pane, &bytes)?;
+    }
+    if enter {
+        thread::sleep(PASTE_GAP);
+        input(client, pane, b"\r")?;
+    }
+    Ok(())
+}
+
+fn paste(bracketed: bool, text: &str) -> Vec<u8> {
+    // The text can't end the paste early.
+    let text = text.replace("\x1b[201~", "");
+    match bracketed {
+        true => format!("\x1b[200~{text}\x1b[201~").into_bytes(),
+        false => text.into_bytes(),
+    }
+}
+
+/// Positionals, plus what follows `--`, so TEXT may start with '-'.
+fn text_positionals(args: &[String]) -> Vec<String> {
+    [positionals(args), command_after_double_dash(args).unwrap_or_default()].concat()
+}
+
 fn cmd_send(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
-    let pos = positionals(args);
+    let pos = text_positionals(args);
     let [target, text] = pos.as_slice() else {
-        return Err((2, "usage: zurafa send TARGET TEXT [--enter] [-e]".into()));
+        return Err((2, "usage: zurafa send TARGET [--enter] [-e] [--] TEXT".into()));
     };
     let snapshot = client.snapshot().map_err(|e| (1, e))?;
     let (_, pane) = target_pane(&snapshot, args, Some(target.clone()))?;
-    let mut bytes = if has_flag(args, &["-e", "--escapes"]) {
-        unescape(text).map_err(|e| (2, e))?
-    } else {
-        text.as_bytes().to_vec()
-    };
-    if has_flag(args, &["--enter"]) {
-        bytes.push(b'\r');
+    let enter = has_flag(args, &["--enter"]);
+    if !has_flag(args, &["-e", "--escapes"]) {
+        return submit(client, &pane, text, enter);
     }
-    input(client, &pane, &bytes)
+    // Escapes are exact bytes, so they go in raw rather than as a paste.
+    input(client, &pane, &unescape(text).map_err(|e| (2, e))?)?;
+    submit(client, &pane, "", enter)
 }
 
 fn cmd_key(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
@@ -423,13 +453,19 @@ fn cmd_key(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
     let Some((target, keys)) = pos.split_first().filter(|(_, k)| !k.is_empty()) else {
         return Err((2, "usage: zurafa key TARGET KEY...".into()));
     };
-    let mut bytes = Vec::new();
-    for key in keys {
-        bytes.extend(key_bytes(key).ok_or((2, format!("unknown key {key:?}")))?);
-    }
+    let bytes = keys
+        .iter()
+        .map(|key| key_bytes(key).ok_or((2, format!("unknown key {key:?}"))))
+        .collect::<Result<Vec<_>, _>>()?;
     let snapshot = client.snapshot().map_err(|e| (1, e))?;
     let (_, pane) = target_pane(&snapshot, args, Some(target.clone()))?;
-    input(client, &pane, &bytes)
+    // One write per key, apart, so the program sees keypresses; Enter waits out a paste just sent.
+    for (key, bytes) in keys.iter().zip(bytes) {
+        let enter = matches!(key.to_ascii_lowercase().as_str(), "enter" | "return");
+        thread::sleep(if enter { PASTE_GAP } else { Duration::from_millis(30) });
+        input(client, &pane, &bytes)?;
+    }
+    Ok(())
 }
 
 fn key_bytes(key: &str) -> Option<Vec<u8>> {
@@ -484,6 +520,12 @@ fn unescape(text: &str) -> Result<Vec<u8>, String> {
 
 /// The pane's screen as text, with up to `lines` lines including scrollback.
 fn screen(client: &mut Client, pane: &str, lines: Option<usize>) -> Result<String, (i32, String)> {
+    Ok(screen_lines(&mut attach_parser(client, pane)?, lines).join("\n"))
+}
+
+/// The pane's output replayed into a terminal, for its screen and modes.
+// shortcut: a replay trimmed by the daemon (`gap`) may miss when a mode was set; track modes in the daemon if that bites.
+fn attach_parser(client: &mut Client, pane: &str) -> Result<vt100::Parser, (i32, String)> {
     let reply = client
         .request(json!({"type":"attach","terminal":pane}))
         .map_err(|e| (1, e))?;
@@ -496,7 +538,7 @@ fn screen(client: &mut Client, pane: &str, lines: Option<usize>) -> Result<Strin
     );
     let mut parser = vt100::Parser::new(rows, cols, 10_000);
     parser.process(&data);
-    Ok(screen_lines(&mut parser, lines).join("\n"))
+    Ok(parser)
 }
 
 fn screen_lines(parser: &mut vt100::Parser, lines: Option<usize>) -> Vec<String> {
@@ -676,15 +718,15 @@ fn cmd_wait(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
 }
 
 fn cmd_prompt(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
-    let pos = positionals(args);
+    let pos = text_positionals(args);
     let [target, text] = pos.as_slice() else {
-        return Err((2, "usage: zurafa prompt TARGET TEXT [--timeout D]".into()));
+        return Err((2, "usage: zurafa prompt TARGET [--timeout D] [--] TEXT".into()));
     };
     let deadline = deadline(args)?;
     let snapshot = client.snapshot().map_err(|e| (1, e))?;
     let (session, pane) = target_pane(&snapshot, args, Some(target.clone()))?;
     let mut watch = Watch::start(client, &session, &pane)?;
-    input(client, &pane, format!("{text}\r").as_bytes())?;
+    submit(client, &pane, text, true)?;
     // shortcut: a program that never reports working is treated as answered after 10s; screen-based detection would remove the guess.
     let started = Instant::now() + Duration::from_secs(10);
     if watch
@@ -903,10 +945,11 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
             v
         }
         "send" => {
-            let mut v = vec!["send".into(), need("pane")?, text("text")?];
+            let mut v = vec!["send".into(), need("pane")?];
             if a["enter"] != false {
                 v.push("--enter".into());
             }
+            v.extend(["--".into(), need("text")?]);
             v
         }
         "key" => {
@@ -927,7 +970,7 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
             }
             v
         }
-        "prompt" => vec!["prompt".into(), need("pane")?, text("text")?, "-t".into(), timeout()],
+        "prompt" => vec!["prompt".into(), need("pane")?, "-t".into(), timeout(), "--".into(), need("text")?],
         other => return Err(format!("unknown tool {other:?}")),
     })
 }
@@ -1784,7 +1827,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
 }
 
 #[cfg(test)]
@@ -1798,6 +1841,16 @@ mod tests {
         assert_eq!(key_bytes("ctrl+c").unwrap(), [3]);
         assert_eq!(key_bytes("Enter").unwrap(), b"\r");
         assert!(key_bytes("ctrl+1").is_none());
+    }
+
+    #[test]
+    fn text_goes_in_as_a_paste() {
+        let mut parser = vt100::Parser::new(24, 80, 0);
+        assert_eq!(paste(parser.screen().bracketed_paste(), "hi"), b"hi");
+        parser.process(b"\x1b[?2004h");
+        assert_eq!(paste(parser.screen().bracketed_paste(), "a\x1b[201~b"), b"\x1b[200~ab\x1b[201~");
+        let args: Vec<String> = ["t3", "--enter", "--", "-v"].map(String::from).into();
+        assert_eq!(text_positionals(&args), ["t3", "-v"]);
     }
 
     #[test]
@@ -1927,15 +1980,16 @@ mod tests {
     #[test]
     fn mcp_tools_map_to_commands() {
         let args = |name, a| tool_args(name, &a).unwrap();
-        assert_eq!(args("send", json!({"pane":"t3","text":"go on"})), ["send", "t3", "go on", "--enter"]);
-        assert_eq!(args("send", json!({"pane":"t3","text":"y","enter":false})), ["send", "t3", "y"]);
+        assert_eq!(args("send", json!({"pane":"t3","text":"go on"})), ["send", "t3", "--enter", "--", "go on"]);
+        assert_eq!(args("send", json!({"pane":"t3","text":"y","enter":false})), ["send", "t3", "--", "y"]);
+        assert_eq!(args("prompt", json!({"pane":"t3","text":"-v?"})), ["prompt", "t3", "-t", "10m", "--", "-v?"]);
         assert_eq!(args("wait", json!({"pane":"t3","for":["blocked","done"]})), ["wait", "t3", "-t", "10m", "--for", "blocked,done"]);
         assert_eq!(
             args("spawn", json!({"agent":"claude","task":"fix it","split":true,"pane":"t1"})),
             ["spawn", "claude", "fix it", "--split", "-b", "t1"]
         );
         assert_eq!(args("key", json!({"pane":"t3","keys":["escape","enter"]})), ["key", "t3", "escape", "enter"]);
-        assert!(tool_args("send", &json!({"pane":"t3","text":"--enter"})).is_err());
+        assert!(tool_args("spawn", &json!({"agent":"--split"})).is_err());
         assert!(tool_args("read", &json!({})).is_err());
         assert!(tool_args("rm", &json!({})).is_err());
     }
