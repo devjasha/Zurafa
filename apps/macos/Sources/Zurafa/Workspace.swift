@@ -775,17 +775,33 @@ enum EditorKind: String, Identifiable {
         }
     }
 
+    /// Changes directory in the focused shell, or opens a tab there when the pane runs something else.
     func openDirectory(_ path: String) {
         let target = sessionID
+        let pane = tab.focus
+        var cwd = path
         // A remote path is checked on its host: the remote daemon falls back to $HOME if it is missing.
-        guard currentSession?.remote == nil else { Task { await createTab(in: target, cwd: path) }; return }
-        let expanded = (path as NSString).expandingTildeInPath
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory), isDirectory.boolValue else {
-            commandError = "Choose an existing local directory"
-            return
+        if currentSession?.remote == nil {
+            cwd = (path as NSString).expandingTildeInPath
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: cwd, isDirectory: &isDirectory), isDirectory.boolValue else {
+                commandError = "Choose an existing local directory"
+                return
+            }
         }
-        Task { await createTab(in: target, cwd: expanded) }
+        guard metas[pane]?.program == .shell else { Task { await createTab(in: target, cwd: cwd) }; return }
+        // Ctrl-E Ctrl-U clears whatever was half-typed at the prompt first.
+        daemon.send(Msg(type: "input", terminal: pane, data: Data("\u{5}\u{15}cd \(Self.shellQuotedPath(currentSession?.remote == nil ? (cwd as NSString).abbreviatingWithTildeInPath : path))\r".utf8)))
+    }
+
+    /// POSIX single-quotes `path` (also valid in fish), leaving a leading `~` or `~/` for the shell to expand.
+    /// shortcut: fish still reads `\\` inside single quotes, so a path with backslashes may cd wrong; rare enough for now.
+    nonisolated static func shellQuotedPath(_ path: String) -> String {
+        let home = path.hasPrefix("~/") ? "~/" : path == "~" ? "~" : ""
+        let rest = path.dropFirst(home.count)
+        // Plain paths go in bare so the prompt reads like something the user typed.
+        let plain = rest.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) || "/._-+@%,:=".unicodeScalars.contains($0) }
+        return rest.isEmpty || plain ? home + rest : home + "'" + rest.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
     }
 }
 

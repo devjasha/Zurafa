@@ -295,7 +295,9 @@ struct EditorSheet: View {
     @State private var hostError: String?
     @State private var savingHost = false
     @State private var directoryCandidates: [DirectoryCandidate] = []
-    @State private var directorySelection = 0
+    /// Nil until ↑/↓ highlights a row, so Return goes to the typed path.
+    @State private var directorySelection: Int?
+    @State private var directoryPopupHeight: CGFloat = 0
     /// One remote directory's entries, so typing within a name filters without another SSH round trip.
     @State private var remoteListing: (dir: String, entries: [(name: String, isDirectory: Bool)])?
     @State private var hostSelection: Int?
@@ -313,6 +315,10 @@ struct EditorSheet: View {
     }
 
     var body: some View {
+        if kind == .goDirectory { directoryPopup } else { sheet }
+    }
+
+    private var sheet: some View {
         ZStack(alignment: .top) {
             Color.black.opacity(0.16).ignoresSafeArea().onTapGesture { close() }
             VStack(alignment: .leading, spacing: 12) {
@@ -366,12 +372,8 @@ struct EditorSheet: View {
                                 .foregroundStyle(PickerStyle.secondary)
                         }.buttonStyle(.plain).help("Close")
                     }
-                    if kind == .goDirectory {
-                        directoryField
-                    } else {
-                        field("Name", text: $label, focus: .label)
-                            .onSubmit(save)
-                    }
+                    field("Name", text: $label, focus: .label)
+                        .onSubmit(save)
                     HStack(spacing: 8) {
                         Spacer()
                         Button("Cancel", action: close).keyboardShortcut(.cancelAction)
@@ -396,7 +398,6 @@ struct EditorSheet: View {
             switch kind {
             case .renameSession: label = ws.name
             case .renameTab: label = ws.tab.label
-            case .goDirectory: label = ws.currentSession?.remote == nil ? NSHomeDirectory() : "~/"
             case .editHost:
                 if let host = ws.editingHost {
                     label = host.label
@@ -406,7 +407,6 @@ struct EditorSheet: View {
                 }
             default: break
             }
-            if kind == .goDirectory { refreshDirectoryCandidates() }
             if kind == .addHost { ws.refreshFoundHosts() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 focusedField = kind == .addHost || kind == .editHost ? .hostname : .label
@@ -494,29 +494,75 @@ struct EditorSheet: View {
         close()
     }
 
-    private var directoryField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            field("Directory path", text: $label, focus: .label)
+    /// Sits just below the focused pane's cursor line, like shell completion, instead of a centered sheet.
+    private var directoryPopup: some View {
+        let terminal = TerminalStore.shared.existingView(ws.tab.focus)
+        return GeometryReader { geo in
+            let anchor = terminal.flatMap(Self.cursorAnchor) ?? CGPoint(x: (geo.size.width - 360) / 2, y: 50)
+            ZStack(alignment: .topLeading) {
+                Color.clear.contentShape(Rectangle()).onTapGesture { close() }
+                directoryField(font: terminal.map { Font($0.font) } ?? .system(size: 13, design: .monospaced))
+                    .padding(6)
+                    .frame(width: 360)
+                    .pickerGlass(in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(PickerStyle.outline, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { directoryPopupHeight = $0 }
+                    .offset(x: max(8, min(anchor.x, geo.size.width - 368)),
+                            y: max(8, min(anchor.y + 2, geo.size.height - directoryPopupHeight - 8)))
+            }
+        }
+        .foregroundStyle(Theme.ink)
+        .onExitCommand(perform: close)
+        .onAppear {
+            label = "~/"
+            refreshDirectoryCandidates()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focusedField = .label
+                // Focus selects all; put the caret after "~/" so typing extends the path like a shell would.
+                DispatchQueue.main.async { NSApp.sendAction(#selector(NSResponder.moveToEndOfDocument(_:)), to: nil, from: nil) }
+            }
+        }
+    }
+
+    /// The bottom-left of the terminal's cursor cell in SwiftUI's top-left window coordinates.
+    private static func cursorAnchor(_ terminal: PaneTerminal) -> CGPoint? {
+        guard let window = terminal.window, let content = window.contentView else { return nil }
+        let screen = terminal.firstRect(forCharacterRange: NSRange(location: 0, length: 0), actualRange: nil)
+        guard screen != .zero else { return nil }
+        let rect = window.convertFromScreen(screen)
+        return CGPoint(x: rect.minX, y: content.bounds.height - rect.minY)
+    }
+
+    private func directoryField(font: Font) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField("Directory path", text: $label)
+                .textFieldStyle(.plain)
+                .font(font)
+                .focused($focusedField, equals: .label)
+                .padding(.horizontal, 6).frame(height: 24)
                 .onSubmit(save)
-                .onChange(of: label) { _, _ in refreshDirectoryCandidates() }
+                .onChange(of: label) { _, _ in directorySelection = nil; refreshDirectoryCandidates() }
                 .onKeyPress(.downArrow) {
-                    directorySelection = min(directorySelection + 1, max(0, directoryCandidates.count - 1))
+                    guard !directoryCandidates.isEmpty else { return .ignored }
+                    directorySelection = min((directorySelection ?? -1) + 1, directoryCandidates.count - 1)
                     return .handled
                 }
                 .onKeyPress(.upArrow) {
-                    directorySelection = max(directorySelection - 1, 0)
+                    guard let selected = directorySelection else { return .ignored }
+                    directorySelection = selected == 0 ? nil : selected - 1
                     return .handled
                 }
                 .onKeyPress(.tab) {
-                    completeSelectedDirectoryCandidate(open: false)
+                    completeDirectoryCandidate(directorySelection ?? 0, open: false)
                     return .handled
                 }
             if !directoryCandidates.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     ForEach(Array(directoryCandidates.enumerated()), id: \.element.id) { index, candidate in
+                        let selected = index == directorySelection
                         Button {
-                            directorySelection = index
-                            completeSelectedDirectoryCandidate(open: candidate.isDirectory)
+                            completeDirectoryCandidate(index, open: true)
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: candidate.isDirectory ? "folder" : "doc")
@@ -524,27 +570,21 @@ struct EditorSheet: View {
                                 Text(candidate.name)
                                     .lineLimit(1)
                                 Spacer(minLength: 6)
-                                Text((candidate.path as NSString).abbreviatingWithTildeInPath)
-                                    .font(.system(size: 11))
-                                    .lineLimit(1)
-                                    .foregroundStyle(index == directorySelection ? Theme.onAccent.opacity(0.65) : PickerStyle.secondary)
                             }
                             .font(.system(size: 12))
-                            .foregroundStyle(index == directorySelection ? Theme.onAccent : Theme.ink)
-                            .padding(.horizontal, 8).frame(height: 26)
-                            .background(index == directorySelection ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 7))
+                            .foregroundStyle(selected ? Theme.onAccent : candidate.isDirectory ? Theme.ink : PickerStyle.secondary)
+                            .padding(.horizontal, 6).frame(height: 22)
+                            .background(selected ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 6))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .disabled(!candidate.isDirectory)
                     }
                 }
-                .padding(5)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(PickerStyle.outline, lineWidth: 1))
-                Text("↑↓ choose · Tab completes · Return opens a tab")
-                    .font(.system(size: 11))
+                Text("↑↓ choose · Tab completes · Return cds here")
+                    .font(.system(size: 10))
                     .foregroundStyle(PickerStyle.secondary)
+                    .padding(.horizontal, 6)
             }
         }
     }
@@ -572,7 +612,8 @@ struct EditorSheet: View {
         // Remote paths keep their `~`: only the remote host knows its home directory.
         let expanded = remote != nil ? (typed.isEmpty ? "~/" : typed)
             : (typed.isEmpty ? NSHomeDirectory() : (typed as NSString).expandingTildeInPath)
-        let endsWithSlash = expanded.hasSuffix("/")
+        // Checked before expansion, which drops a trailing slash.
+        let endsWithSlash = typed.isEmpty || typed.hasSuffix("/")
         let parent = endsWithSlash ? expanded : (expanded as NSString).deletingLastPathComponent
         let prefix = endsWithSlash ? "" : (expanded as NSString).lastPathComponent
         let directory = parent.isEmpty ? "/" : parent
@@ -580,7 +621,6 @@ struct EditorSheet: View {
         if let remote {
             guard let listing = remoteListing, listing.dir == directory else {
                 directoryCandidates = []
-                directorySelection = 0
                 loadRemoteListing(directory, on: remote)
                 return
             }
@@ -593,6 +633,7 @@ struct EditorSheet: View {
             )) ?? []
             entries = urls.map { ($0.lastPathComponent, (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true) }
         }
+        // shortcut: only the first 12 matches show, so typing narrows big directories; add scrolling if that pinches.
         directoryCandidates = entries.compactMap { entry in
             guard prefix.isEmpty || entry.name.localizedCaseInsensitiveContains(prefix) else { return nil }
             let path = (directory as NSString).appendingPathComponent(entry.name)
@@ -605,7 +646,7 @@ struct EditorSheet: View {
             if exact0 != ($1.name.caseInsensitiveCompare(prefix) == .orderedSame) { return exact0 }
             return $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
-        directorySelection = min(directorySelection, max(0, directoryCandidates.count - 1))
+        .prefix(12).map { $0 }
     }
 
     private func loadRemoteListing(_ directory: String, on host: RemoteHost) {
@@ -641,11 +682,10 @@ struct EditorSheet: View {
         }
     }
 
-    private func completeSelectedDirectoryCandidate(open: Bool) {
-        guard directoryCandidates.indices.contains(directorySelection) else { return }
-        let candidate = directoryCandidates[directorySelection]
-        guard candidate.isDirectory else { return }
-        label = (candidate.path as NSString).abbreviatingWithTildeInPath
+    /// Fills in a directory row; the trailing slash makes the list descend into it.
+    private func completeDirectoryCandidate(_ index: Int, open: Bool) {
+        guard directoryCandidates.indices.contains(index), directoryCandidates[index].isDirectory else { return }
+        label = (directoryCandidates[index].path as NSString).abbreviatingWithTildeInPath + "/"
         if open { save() }
     }
 
@@ -700,8 +740,8 @@ struct EditorSheet: View {
         case .renameTab: ws.renameTab(value)
         case .newSession: ws.createSession(label: value)
         case .goDirectory:
-            // Return opens the highlighted row, not the partial text typed so far.
-            let selected = directoryCandidates.indices.contains(directorySelection) ? directoryCandidates[directorySelection] : nil
+            // Return goes to the highlighted row when there is one, else to the typed path.
+            let selected = directorySelection.flatMap { directoryCandidates.indices.contains($0) ? directoryCandidates[$0] : nil }
             ws.openDirectory(selected?.isDirectory == true ? selected!.path : value)
         case .addHost, .editHost: break
         }

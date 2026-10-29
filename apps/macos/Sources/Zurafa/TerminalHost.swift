@@ -198,6 +198,9 @@ final class PaneTerminal: TerminalView {
     /// Types text into a pane's prompt as a paste (bracketed when the program asks), without submitting it.
     func paste(_ text: String, into id: String) { views[id]?.pasteText(text) }
 
+    /// The terminal already on screen for `id`, without creating one.
+    func existingView(_ id: String) -> PaneTerminal? { views[id] }
+
     func view(for id: String, program: Program) -> PaneTerminal {
         if let view = views[id] { return view }
         let view = PaneTerminal(frame: .zero)
