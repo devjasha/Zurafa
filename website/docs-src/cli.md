@@ -34,6 +34,16 @@ Run `zurafa help` for the full command list.
 
 Agents running in a Zurafa pane can use the CLI the way you would: start a test run beside themselves, type into another agent, wait for it and read its screen.
 
+`zurafa spawn` starts an agent with a task in a new tab, named after the task, and prints the new pane:
+
+```sh
+p=$(zurafa spawn claude "fix the flaky login test")
+zurafa wait $p && zurafa read $p -n 40
+zurafa spawn codex "review the diff" --split   # beside the current pane instead
+```
+
+The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass `--cwd`. `-s` picks the workspace, `-l` names the tab, and `--split` takes `-b` and `--axis`. Spawning into a remote workspace isn't supported yet.
+
 ```sh
 zurafa send review "npm run migrate" --enter   # type text, then press Enter
 zurafa send review -e 'y\n'                     # interpret \n \r \t \e \xHH escapes
@@ -43,13 +53,16 @@ zurafa wait review                             # until it stops working
 zurafa wait review --for blocked,error -t 10m  # until it reaches one of these statuses
 zurafa prompt review "summarize the diff"      # send + Enter, wait, print the screen
 zurafa events --for blocked                    # print status changes as they happen
+zurafa panes                                   # every pane: tab, program, status, directory
 ```
 
 A target is a pane, or a session for its focused pane. Without `-s`, agent commands search every session. `read`, `wait` and `events` default to the current pane inside Zurafa.
 
 `wait` prints the pane's status when it returns: `idle`, `working`, `blocked`, `done`, `error` or `exited`. A pane whose program reports nothing is `idle`, so `wait` and `prompt` rely on [status reports](/docs/status/). `prompt` treats a program that doesn't start working within 10 seconds as answered. `--timeout` (`30s`, `10m`, `1h`) makes `wait`, `prompt` and `events` exit with status 5.
 
-`zurafa events --json` prints one daemon event per line. `--once` exits after the first matching event.
+`zurafa events --json` prints one daemon event per line. `--once` exits after the first matching event. `zurafa --json panes` lists the panes as JSON; your own pane has `"current": true`.
+
+`zurafa mcp` offers these commands to agents as MCP tools. See [Let agents drive Zurafa](/docs/agents/#let-agents-drive-zurafa).
 
 Programs and agents report their own status with `zurafa report`, which writes an OSC 7501 sequence to the terminal:
 
@@ -59,6 +72,8 @@ zurafa report blocked "Approve the production deploy?" --kind permission
 zurafa report done "Deployed to staging"
 zurafa report clear
 ```
+
+`zurafa setup claude` adds these reports to Claude Code's hooks for you. See [Connect your agents](/docs/agents/).
 
 `--id` and `--title` report one of several tasks in a pane, and `--app` names the program.
 

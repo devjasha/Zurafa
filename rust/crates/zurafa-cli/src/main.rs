@@ -153,6 +153,12 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
     if args[0] == "report" {
         return cmd_report(&args[1..]);
     }
+    if args[0] == "setup" {
+        return cmd_setup(&args[1..]);
+    }
+    if args[0] == "mcp" {
+        return cmd_mcp(global.socket);
+    }
     let mut client = Client::connect(global.socket).map_err(|e| (4, e))?;
     match args[0].as_str() {
         "ls" | "sessions" => cmd_ls(&mut client, global.json),
@@ -171,6 +177,8 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
         "wait" => cmd_wait(&mut client, &args[1..]),
         "prompt" => cmd_prompt(&mut client, &args[1..]),
         "events" => cmd_events(&mut client, &args[1..], global.json),
+        "spawn" => cmd_spawn(&mut client, &args[1..]),
+        "panes" => cmd_panes(&mut client, global.json),
         other => Err((2, format!("unknown command {other:?}; run `zurafa help`"))),
     }
 }
@@ -688,6 +696,340 @@ fn cmd_prompt(client: &mut Client, args: &[String]) -> Result<(), (i32, String)>
     Ok(())
 }
 
+/// Opens a tab (or split) that runs the agent through the user's interactive login shell,
+/// so it gets the shell's PATH, and leaves that shell behind when the agent exits.
+fn cmd_spawn(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
+    let pos = positionals(args);
+    let Some((agent, task)) = pos.split_first() else {
+        return Err((2, "usage: zurafa spawn AGENT [TASK] [--split] [-s S] [-b PANE] [--axis A] [--cwd DIR] [-l LABEL]".into()));
+    };
+    // Goes into the shell script unquoted, so only a plain program name or path.
+    if !agent.chars().all(|c| c.is_ascii_alphanumeric() || "._+-/~".contains(c)) {
+        return Err((2, format!("{agent:?} is not a program name")));
+    }
+    let task = task.join(" ");
+    let label = option_value(args, &["-l", "--label"]).unwrap_or_else(|| match task.as_str() {
+        "" => agent.clone(),
+        t => format!("{agent}: {}", truncate(t, 24)),
+    });
+    let snapshot = client.snapshot().map_err(|e| (1, e))?;
+    let split = has_flag(args, &["--split"]);
+    let (session, pane) = if split {
+        let (s, p) = target_pane(&snapshot, args, None)?;
+        (s, Some(p))
+    } else {
+        let target = option_value(args, &["-s", "--session"])
+            .or_else(|| env::var("ZURAFA_SESSION").ok())
+            .unwrap_or_else(|| "default".into());
+        (strv(&resolve_session(&snapshot, &target)?["session_id"]), None)
+    };
+    // shortcut: a pane's own command runs on this Mac, not the remote host; remote spawn needs the remote daemon to take a command.
+    if !resolve_session(&snapshot, &session)?["remote"].is_null() {
+        return Err((2, "spawn does not work in remote workspaces yet".into()));
+    }
+    let cwd = option_value(args, &["--cwd"])
+        .or_else(|| env::current_dir().ok().map(|d| d.to_string_lossy().into_owned()));
+    let shell = login_shell()
+        .or_else(|| env::var("SHELL").ok().filter(|s| !s.is_empty()))
+        .unwrap_or_else(|| "/bin/zsh".into());
+    let run = if task.is_empty() { agent.clone() } else { format!("{agent} {}", shell_word(&task)) };
+    // -i makes zsh and bash read .zshrc / .bashrc, where PATH is often set. fish reads config.fish
+    // anyway, and an interactive fish here breaks the prompt of the fish that follows it.
+    let interactive = if shell.ends_with("/fish") || shell == "fish" { "-l" } else { "-li" };
+    // sh, bash, zsh and fish all accept this script.
+    let command = json!([shell, interactive, "-c", format!("{run}; exec {} -l", shell_word(&shell))]);
+    let reply = match pane {
+        Some(pane) => {
+            let axis = option_value(args, &["--axis"]).unwrap_or_else(|| "horizontal".into());
+            if axis != "horizontal" && axis != "vertical" {
+                return Err((2, "--axis must be horizontal or vertical".into()));
+            }
+            client.request(json!({"type":"layout.split","session":session,"block":pane,"axis":axis,"cols":80,"rows":24,"cwd":cwd,"command":command}))
+        }
+        None => client.request(json!({"type":"layout.tab","session":session,"label":label,"cols":80,"rows":24,"cwd":cwd,"command":command})),
+    }
+    .map_err(|e| (1, e))?;
+    println!("{}", strv(&reply["terminal"]));
+    Ok(())
+}
+
+/// Every pane in every session, with the status the app shows for it.
+fn cmd_panes(client: &mut Client, as_json: bool) -> Result<(), (i32, String)> {
+    let snapshot = client.snapshot().map_err(|e| (1, e))?;
+    let home = env::var("HOME").unwrap_or_default();
+    let here = env::var("ZURAFA_PANE").ok();
+    let mut rows = vec![];
+    for session in sessions(&snapshot) {
+        for tab in session["windows"].as_array().into_iter().flatten() {
+            let mut ids = vec![];
+            layout_panes(&tab["layout"], &mut ids);
+            for id in ids {
+                let pane = &session["blocks"][&id];
+                let records = pane["statuses"]["records"].as_object();
+                let states = records
+                    .into_iter()
+                    .flatten()
+                    .map(|(k, r)| (k.clone(), strv(&r["state"])))
+                    .collect::<BTreeMap<_, _>>();
+                let status = pane_state(&states, pane["running"].as_bool().unwrap_or(false));
+                let message = records
+                    .into_iter()
+                    .flatten()
+                    .find(|(_, r)| r["state"] == status)
+                    .map(|(_, r)| strv(&r["msg"]))
+                    .unwrap_or_default();
+                let cwd = strv(&pane["foreground"]["cwd"]);
+                rows.push(json!({
+                    "pane": id,
+                    "session": strv(&session["session_id"]),
+                    "tab": strv(&tab["label"]),
+                    "program": strv(&pane["foreground"]["name"]),
+                    "status": status,
+                    "message": message,
+                    "cwd": match cwd.strip_prefix(&home) { Some(rest) if !home.is_empty() => format!("~{rest}"), _ => cwd },
+                    "current": here.as_deref() == Some(id.as_str()),
+                }));
+            }
+        }
+    }
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&rows).unwrap());
+        return Ok(());
+    }
+    println!("{:<8} {:<12} {:<24} {:<10} {:<8} {:<28} MESSAGE", "PANE", "SESSION", "TAB", "PROGRAM", "STATUS", "CWD");
+    for r in rows {
+        let mark = if r["current"] == true { "*" } else { "" };
+        println!(
+            "{:<8} {:<12} {:<24} {:<10} {:<8} {:<28} {}",
+            format!("{}{mark}", strv(&r["pane"])),
+            truncate(&strv(&r["session"]), 12),
+            truncate(&strv(&r["tab"]), 24),
+            truncate(&strv(&r["program"]), 10),
+            strv(&r["status"]),
+            truncate(&strv(&r["cwd"]), 28),
+            strv(&r["message"]),
+        );
+    }
+    Ok(())
+}
+
+/// Pane ids in a tab's layout tree, in layout order.
+fn layout_panes(layout: &Value, out: &mut Vec<String>) {
+    match layout["block_id"].as_str() {
+        Some(id) => out.push(id.to_owned()),
+        None if layout.is_object() => {
+            layout_panes(&layout["first"], out);
+            layout_panes(&layout["second"], out);
+        }
+        None => {}
+    }
+}
+
+const MCP_INSTRUCTIONS: &str = "Zurafa is the terminal workspace you are running in. Its panes are terminals; \
+other coding agents may run in them. Use these tools to start agents on tasks (spawn), see every pane and \
+whether it is idle, working, blocked (waiting on a person), done, error or exited (list_panes), type into a \
+pane (send, key), read its screen (read), and wait for it to finish (wait, prompt). Statuses come from agents \
+that report them, so a pane whose program reports nothing stays idle. Pane targets are ids like t3, a tab or \
+session label, or a session (meaning its focused pane).";
+
+fn mcp_tools() -> Value {
+    let pane = json!({"type":"string","description":"Pane id (like t3), label, or session. Defaults to your own pane where that makes sense."});
+    let timeout = json!({"type":"string","description":"How long to wait, like 30s, 10m or 1h. Default 10m."});
+    json!([
+        {"name":"list_panes","description":"List every pane in every Zurafa session with its tab, program, status (idle, working, blocked, done, error, exited), status message and directory. Your own pane is marked current.",
+         "inputSchema":{"type":"object","properties":{}}},
+        {"name":"spawn","description":"Start a coding agent (or any program) with a task in a new Zurafa tab, or beside a pane with split. The task is passed as the program's first argument, so `claude` starts an interactive session working on it. Returns the new pane id; use wait and read on it. Not available in remote workspaces.",
+         "inputSchema":{"type":"object","properties":{
+            "agent":{"type":"string","description":"Program to run, like claude, codex or pi."},
+            "task":{"type":"string","description":"The task, passed as the program's first argument."},
+            "split":{"type":"boolean","description":"Open beside a pane instead of in a new tab."},
+            "pane":{"type":"string","description":"With split: the pane to split. Defaults to yours."},
+            "cwd":{"type":"string","description":"Directory to start in. Defaults to your current directory."},
+            "label":{"type":"string","description":"Tab name. Defaults to the agent and task."}},
+          "required":["agent"]}},
+        {"name":"send","description":"Type text into a pane, then press Enter unless enter is false. To answer another agent, send your message to its pane.",
+         "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"enter":{"type":"boolean","description":"Press Enter after the text. Default true."}},"required":["pane","text"]}},
+        {"name":"key","description":"Press keys in a pane: enter, tab, escape, up, down, left, right, backspace, ctrl+c and other ctrl+letter keys.",
+         "inputSchema":{"type":"object","properties":{"pane":pane,"keys":{"type":"array","items":{"type":"string"}}},"required":["pane","keys"]}},
+        {"name":"read","description":"Read a pane's screen as text, or its last N lines including scrollback.",
+         "inputSchema":{"type":"object","properties":{"pane":pane,"lines":{"type":"integer","minimum":1}},"required":["pane"]}},
+        {"name":"wait","description":"Wait until a pane stops working, or reaches one of the given statuses, and return its status. Needs the pane's program to report status.",
+         "inputSchema":{"type":"object","properties":{"pane":pane,"for":{"type":"array","items":{"type":"string","enum":["idle","working","blocked","done","error","exited"]}},"timeout":timeout},"required":["pane"]}},
+        {"name":"prompt","description":"Send text and Enter to a pane, wait until its agent finishes, and return the screen. The quickest way to ask another agent something.",
+         "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"timeout":timeout},"required":["pane","text"]}}
+    ])
+}
+
+/// The `zurafa` arguments that carry out an MCP tool call.
+fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
+    let s = |k: &str| a[k].as_str().map(str::to_owned);
+    let need = |k: &str| s(k).filter(|v| !v.is_empty()).ok_or(format!("{k} is required"));
+    // The CLI would read these as options rather than text.
+    let text = |k: &str| {
+        need(k).and_then(|v| match v.starts_with('-') {
+            true => Err(format!("{k} cannot start with '-'")),
+            false => Ok(v),
+        })
+    };
+    let timeout = || s("timeout").unwrap_or_else(|| "10m".into());
+    Ok(match name {
+        "list_panes" => vec!["panes".into()],
+        "spawn" => {
+            let mut v = vec!["spawn".into(), text("agent")?];
+            if s("task").is_some_and(|t| !t.is_empty()) {
+                v.push(text("task")?);
+            }
+            if a["split"] == true {
+                v.push("--split".into());
+            }
+            for (flag, key) in [("-b", "pane"), ("--cwd", "cwd"), ("-l", "label")] {
+                if let Some(x) = s(key) {
+                    v.extend([flag.into(), x]);
+                }
+            }
+            v
+        }
+        "send" => {
+            let mut v = vec!["send".into(), need("pane")?, text("text")?];
+            if a["enter"] != false {
+                v.push("--enter".into());
+            }
+            v
+        }
+        "key" => {
+            let keys = a["keys"].as_array().filter(|k| !k.is_empty()).ok_or("keys is required")?;
+            [vec!["key".into(), need("pane")?], keys.iter().map(strv).collect()].concat()
+        }
+        "read" => {
+            let mut v = vec!["read".into(), need("pane")?];
+            if let Some(n) = a["lines"].as_u64() {
+                v.extend(["-n".into(), n.to_string()]);
+            }
+            v
+        }
+        "wait" => {
+            let mut v = vec!["wait".into(), need("pane")?, "-t".into(), timeout()];
+            if let Some(states) = a["for"].as_array().filter(|s| !s.is_empty()) {
+                v.extend(["--for".into(), states.iter().map(strv).collect::<Vec<_>>().join(",")]);
+            }
+            v
+        }
+        "prompt" => vec!["prompt".into(), need("pane")?, text("text")?, "-t".into(), timeout()],
+        other => return Err(format!("unknown tool {other:?}")),
+    })
+}
+
+/// Runs a tool by running this same binary, so tools behave exactly like the commands
+/// and nothing they print can reach the MCP stream.
+fn call_tool(params: &Value, socket: &Option<String>) -> Value {
+    let result = tool_args(&strv(&params["name"]), &params["arguments"]).and_then(|args| {
+        let mut cmd = process::Command::new(env::current_exe().map_err(|e| e.to_string())?);
+        if let Some(s) = socket {
+            cmd.args(["--socket", s]);
+        }
+        let out = cmd.args(args).stdin(process::Stdio::null()).output().map_err(|e| e.to_string())?;
+        let text = [out.stdout, out.stderr].concat();
+        let text = String::from_utf8_lossy(&text).trim_end().to_owned();
+        match (out.status.success(), text.is_empty()) {
+            (true, true) => Ok("done".to_owned()),
+            (true, false) => Ok(text),
+            (false, _) => Err(text),
+        }
+    });
+    let (text, is_error) = match result {
+        Ok(t) => (t, false),
+        Err(e) => (e, true),
+    };
+    json!({"content":[{"type":"text","text":text}],"isError":is_error})
+}
+
+/// The reply to one MCP message, or None for notifications and replies.
+fn mcp_reply(msg: &Value, socket: &Option<String>) -> Option<Value> {
+    let id = msg.get("id")?.clone();
+    let method = msg.get("method")?.as_str().unwrap_or_default();
+    let result = match method {
+        "initialize" => Ok(json!({
+            // Only plain tools are used, which every protocol version has.
+            "protocolVersion": msg["params"]["protocolVersion"].as_str().unwrap_or("2025-06-18"),
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "zurafa", "version": env!("CARGO_PKG_VERSION")},
+            "instructions": MCP_INSTRUCTIONS,
+        })),
+        "ping" => Ok(json!({})),
+        "tools/list" => Ok(json!({"tools": mcp_tools()})),
+        "tools/call" => Ok(call_tool(&msg["params"], socket)),
+        _ => Err(json!({"code": -32601, "message": format!("method not found: {method}")})),
+    };
+    Some(match result {
+        Ok(r) => json!({"jsonrpc": "2.0", "id": id, "result": r}),
+        Err(e) => json!({"jsonrpc": "2.0", "id": id, "error": e}),
+    })
+}
+
+/// An MCP server on stdin/stdout, one JSON-RPC message per line. Each message gets its own
+/// thread, so an agent can wait on one pane while it works with another.
+fn cmd_mcp(socket: Option<String>) -> Result<(), (i32, String)> {
+    use std::io::BufRead;
+    let out = std::sync::Arc::new(std::sync::Mutex::new(std::io::stdout()));
+    let write = |out: &std::sync::Mutex<std::io::Stdout>, v: Value| {
+        let mut o = out.lock().unwrap();
+        let _ = writeln!(o, "{v}").and_then(|_| o.flush());
+    };
+    for line in std::io::stdin().lock().lines() {
+        let line = line.map_err(|e| (1, e.to_string()))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let msg: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(e) => {
+                write(&out, json!({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":e.to_string()}}));
+                continue;
+            }
+        };
+        let (out, socket) = (out.clone(), socket.clone());
+        std::thread::spawn(move || {
+            if let Some(reply) = mcp_reply(&msg, &socket) {
+                write(&out, reply);
+            }
+        });
+    }
+    Ok(())
+}
+
+/// The account's login shell, which the daemon gives every new pane (same lookup as its pty.rs).
+fn login_shell() -> Option<String> {
+    let mut entry = std::mem::MaybeUninit::<libc::passwd>::uninit();
+    let mut result = std::ptr::null_mut();
+    let mut buffer = vec![0u8; 16 * 1024];
+    // SAFETY: getpwuid_r fills entry from buffer; pw_shell is read only on success, while buffer lives.
+    let status = unsafe {
+        libc::getpwuid_r(libc::getuid(), entry.as_mut_ptr(), buffer.as_mut_ptr().cast(), buffer.len(), &mut result)
+    };
+    if status != 0 || result.is_null() || unsafe { (*result).pw_shell }.is_null() {
+        return None;
+    }
+    let shell = unsafe { std::ffi::CStr::from_ptr((*result).pw_shell) }.to_str().ok()?;
+    (!shell.is_empty()).then(|| shell.to_owned())
+}
+
+/// Quotes `text` as one word that sh, bash, zsh and fish all read back unchanged.
+/// Control characters become spaces: typed into a shell they would edit the line.
+fn shell_word(text: &str) -> String {
+    let mut out = String::from("'");
+    for c in text.chars() {
+        match c {
+            // Fish reads \' and \\ inside single quotes, so both go outside them.
+            '\'' => out.push_str(r#"'"'"'"#),
+            '\\' => out.push_str(r#"'"\\"'"#),
+            c if c.is_control() => out.push(' '),
+            c => out.push(c),
+        }
+    }
+    out.push('\'');
+    out
+}
+
 fn cmd_events(client: &mut Client, args: &[String], as_json: bool) -> Result<(), (i32, String)> {
     let wanted = option_value(args, &["--for"])
         .map(|l| parse_states(&l))
@@ -808,6 +1150,96 @@ fn cmd_report(args: &[String]) -> Result<(), (i32, String)> {
         .open("/dev/tty")
         .map_err(|e| (1, format!("no terminal to report to: {e}")))?;
     write!(tty, "\x1b]7501;{}\x1b\\", fields.join(":")).map_err(|e| (1, e.to_string()))
+}
+
+/// The hooks the agents guide lists: (event, matcher, command).
+const CLAUDE_HOOKS: [(&str, Option<&str>, &str); 4] = [
+    ("UserPromptSubmit", None, "zurafa report working"),
+    ("PostToolUse", None, "zurafa report working"),
+    ("Notification", Some("permission_prompt"), "zurafa report blocked --kind permission"),
+    ("Stop", None, "zurafa report done"),
+];
+
+fn cmd_setup(args: &[String]) -> Result<(), (i32, String)> {
+    if positionals(args).first().map(String::as_str) != Some("claude") {
+        return Err((2, "usage: zurafa setup claude".into()));
+    }
+    let dir = env::var_os("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude")))
+        .ok_or((1, "HOME is not set".to_owned()))?;
+    let mut path = dir.join("settings.json");
+    // Write through a symlinked settings.json (dotfiles) instead of replacing the link.
+    if let Ok(real) = std::fs::canonicalize(&path) {
+        path = real;
+    }
+    let original = match std::fs::read_to_string(&path) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == ErrorKind::NotFound => None,
+        Err(e) => return Err((1, format!("cannot read {}: {e}", path.display()))),
+    };
+    let mut settings = match &original {
+        Some(text) if !text.trim().is_empty() => serde_json::from_str(text)
+            .map_err(|e| (1, format!("{} is not valid JSON, left unchanged: {e}", path.display())))?,
+        _ => json!({}),
+    };
+    let added = add_claude_hooks(&mut settings).map_err(|e| (1, format!("{}: {e}, left unchanged", path.display())))?;
+    if added == 0 {
+        println!("Claude Code already reports to Zurafa ({}).", path.display());
+        return Ok(());
+    }
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| (1, e.to_string()))?;
+    // Settings can hold API keys in `env`, so copies keep the original's permissions.
+    let perms = std::fs::metadata(&path).ok().map(|m| m.permissions());
+    let keep_perms = |p: &PathBuf| match &perms {
+        Some(perms) => std::fs::set_permissions(p, perms.clone()),
+        None => Ok(()),
+    };
+    if let Some(text) = &original {
+        let backup = path.with_extension("json.zurafa-backup");
+        std::fs::write(&backup, text)
+            .and_then(|_| keep_perms(&backup))
+            .map_err(|e| (1, format!("cannot back up settings: {e}")))?;
+        println!("Backed up the old settings to {}", backup.display());
+    }
+    let tmp = path.with_extension("json.zurafa-tmp");
+    let body = serde_json::to_string_pretty(&settings).unwrap() + "\n";
+    std::fs::write(&tmp, body)
+        .and_then(|_| keep_perms(&tmp))
+        .and_then(|_| std::fs::rename(&tmp, &path))
+        .map_err(|e| (1, format!("cannot write {}: {e}", path.display())))?;
+    println!("Added {added} Zurafa hooks to {}. Restart Claude Code in a Zurafa pane.", path.display());
+    Ok(())
+}
+
+/// Adds the Zurafa hooks that are missing and returns how many it added.
+/// Refuses, without changing anything, when `hooks` has an unexpected shape.
+fn add_claude_hooks(settings: &mut Value) -> Result<usize, String> {
+    let root = settings.as_object_mut().ok_or("settings are not a JSON object")?;
+    let hooks = root.entry("hooks").or_insert_with(|| json!({}));
+    let hooks = hooks.as_object_mut().ok_or("\"hooks\" is not an object")?;
+    for (event, _, _) in CLAUDE_HOOKS {
+        if hooks.get(event).is_some_and(|v| !v.is_array()) {
+            return Err(format!("\"hooks.{event}\" is not a list"));
+        }
+    }
+    let mut added = 0;
+    for (event, matcher, command) in CLAUDE_HOOKS {
+        let list = hooks.entry(event).or_insert_with(|| json!([])).as_array_mut().unwrap();
+        let present = list.iter().any(|entry| {
+            entry["hooks"].as_array().is_some_and(|hs| hs.iter().any(|h| h["command"] == command))
+        });
+        if present {
+            continue;
+        }
+        let mut entry = json!({ "hooks": [{ "type": "command", "command": command }] });
+        if let Some(m) = matcher {
+            entry["matcher"] = json!(m);
+        }
+        list.push(entry);
+        added += 1;
+    }
+    Ok(added)
 }
 
 fn has_flag(args: &[String], names: &[&str]) -> bool {
@@ -944,7 +1376,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude                         Add the status hooks to Claude Code's settings\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
 }
 
 #[cfg(test)]
@@ -974,6 +1406,78 @@ mod tests {
         assert_eq!(pane_state(&records, true), "blocked");
         assert_eq!(pane_state(&BTreeMap::new(), true), "idle");
         assert_eq!(pane_state(&records, false), "exited");
+    }
+
+    #[test]
+    fn claude_hooks_merge_once_and_keep_user_hooks() {
+        let mut settings = json!({
+            "model": "opus",
+            "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] }
+        });
+        assert_eq!(add_claude_hooks(&mut settings).unwrap(), 4);
+        assert_eq!(settings["model"], "opus");
+        assert_eq!(settings["hooks"]["Stop"][0]["hooks"][0]["command"], "say done");
+        assert_eq!(settings["hooks"]["Stop"][1]["hooks"][0]["command"], "zurafa report done");
+        assert_eq!(settings["hooks"]["Notification"][0]["matcher"], "permission_prompt");
+        assert_eq!(add_claude_hooks(&mut settings).unwrap(), 0);
+
+        let mut odd = json!({ "hooks": { "Stop": "nope" } });
+        assert!(add_claude_hooks(&mut odd).is_err());
+        assert_eq!(odd, json!({ "hooks": { "Stop": "nope" } }));
+        assert!(add_claude_hooks(&mut json!([])).is_err());
+    }
+
+    #[test]
+    fn shell_word_reads_back_unchanged_in_every_shell() {
+        let task = r#"fix "it" — don't $HOME `x` \n \\ !! *.rs"#;
+        assert_eq!(shell_word("a\tb\nc"), "'a b c'");
+        for shell in ["sh", "bash", "zsh", "fish"] {
+            let script = format!("printf %s {}", shell_word(task));
+            let Ok(out) = process::Command::new(shell).arg("-c").arg(&script).output() else {
+                continue; // that shell isn't installed here
+            };
+            assert_eq!(String::from_utf8_lossy(&out.stdout), task, "{shell}");
+        }
+    }
+
+    #[test]
+    fn mcp_tools_map_to_commands() {
+        let args = |name, a| tool_args(name, &a).unwrap();
+        assert_eq!(args("send", json!({"pane":"t3","text":"go on"})), ["send", "t3", "go on", "--enter"]);
+        assert_eq!(args("send", json!({"pane":"t3","text":"y","enter":false})), ["send", "t3", "y"]);
+        assert_eq!(args("wait", json!({"pane":"t3","for":["blocked","done"]})), ["wait", "t3", "-t", "10m", "--for", "blocked,done"]);
+        assert_eq!(
+            args("spawn", json!({"agent":"claude","task":"fix it","split":true,"pane":"t1"})),
+            ["spawn", "claude", "fix it", "--split", "-b", "t1"]
+        );
+        assert_eq!(args("key", json!({"pane":"t3","keys":["escape","enter"]})), ["key", "t3", "escape", "enter"]);
+        assert!(tool_args("send", &json!({"pane":"t3","text":"--enter"})).is_err());
+        assert!(tool_args("read", &json!({})).is_err());
+        assert!(tool_args("rm", &json!({})).is_err());
+    }
+
+    #[test]
+    fn mcp_answers_requests_but_not_notifications() {
+        let init = mcp_reply(&json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}), &None).unwrap();
+        assert_eq!(init["result"]["protocolVersion"], "2025-03-26");
+        assert_eq!(init["id"], 1);
+        let list = mcp_reply(&json!({"jsonrpc":"2.0","id":"a","method":"tools/list"}), &None).unwrap();
+        let names: Vec<_> = list["result"]["tools"].as_array().unwrap().iter().map(|t| strv(&t["name"])).collect();
+        assert_eq!(names, ["list_panes", "spawn", "send", "key", "read", "wait", "prompt"]);
+        assert!(mcp_reply(&json!({"jsonrpc":"2.0","method":"notifications/initialized"}), &None).is_none());
+        assert_eq!(mcp_reply(&json!({"jsonrpc":"2.0","id":2,"method":"nope"}), &None).unwrap()["error"]["code"], -32601);
+    }
+
+    #[test]
+    fn layout_panes_follow_the_tree() {
+        let block = |id| json!({"type":"block","block_id":id});
+        let split = |a, b| json!({"type":"split","axis":"vertical","ratio":0.5,"first":a,"second":b});
+        let layout = split(block("t2"), split(block("t5"), block("t3")));
+        let mut ids = vec![];
+        layout_panes(&layout, &mut ids);
+        assert_eq!(ids, ["t2", "t5", "t3"]);
+        layout_panes(&json!({"type":"split"}), &mut ids); // malformed: no branches
+        assert_eq!(ids.len(), 3);
     }
 
     #[test]

@@ -82,6 +82,10 @@ struct PaneMeta {
         }
         return nil
     }
+    /// Claude Code blocked on a permission prompt: the only prompt whose keys Zurafa knows.
+    var waitingForPermission: Bool {
+        program == .claude && status == "blocked" && statuses.values.contains { $0.state == "blocked" && $0.kind == "permission" }
+    }
     var statusMessage: String? {
         guard let status else { return nil }
         let original = status == "completed" ? "done" : status == "blocked" && statuses.values.contains(where: { $0.state == "error" }) ? "error" : status
@@ -185,7 +189,8 @@ enum EditorKind: String, Identifiable {
     init() {
         TerminalStore.shared.onFocus = { [weak self] id in self?.focus(id) }
         TerminalStore.shared.onOpenLink = { [weak self] id, link in self?.openPreview(link, from: id) ?? false }
-        Attention.shared.start { [weak self] pane in self?.jump(to: pane) }
+        Attention.shared.start(onOpen: { [weak self] pane in self?.jump(to: pane) },
+                               onAnswer: { [weak self] pane, approve in self?.answerPermission(pane, approve: approve) })
         loadZurafaConfig()
         syncTerminalAppearance()
         // shortcut: polls the config's modification date once a second; catches every editor's save style. Switch to FSEvents if it ever shows up in profiles.
@@ -394,7 +399,16 @@ enum EditorKind: String, Identifiable {
         let tabLabel = tabs(in: session).first { $0.layout.panes.contains(pane) }?.label
         Attention.shared.notify(pane: pane, title: "\(m.program.title) \(verb)",
                                 subtitle: [session.label, tabLabel].compactMap { $0 }.joined(separator: " · "),
-                                body: m.statusMessage ?? m.title)
+                                body: m.statusMessage ?? m.title,
+                                answerable: m.waitingForPermission)
+    }
+
+    /// Answers a permission prompt from its notification, if the pane is still asking.
+    func answerPermission(_ pane: String, approve: Bool) {
+        // The prompt may have been answered or replaced since the banner went out.
+        guard metas[pane]?.waitingForPermission == true else { return jump(to: pane) }
+        // Claude Code's prompt highlights "Yes" first; Escape declines.
+        daemon.send(Msg(type: "input", terminal: pane, data: Data((approve ? "\r" : "\u{1b}").utf8)))
     }
 
     func selectTab(_ i: Int) { if tabs.indices.contains(i) { focus(tabs[i].focus) } }
