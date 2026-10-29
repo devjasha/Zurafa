@@ -20,7 +20,7 @@ Run this once from any terminal:
 zurafa setup claude
 ```
 
-It adds the eight hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`), keeps your other settings and hooks, and saves the old file as `settings.json.zurafa-backup`. Running it again changes nothing. To set it up by hand instead, add these hooks to `~/.claude/settings.json`. If the file already has a `hooks` object, merge the eight entries into it.
+It adds the nine hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`), keeps your other settings and hooks, and saves the old file as `settings.json.zurafa-backup`. Running it again changes nothing. To set it up by hand instead, add these hooks to `~/.claude/settings.json`. If the file already has a `hooks` object, merge the nine entries into it.
 
 ```
 {
@@ -41,16 +41,23 @@ It adds the eight hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_D
     ],
     "Notification": [
       {
-        "matcher": "permission_prompt",
+        "matcher": "permission_prompt|elicitation_dialog",
         "hooks": [
-          { "type": "command", "command": "zurafa report blocked --kind permission" }
+          { "type": "command", "command": "zurafa hook claude" }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "zurafa report done" }
+          { "type": "command", "command": "zurafa hook claude" }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          { "type": "command", "command": "zurafa hook claude" }
         ]
       }
     ],
@@ -77,7 +84,7 @@ It adds the eight hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_D
     ],
     "PreToolUse": [
       {
-        "matcher": "Agent|Task",
+        "matcher": "Agent|Task|AskUserQuestion",
         "hooks": [
           { "type": "command", "command": "zurafa hook claude" }
         ]
@@ -87,7 +94,7 @@ It adds the eight hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_D
 }
 ```
 
-Restart Claude Code in a Zurafa pane. The pane now turns **working** when you send a prompt, **blocked** when Claude asks for permission, back to **working** once you answer, and **done** when it finishes.
+Restart Claude Code in a Zurafa pane. The pane now turns **working** when you send a prompt, **blocked** when Claude asks for permission or asks you a question, back to **working** once you answer, **done** with Claude's final answer as the message when it finishes, and **error** when the turn fails on an API error. Running `zurafa setup claude` again replaces the hooks an older Zurafa set up.
 
 ## Codex
 
@@ -97,7 +104,7 @@ Run this once:
 zurafa setup codex
 ```
 
-It adds eight hooks to `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`), all running `zurafa hook codex`, and keeps a backup like the Claude setup. They report the same states, using Codex's `PermissionRequest` event for **blocked**, and give Codex the same [subagent](#subagents) handling as Claude: `explorer` subagents show in the card, and other subagents go to `zurafa spawn`. Codex runs hooks in a background server that all its sessions share, so they reach Zurafa through its daemon and find the pane running Codex in the hook's folder. Two Codex panes in the same folder can't be told apart, so neither gets those reports. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open `/hooks`, and trust the Zurafa hooks. If you set up Codex before this release, remove its old `zurafa report` hooks from `hooks.json`.
+It adds eight hooks to `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`), all running `zurafa hook codex`, and keeps a backup like the Claude setup. They report the same states, using Codex's `PermissionRequest` event for **blocked** and Codex's final answer as **done**'s message, and give Codex the same [subagent](#subagents) handling as Claude: `explorer` subagents show in the card, and other subagents go to `zurafa spawn`. Codex runs hooks in a background server that all its sessions share, so they reach Zurafa through its daemon and find the pane running Codex in the hook's folder. Two Codex panes in the same folder can't be told apart, so neither gets those reports. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open `/hooks`, and trust the Zurafa hooks. If you set up Codex before this release, remove its old `zurafa report` hooks from `hooks.json`.
 
 ## Pi
 

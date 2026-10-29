@@ -38,11 +38,12 @@ Agents running in a Zurafa pane can use the CLI the way you would: start a test 
 
 ```sh
 p=$(zurafa spawn claude "fix the flaky login test")
-zurafa wait $p && zurafa read $p -n 40
+zurafa wait $p          # prints its status and final answer
+zurafa read $p -n 40
 zurafa spawn codex "review the diff" --split   # beside the current pane instead
 ```
 
-The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass `--cwd`. `-s` picks the workspace, `-l` names the tab, and `--split` takes `-b` and `--axis`. Spawning into a remote workspace isn't supported yet.
+The new pane gets `ZURAFA_PARENT`, the pane that ran `spawn`, so the agent can report back with `zurafa send $ZURAFA_PARENT --enter -- "result"`. The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass `--cwd`. `-s` picks the workspace, `-l` names the tab, and `--split` takes `-b` and `--axis`. Spawning into a remote workspace isn't supported yet.
 
 ### Worktrees
 
@@ -76,7 +77,7 @@ zurafa panes                                   # every pane: tab, program, statu
 
 A target is a pane, or a session for its focused pane. Without `-s`, agent commands search every session. `read`, `wait` and `events` default to the current pane inside Zurafa.
 
-`wait` prints the pane's status when it returns: `idle`, `working`, `blocked`, `done`, `error` or `exited`. A pane whose program reports nothing is `idle`, so `wait` and `prompt` rely on [status reports](/docs/status/). `prompt` treats a program that doesn't start working within 10 seconds as answered. `--timeout` (`30s`, `10m`, `1h`) makes `wait`, `prompt` and `events` exit with status 5.
+`wait` prints the pane's status when it returns: `starting`, `idle`, `working`, `blocked`, `done`, `error` or `exited`, then its status message on the next line, if it has one: a finished agent's final answer, an error, or the question a blocked agent asks. `zurafa --json wait` prints `pane`, `state`, `kind` (`permission`, `question` or `auth` when blocked), `msg` and `turn`. A pane whose program reports nothing is `idle`, so `wait` and `prompt` rely on [status reports](/docs/status/). `prompt` treats a program that doesn't start working within 10 seconds as answered. `--timeout` (`30s`, `10m`, `1h`) makes `wait`, `prompt` and `events` exit with status 5.
 
 `zurafa events --json` prints one daemon event per line. `--once` exits after the first matching event. `zurafa --json panes` lists the panes as JSON; your own pane has `"current": true`.
 
@@ -116,6 +117,7 @@ Inside terminals created by Zurafa, the daemon sets context variables so command
 | `ZURAFA_SESSION` | The current session ID |
 | `ZURAFA_PANE` | The current pane ID |
 | `ZURAFA_BLOCK` | Compatibility alias for the current pane ID |
+| `ZURAFA_PARENT` | The pane that ran `zurafa spawn`, in the agent it started |
 
 Outside a Zurafa terminal, commands default to the standard daemon socket and the `default` session. Use flags when you want another target:
 
