@@ -21,10 +21,21 @@ struct Term {
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     running: AtomicBool,
     replay: Mutex<Replay>,
+    /// The program turned on bracketed paste (mode 2004).
+    bracketed: AtomicBool,
 }
 
 /// Recent output kept so a client that reconnects can catch up on what it missed.
 const REPLAY_BYTES: usize = 256 * 1024;
+
+/// The last bracketed paste switch (DECSET 2004) in `data`: on, off, or none.
+fn paste_mode(data: &[u8]) -> Option<bool> {
+    let at = |seq: &[u8]| data.windows(seq.len()).rposition(|w| w == seq);
+    match (at(b"\x1b[?2004h"), at(b"\x1b[?2004l")) {
+        (None, None) => None,
+        (on, off) => Some(on > off),
+    }
+}
 
 #[derive(Default)]
 struct Replay {
@@ -125,6 +136,8 @@ pub struct SpawnOptions {
     pub raw: bool,
     /// The pane that asked for this one, shown as its parent agent.
     pub parent: Option<String>,
+    /// Keep running when the parent pane closes or its agent exits.
+    pub outlive_parent: bool,
 }
 
 pub struct Terminals {
@@ -220,6 +233,9 @@ impl Terminals {
     fn output(&self, terminal: &str, term: &Term, data: &[u8]) {
         if data.is_empty() {
             return;
+        }
+        if let Some(on) = paste_mode(data) {
+            term.bracketed.store(on, Ordering::Relaxed);
         }
         let mut replay = term.replay.lock().unwrap();
         replay.end += data.len() as u64;
@@ -332,6 +348,7 @@ impl Terminals {
             label: "Terminal".into(),
             raw,
             parent: None,
+            outlive_parent: false,
         })
     }
 
@@ -347,6 +364,7 @@ impl Terminals {
             label,
             raw,
             parent,
+            outlive_parent,
         } = options;
         let session = session.as_str();
         let split = split.as_deref();
@@ -416,7 +434,7 @@ impl Terminals {
         let mut child = pair.slave.spawn_command(cmd).map_err(err)?;
         drop(pair.slave); // otherwise the reader never sees EOF
         self.dispatcher
-            .add_block(session, &id, split, axis, label, parent)?;
+            .add_block(session, &id, split, axis, label, parent, outlive_parent)?;
         let (input, input_rx) = mpsc::sync_channel::<Vec<u8>>(64);
         thread::spawn(move || {
             while let Ok(bytes) = input_rx.recv() {
@@ -431,6 +449,7 @@ impl Terminals {
             killer: Mutex::new(child.clone_killer()),
             running: AtomicBool::new(true),
             replay: Mutex::default(),
+            bracketed: AtomicBool::new(false),
         };
         let term = Arc::new(term);
         self.map.lock().unwrap().insert(id.clone(), term.clone());
@@ -506,6 +525,18 @@ impl Terminals {
         }
     }
 
+    /// Types `text` as a paste, bracketed when the program asked for that.
+    pub fn paste(&self, id: &str, text: &str) {
+        let Some(t) = self.get(id) else { return };
+        // The text can't end the paste early.
+        let text = text.replace("\x1b[201~", "");
+        let bytes = match t.bracketed.load(Ordering::Relaxed) {
+            true => format!("\x1b[200~{text}\x1b[201~"),
+            false => text,
+        };
+        self.input(id, bytes.as_bytes());
+    }
+
     /// The PTY's current cell size, so a client can lay out a replay as the screen shows it.
     pub fn size(&self, id: &str) -> Option<(u16, u16)> {
         let size = self.get(id)?.master.lock().unwrap().get_size().ok()?;
@@ -534,6 +565,13 @@ mod shell_tests {
         );
         assert_eq!(choose_shell(None, Some("/bin/sh")), "/bin/sh");
         assert_eq!(choose_shell(None, None), "/bin/zsh");
+    }
+
+    #[test]
+    fn last_paste_switch_wins() {
+        assert_eq!(paste_mode(b"hi"), None);
+        assert_eq!(paste_mode(b"\x1b[?2004l..\x1b[?2004h"), Some(true));
+        assert_eq!(paste_mode(b"\x1b[?2004h..\x1b[?2004l"), Some(false));
     }
 
     #[test]

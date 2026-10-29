@@ -442,11 +442,21 @@ fn cmd_send(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
     let (_, pane) = target_pane(&snapshot, args, Some(target.clone()))?;
     let enter = has_flag(args, &["--enter"]);
     if !has_flag(args, &["-e", "--escapes"]) {
-        return submit(client, &pane, text, enter);
+        let text = tag_report(text, &pane, env::var("ZURAFA_PANE").ok(), env::var("ZURAFA_PARENT").ok());
+        return submit(client, &pane, &text, enter);
     }
     // Escapes are exact bytes, so they go in raw rather than as a paste.
     input(client, &pane, &unescape(text).map_err(|e| (2, e))?)?;
     submit(client, &pane, "", enter)
+}
+
+/// A spawned agent's report to its parent, marked like the daemon's notes so the parent
+/// can tell it from its user: `<zurafa from="t7">text</zurafa>`.
+fn tag_report(text: &str, target: &str, me: Option<String>, parent: Option<String>) -> String {
+    match (me, parent) {
+        (Some(me), Some(parent)) if parent == target => format!("<zurafa from=\"{me}\">{text}</zurafa>"),
+        _ => text.to_owned(),
+    }
 }
 
 fn cmd_key(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
@@ -1086,7 +1096,7 @@ fn cmd_prompt(client: &mut Client, args: &[String]) -> Result<(), (i32, String)>
 fn cmd_spawn(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
     let pos = positionals(args);
     let Some((agent, task)) = pos.split_first() else {
-        return Err((2, "usage: zurafa spawn AGENT [TASK] [--split] [-s S] [-b PANE] [--axis A] [--cwd DIR] [--worktree BRANCH] [-l LABEL]".into()));
+        return Err((2, "usage: zurafa spawn AGENT [TASK] [--split] [-s S] [-b PANE] [--axis A] [--cwd DIR] [--worktree BRANCH] [-l LABEL] [--outlive-parent]".into()));
     };
     // Goes into the shell script unquoted, so only a plain program name or path.
     if !agent.chars().all(|c| c.is_ascii_alphanumeric() || "._+-/~".contains(c)) {
@@ -1132,15 +1142,16 @@ fn cmd_spawn(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> 
     if let Some(p) = &parent {
         command.splice(0..0, ["/usr/bin/env".into(), format!("ZURAFA_PARENT={p}")]);
     }
+    let outlive = has_flag(args, &["--outlive-parent"]);
     let reply = match pane {
         Some(pane) => {
             let axis = option_value(args, &["--axis"]).unwrap_or_else(|| "horizontal".into());
             if axis != "horizontal" && axis != "vertical" {
                 return Err((2, "--axis must be horizontal or vertical".into()));
             }
-            client.request(json!({"type":"layout.split","session":session,"block":pane,"axis":axis,"cols":80,"rows":24,"cwd":cwd,"command":command,"parent":parent}))
+            client.request(json!({"type":"layout.split","session":session,"block":pane,"axis":axis,"cols":80,"rows":24,"cwd":cwd,"command":command,"parent":parent,"outlive_parent":outlive}))
         }
-        None => client.request(json!({"type":"layout.tab","session":session,"label":label,"cols":80,"rows":24,"cwd":cwd,"command":command,"parent":parent})),
+        None => client.request(json!({"type":"layout.tab","session":session,"label":label,"cols":80,"rows":24,"cwd":cwd,"command":command,"parent":parent,"outlive_parent":outlive})),
     }
     .map_err(|e| (1, e))?;
     println!("{}", strv(&reply["terminal"]));
@@ -1240,7 +1251,8 @@ fn mcp_tools() -> Value {
             "pane":{"type":"string","description":"With split: the pane to split. Defaults to yours."},
             "cwd":{"type":"string","description":"Directory to start in. Defaults to your current directory."},
             "label":{"type":"string","description":"Tab name. Defaults to the agent and task."},
-            "worktree":{"type":"string","description":"Run in its own git worktree on this branch, created from the current HEAD if new, so its changes stay apart from other agents'. Reuses the worktree if it exists."}},
+            "worktree":{"type":"string","description":"Run in its own git worktree on this branch, created from the current HEAD if new, so its changes stay apart from other agents'. Reuses the worktree if it exists."},
+            "outlive_parent":{"type":"boolean","description":"Keep running after your pane closes or you exit. By default your spawned panes close with you."}},
           "required":["agent"]}},
         {"name":"send","description":"Type text into a pane, then press Enter unless enter is false. To answer another agent, send your message to its pane.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"enter":{"type":"boolean","description":"Press Enter after the text. Default true."}},"required":["pane","text"]}},
@@ -1279,6 +1291,9 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
             }
             if a["split"] == true {
                 v.push("--split".into());
+            }
+            if a["outlive_parent"] == true {
+                v.push("--outlive-parent".into());
             }
             for (flag, key) in [("-b", "pane"), ("--cwd", "cwd"), ("-l", "label"), ("--worktree", "worktree")] {
                 if let Some(x) = s(key) {
@@ -2227,7 +2242,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  wait --children any|all [TARGET]     Wait for the panes spawned from TARGET (this pane):\n                                       any: first with news; all: none working or starting\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n  ZURAFA_PARENT is the pane that spawned this one.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n    [--outlive-parent]                 ...and keep it when this pane closes or its agent exits\n                                       (else it closes too; its blocks, errors and exit are typed\n                                       here as <zurafa from=...> notes; agent-notes = false\n                                       in config.zurafa turns notes off)\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  wait --children any|all [TARGET]     Wait for the panes spawned from TARGET (this pane):\n                                       any: first with news; all: none working or starting\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n  ZURAFA_PARENT is the pane that spawned this one.");
 }
 
 #[cfg(test)]
@@ -2241,6 +2256,14 @@ mod tests {
         assert_eq!(key_bytes("ctrl+c").unwrap(), [3]);
         assert_eq!(key_bytes("Enter").unwrap(), b"\r");
         assert!(key_bytes("ctrl+1").is_none());
+    }
+
+    #[test]
+    fn reports_to_the_parent_are_tagged() {
+        let some = |s: &str| Some(s.to_owned());
+        assert_eq!(tag_report("done", "t1", some("t7"), some("t1")), "<zurafa from=\"t7\">done</zurafa>");
+        assert_eq!(tag_report("hi", "t2", some("t7"), some("t1")), "hi");
+        assert_eq!(tag_report("hi", "t1", some("t7"), None), "hi");
     }
 
     #[test]
@@ -2440,8 +2463,8 @@ mod tests {
         assert_eq!(args("wait", json!({"pane":"t3","for":["blocked","done"]})), ["wait", "--json", "t3", "-t", "10m", "--for", "blocked,done"]);
         assert_eq!(args("wait", json!({"children":"all","next":true})), ["wait", "--children", "all", "-t", "10m", "--next"]);
         assert_eq!(
-            args("spawn", json!({"agent":"claude","task":"fix it","split":true,"pane":"t1"})),
-            ["spawn", "claude", "fix it", "--split", "-b", "t1"]
+            args("spawn", json!({"agent":"claude","task":"fix it","split":true,"pane":"t1","outlive_parent":true})),
+            ["spawn", "claude", "fix it", "--split", "--outlive-parent", "-b", "t1"]
         );
         assert_eq!(args("key", json!({"pane":"t3","keys":["escape","enter"]})), ["key", "t3", "escape", "enter"]);
         assert!(tool_args("spawn", &json!({"agent":"--split"})).is_err());

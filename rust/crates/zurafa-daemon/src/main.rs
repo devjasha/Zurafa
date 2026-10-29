@@ -1,6 +1,7 @@
 mod hosts;
 mod listen;
 mod login;
+mod notes;
 mod osc7501;
 mod protocol;
 mod pty;
@@ -117,6 +118,7 @@ async fn main() -> io::Result<()> {
         signal(SignalKind::interrupt())?,
     );
     let terms = pty::Terminals::new();
+    tokio::spawn(notes::run(terms.clone()));
     let allow_identified = env::args().any(|a| a == "--tailnet-allow-identified");
     let allow_anonymous = env::args().any(|a| a == "--allow-anonymous");
     let mut args = env::args();
