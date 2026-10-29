@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.23-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.24-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -73,6 +73,15 @@
 </div>
     </div></aside>
     <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Reference</div><h1>Changelog</h1><div class="prose"><p>What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on <a href="https://github.com/devjasha/Zurafa/releases">GitHub releases</a>.</p>
+<h2 id="0-1-24">0.1.24</h2>
+<p><strong>October 29, 2026</strong></p>
+<ul>
+<li>Zurafa has a Settings window (⌘,). Change the theme and every terminal color, fonts, pane spacing, window opacity, tabs and the sidebar, and manage your saved remote connections, all without editing the config file.</li>
+<li>Settings can start Zurafa when you log in, turn automatic updates on or off, install the command-line tool, and set up Claude Code&#x27;s status hooks.</li>
+<li>Zurafa now uses the current macOS look on macOS 26 and later.</li>
+<li>When an agent starts other agents with <code>zurafa spawn</code>, the sidebar shows them together on one card under the agent that started them.</li>
+<li><code>zurafa spawn claude &quot;fix the login bug&quot; --worktree fix-login</code> gives the agent its own git worktree, so agents in the same repository don&#x27;t edit each other&#x27;s files. <code>zurafa worktree add</code> and <code>zurafa worktree remove</code> manage them, and the MCP <code>spawn</code> tool takes a worktree too.</li>
+</ul>
 <h2 id="0-1-23">0.1.23</h2>
 <p><strong>October 29, 2026</strong></p>
 <ul>
@@ -252,7 +261,7 @@
 <li>The first public beta: a Rust backed terminal workspace with tabs, split panes, sessions, system SSH remote hosts, an event driven UI, Ghostty settings import, and an optional dithered background image.</li>
 <li>Built for Apple Silicon Macs on macOS 14 or newer.</li>
 </ul></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/troubleshooting/"><small>← Previous</small><strong>Troubleshooting &amp; limits</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#0-1-23">0.1.23</a><a href="#0-1-22">0.1.22</a><a href="#0-1-21">0.1.21</a><a href="#0-1-20">0.1.20</a><a href="#0-1-19">0.1.19</a><a href="#0-1-18">0.1.18</a><a href="#0-1-17">0.1.17</a><a href="#0-1-16">0.1.16</a><a href="#0-1-15">0.1.15</a><a href="#0-1-14">0.1.14</a><a href="#0-1-13">0.1.13</a><a href="#0-1-12">0.1.12</a><a href="#0-1-11">0.1.11</a><a href="#0-1-10">0.1.10</a><a href="#0-1-9">0.1.9</a><a href="#0-1-8">0.1.8</a><a href="#0-1-7">0.1.7</a><a href="#0-1-6">0.1.6</a><a href="#0-1-5">0.1.5</a><a href="#0-1-4">0.1.4</a><a href="#0-1-3">0.1.3</a><a href="#0-1-2">0.1.2</a><a href="#0-1-1">0.1.1</a><a href="#0-1-0-beta-2">0.1.0 beta 2</a><a href="#0-1-0-beta-1">0.1.0 beta 1</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#0-1-24">0.1.24</a><a href="#0-1-23">0.1.23</a><a href="#0-1-22">0.1.22</a><a href="#0-1-21">0.1.21</a><a href="#0-1-20">0.1.20</a><a href="#0-1-19">0.1.19</a><a href="#0-1-18">0.1.18</a><a href="#0-1-17">0.1.17</a><a href="#0-1-16">0.1.16</a><a href="#0-1-15">0.1.15</a><a href="#0-1-14">0.1.14</a><a href="#0-1-13">0.1.13</a><a href="#0-1-12">0.1.12</a><a href="#0-1-11">0.1.11</a><a href="#0-1-10">0.1.10</a><a href="#0-1-9">0.1.9</a><a href="#0-1-8">0.1.8</a><a href="#0-1-7">0.1.7</a><a href="#0-1-6">0.1.6</a><a href="#0-1-5">0.1.5</a><a href="#0-1-4">0.1.4</a><a href="#0-1-3">0.1.3</a><a href="#0-1-2">0.1.2</a><a href="#0-1-1">0.1.1</a><a href="#0-1-0-beta-2">0.1.0 beta 2</a><a href="#0-1-0-beta-1">0.1.0 beta 1</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>

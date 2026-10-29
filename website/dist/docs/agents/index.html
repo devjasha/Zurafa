@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.23-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.24-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -127,7 +127,7 @@
 <h2 id="let-agents-drive-zurafa">Let agents drive Zurafa</h2>
 <p><code>zurafa mcp</code> serves Zurafa&#x27;s agent commands as MCP tools, so an agent can find them on its own: start other agents on tasks, list every pane and its status, type into a pane, read its screen, and wait for it to finish. Add it to Claude Code once:</p>
 <pre><code>claude mcp add --scope user zurafa -- zurafa mcp</code></pre>
-<p>Other agents that support MCP servers over stdio take the same command, <code>zurafa mcp</code>. Then ask, for example, &quot;spawn a Codex agent to write tests for this module and tell me when it&#x27;s done&quot;. The tools are <code>list_panes</code>, <code>spawn</code>, <code>send</code>, <code>key</code>, <code>read</code>, <code>wait</code>, and <code>prompt</code>; each does what the <a href="/docs/cli/">CLI command</a> of the same name does. <code>wait</code> and <code>prompt</code> give up after 10 minutes unless the agent asks for longer.</p>
+<p>Other agents that support MCP servers over stdio take the same command, <code>zurafa mcp</code>. Then ask, for example, &quot;spawn a Codex agent to write tests for this module and tell me when it&#x27;s done&quot;. The tools are <code>list_panes</code>, <code>spawn</code>, <code>send</code>, <code>key</code>, <code>read</code>, <code>wait</code>, and <code>prompt</code>; each does what the <a href="/docs/cli/">CLI command</a> of the same name does. <code>wait</code> and <code>prompt</code> give up after 10 minutes unless the agent asks for longer. <code>spawn</code> takes a <code>worktree</code> branch to put the new agent in <a href="/docs/cli/#worktrees">its own worktree</a>.</p>
 <h2 id="when-an-agent-needs-you">When an agent needs you</h2>
 <p>A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. When Claude Code asks for permission, hover the notification and choose <strong>Approve</strong> or <strong>Deny</strong> to answer without leaving what you&#x27;re doing. If the prompt was already answered or changed, Zurafa takes you to the pane instead of pressing anything. The Dock icon counts the panes waiting on you, and <code>⌘J</code> jumps to the next one.</p>
 <h2 id="how-it-works">How it works</h2>
