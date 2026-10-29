@@ -159,6 +159,9 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
     if args[0] == "mcp" {
         return cmd_mcp(global.socket);
     }
+    if args[0] == "worktree" {
+        return cmd_worktree(global.socket, &args[1..]);
+    }
     let mut client = Client::connect(global.socket).map_err(|e| (4, e))?;
     match args[0].as_str() {
         "ls" | "sessions" => cmd_ls(&mut client, global.json),
@@ -727,8 +730,12 @@ fn cmd_spawn(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> 
     if !resolve_session(&snapshot, &session)?["remote"].is_null() {
         return Err((2, "spawn does not work in remote workspaces yet".into()));
     }
-    let cwd = option_value(args, &["--cwd"])
+    let mut cwd = option_value(args, &["--cwd"])
         .or_else(|| env::current_dir().ok().map(|d| d.to_string_lossy().into_owned()));
+    if let Some(name) = option_value(args, &["--worktree"]) {
+        let repo = PathBuf::from(cwd.clone().unwrap_or_else(|| ".".into()));
+        cwd = Some(ensure_worktree(&repo, &worktrees_root()?, &name)?.to_string_lossy().into_owned());
+    }
     let shell = login_shell()
         .or_else(|| env::var("SHELL").ok().filter(|s| !s.is_empty()))
         .unwrap_or_else(|| "/bin/zsh".into());
@@ -738,15 +745,17 @@ fn cmd_spawn(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> 
     let interactive = if shell.ends_with("/fish") || shell == "fish" { "-l" } else { "-li" };
     // sh, bash, zsh and fish all accept this script.
     let command = json!([shell, interactive, "-c", format!("{run}; exec {} -l", shell_word(&shell))]);
+    // The pane that ran spawn, so the app can show the new agent under it.
+    let parent = env::var("ZURAFA_PANE").ok();
     let reply = match pane {
         Some(pane) => {
             let axis = option_value(args, &["--axis"]).unwrap_or_else(|| "horizontal".into());
             if axis != "horizontal" && axis != "vertical" {
                 return Err((2, "--axis must be horizontal or vertical".into()));
             }
-            client.request(json!({"type":"layout.split","session":session,"block":pane,"axis":axis,"cols":80,"rows":24,"cwd":cwd,"command":command}))
+            client.request(json!({"type":"layout.split","session":session,"block":pane,"axis":axis,"cols":80,"rows":24,"cwd":cwd,"command":command,"parent":parent}))
         }
-        None => client.request(json!({"type":"layout.tab","session":session,"label":label,"cols":80,"rows":24,"cwd":cwd,"command":command})),
+        None => client.request(json!({"type":"layout.tab","session":session,"label":label,"cols":80,"rows":24,"cwd":cwd,"command":command,"parent":parent})),
     }
     .map_err(|e| (1, e))?;
     println!("{}", strv(&reply["terminal"]));
@@ -845,7 +854,8 @@ fn mcp_tools() -> Value {
             "split":{"type":"boolean","description":"Open beside a pane instead of in a new tab."},
             "pane":{"type":"string","description":"With split: the pane to split. Defaults to yours."},
             "cwd":{"type":"string","description":"Directory to start in. Defaults to your current directory."},
-            "label":{"type":"string","description":"Tab name. Defaults to the agent and task."}},
+            "label":{"type":"string","description":"Tab name. Defaults to the agent and task."},
+            "worktree":{"type":"string","description":"Run in its own git worktree on this branch, created from the current HEAD if new, so its changes stay apart from other agents'. Reuses the worktree if it exists."}},
           "required":["agent"]}},
         {"name":"send","description":"Type text into a pane, then press Enter unless enter is false. To answer another agent, send your message to its pane.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"enter":{"type":"boolean","description":"Press Enter after the text. Default true."}},"required":["pane","text"]}},
@@ -882,7 +892,7 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
             if a["split"] == true {
                 v.push("--split".into());
             }
-            for (flag, key) in [("-b", "pane"), ("--cwd", "cwd"), ("-l", "label")] {
+            for (flag, key) in [("-b", "pane"), ("--cwd", "cwd"), ("-l", "label"), ("--worktree", "worktree")] {
                 if let Some(x) = s(key) {
                     v.extend([flag.into(), x]);
                 }
@@ -993,6 +1003,121 @@ fn cmd_mcp(socket: Option<String>) -> Result<(), (i32, String)> {
                 write(&out, reply);
             }
         });
+    }
+    Ok(())
+}
+
+/// Where `--worktree` puts worktrees: ~/.zurafa/worktrees/<repo>/<name>.
+fn worktrees_root() -> Result<PathBuf, (i32, String)> {
+    env::var_os("HOME")
+        .map(|h| PathBuf::from(h).join(".zurafa/worktrees"))
+        .ok_or((1, "HOME is not set".to_owned()))
+}
+
+/// Runs git in `dir` and returns its trimmed output, or its error message.
+fn git(dir: &std::path::Path, args: &[&str]) -> Result<String, String> {
+    let out = process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .stdin(process::Stdio::null())
+        .output()
+        .map_err(|e| format!("cannot run git: {e}"))?;
+    let text = |b: Vec<u8>| String::from_utf8_lossy(&b).trim().to_owned();
+    if out.status.success() {
+        Ok(text(out.stdout))
+    } else {
+        Err(text(out.stderr))
+    }
+}
+
+/// The main repository of `dir` (also from inside one of its worktrees) and where
+/// the worktree for branch `name` goes.
+fn worktree_path(dir: &std::path::Path, root: &std::path::Path, name: &str) -> Result<(String, PathBuf), (i32, String)> {
+    let common = git(dir, &["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .map_err(|e| (2, format!("{} is not in a git repository: {e}", dir.display())))?;
+    git(dir, &["check-ref-format", "--branch", name]).map_err(|_| (2, format!("{name:?} is not a valid branch name")))?;
+    let repo = PathBuf::from(&common);
+    // A bare clone's common dir is the repo itself; a normal one's is <repo>/.git.
+    let repo_dir = if repo.file_name().is_some_and(|n| n == ".git") { repo.parent().unwrap().to_path_buf() } else { repo };
+    let repo_name = repo_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "repo".into());
+    Ok((common, root.join(repo_name).join(name.replace('/', "-"))))
+}
+
+/// The worktree for branch `name` of the repo at `dir`, made from HEAD (or the existing
+/// branch) when it doesn't exist yet.
+fn ensure_worktree(dir: &std::path::Path, root: &std::path::Path, name: &str) -> Result<PathBuf, (i32, String)> {
+    let (common, path) = worktree_path(dir, root, name)?;
+    if path.exists() {
+        // Same folder name from another repo of the same name, or something else entirely.
+        let theirs = git(&path, &["rev-parse", "--path-format=absolute", "--git-common-dir"]).ok();
+        if theirs.as_deref() != Some(common.as_str()) {
+            return Err((1, format!("{} exists but is not a worktree of this repository", path.display())));
+        }
+        return Ok(path);
+    }
+    let path_str = path.to_string_lossy().into_owned();
+    let exists = git(dir, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{name}")]).is_ok();
+    let args: Vec<&str> = if exists {
+        vec!["worktree", "add", &path_str, name]
+    } else {
+        vec!["worktree", "add", "-b", name, &path_str, "HEAD"]
+    };
+    git(dir, &args).map_err(|e| (1, format!("git worktree add failed: {e}")))?;
+    Ok(path)
+}
+
+/// Removes the worktree for branch `name` and, if it is merged, the branch.
+fn remove_worktree(dir: &std::path::Path, root: &std::path::Path, name: &str, force: bool) -> Result<String, (i32, String)> {
+    let (common, path) = worktree_path(dir, root, name)?;
+    if git(&path, &["rev-parse", "--path-format=absolute", "--git-common-dir"]).ok().as_deref() != Some(common.as_str()) {
+        return Err((3, format!("no worktree {name:?} for this repository at {}", path.display())));
+    }
+    let branch = git(&path, &["branch", "--show-current"]).unwrap_or_default();
+    let path_str = path.to_string_lossy().into_owned();
+    let mut args = vec!["worktree", "remove", path_str.as_str()];
+    if force {
+        args.push("--force");
+    }
+    git(dir, &args).map_err(|e| (1, format!("{e}\nCommit or stash the changes first, or pass --force to discard them.")))?;
+    let mut done = format!("Removed {}", path.display());
+    if !branch.is_empty() {
+        // -d keeps a branch with unmerged commits, so no work is lost.
+        match git(dir, &["branch", "-d", &branch]) {
+            Ok(_) => done += &format!(" and branch {branch}"),
+            Err(_) => done += &format!("; kept branch {branch}, which has unmerged commits"),
+        }
+    }
+    Ok(done)
+}
+
+fn cmd_worktree(socket: Option<String>, args: &[String]) -> Result<(), (i32, String)> {
+    let pos = positionals(args);
+    let dir = PathBuf::from(option_value(args, &["--cwd"]).unwrap_or_else(|| ".".into()));
+    let root = worktrees_root()?;
+    match pos.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["add", name] => println!("{}", ensure_worktree(&dir, &root, name)?.display()),
+        ["remove", name] => {
+            let force = has_flag(args, &["--force", "-f"]);
+            let (_, path) = worktree_path(&dir, &root, name)?;
+            // Pulling the folder out from under a running agent would break it.
+            if !force {
+                if let Ok(snapshot) = Client::connect(socket).and_then(|mut c| c.snapshot()) {
+                    let busy: Vec<String> = sessions(&snapshot)
+                        .iter()
+                        .flat_map(|s| s["blocks"].as_object().cloned().unwrap_or_default())
+                        .filter(|(_, b)| b["running"] == true)
+                        .filter(|(_, b)| b["foreground"]["cwd"].as_str().is_some_and(|c| std::path::Path::new(c).starts_with(&path)))
+                        .map(|(id, _)| id)
+                        .collect();
+                    if !busy.is_empty() {
+                        return Err((1, format!("panes {} are open in {}; close them or pass --force", busy.join(", "), path.display())));
+                    }
+                }
+            }
+            println!("{}", remove_worktree(&dir, &root, name, force)?);
+        }
+        _ => return Err((2, "usage: zurafa worktree add NAME | remove NAME [--force]  (in the repository, or with --cwd DIR)".into())),
     }
     Ok(())
 }
@@ -1145,11 +1270,33 @@ fn cmd_report(args: &[String]) -> Result<(), (i32, String)> {
         fields.push(format!("msg={}", B64.encode(msg.join(" "))));
     }
     // An agent's command output is captured, so write to the terminal itself.
-    let mut tty = std::fs::OpenOptions::new()
-        .write(true)
-        .open("/dev/tty")
+    let open = |path: &str| std::fs::OpenOptions::new().write(true).open(path);
+    let mut tty = open("/dev/tty")
+        // Claude Code runs hooks in a session of their own, without a controlling terminal,
+        // so use the terminal of the nearest process that has one: the agent's.
+        .or_else(|e| ancestor_tty().ok_or(e).and_then(|t| open(&t)))
         .map_err(|e| (1, format!("no terminal to report to: {e}")))?;
     write!(tty, "\x1b]7501;{}\x1b\\", fields.join(":")).map_err(|e| (1, e.to_string()))
+}
+
+/// The terminal device of the closest parent process that has one, like /dev/ttys002.
+fn ancestor_tty() -> Option<String> {
+    let mut pid = std::os::unix::process::parent_id();
+    for _ in 0..16 {
+        let out = process::Command::new("ps").args(["-o", "tty=,ppid=", "-p", &pid.to_string()]).output().ok()?;
+        let text = String::from_utf8_lossy(&out.stdout);
+        let mut fields = text.split_whitespace();
+        let (tty, parent) = (fields.next()?, fields.next()?.parse::<u32>().ok()?);
+        // ps shows "??" (macOS) or "?" (Linux) for a process without a terminal.
+        if !tty.starts_with('?') {
+            return Some(format!("/dev/{tty}"));
+        }
+        if parent <= 1 {
+            return None;
+        }
+        pid = parent;
+    }
+    None
 }
 
 /// The hooks the agents guide lists: (event, matcher, command).
@@ -1344,7 +1491,8 @@ fn option_value(args: &[String], names: &[&str]) -> Option<String> {
         .map(|w| w[1].clone())
 }
 /// Options that take a value, so their values are not mistaken for positional arguments.
-const VALUED: [&str; 19] = [
+const VALUED: [&str; 20] = [
+    "--worktree",
     "-s",
     "--session",
     "-b",
@@ -1376,7 +1524,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude                         Add the status hooks to Claude Code's settings\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude                         Add the status hooks to Claude Code's settings\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
 }
 
 #[cfg(test)]
@@ -1466,6 +1614,40 @@ mod tests {
         assert_eq!(names, ["list_panes", "spawn", "send", "key", "read", "wait", "prompt"]);
         assert!(mcp_reply(&json!({"jsonrpc":"2.0","method":"notifications/initialized"}), &None).is_none());
         assert_eq!(mcp_reply(&json!({"jsonrpc":"2.0","id":2,"method":"nope"}), &None).unwrap()["error"]["code"], -32601);
+    }
+
+    #[test]
+    fn worktrees_are_made_reused_and_removed_safely() {
+        let base = env::temp_dir().join(format!("zurafa-wt-{}", process::id()));
+        let (repo, root) = (base.join("myrepo"), base.join("worktrees"));
+        std::fs::create_dir_all(&repo).unwrap();
+        let g = |dir: &std::path::Path, args: &[&str]| git(dir, args).unwrap();
+        g(&repo, &["init", "-q", "-b", "main"]);
+        g(&repo, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"]);
+
+        let path = ensure_worktree(&repo, &root, "agent/fix-login").unwrap();
+        assert_eq!(path, root.join("myrepo/agent-fix-login"));
+        assert_eq!(g(&path, &["branch", "--show-current"]), "agent/fix-login");
+        // Again, and from inside the worktree itself: the same folder.
+        assert_eq!(ensure_worktree(&repo, &root, "agent/fix-login").unwrap(), path);
+        assert_eq!(ensure_worktree(&path, &root, "agent/fix-login").unwrap(), path);
+        assert!(ensure_worktree(&repo, &root, "bad..name").is_err());
+
+        // Uncommitted work blocks removal; a merged branch goes with the worktree.
+        std::fs::write(path.join("wip.txt"), "x").unwrap();
+        assert!(remove_worktree(&repo, &root, "agent/fix-login", false).is_err());
+        assert!(path.join("wip.txt").exists());
+        std::fs::remove_file(path.join("wip.txt")).unwrap();
+        assert!(remove_worktree(&repo, &root, "agent/fix-login", false).unwrap().contains("and branch"));
+        assert!(!path.exists());
+
+        // A branch with unmerged commits is kept.
+        let path = ensure_worktree(&repo, &root, "spike").unwrap();
+        g(&path, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "wip"]);
+        assert!(remove_worktree(&repo, &root, "spike", false).unwrap().contains("kept branch spike"));
+        assert!(git(&repo, &["rev-parse", "--verify", "--quiet", "refs/heads/spike"]).is_ok());
+        assert!(remove_worktree(&repo, &root, "spike", false).is_err()); // already gone
+        std::fs::remove_dir_all(&base).unwrap();
     }
 
     #[test]

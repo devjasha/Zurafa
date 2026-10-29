@@ -69,7 +69,11 @@ struct BlockSnapshot: Codable {
     var title: String?
     var pwd: String?
     var foreground: ForegroundProcess?
-    enum CodingKeys: String, CodingKey { case blockID = "block_id", running, exitCode = "exit_code", statuses, title, pwd, foreground }
+    /// The pane whose agent spawned this one; absent from older daemons.
+    var parent: String?
+    /// Milliseconds since the Unix epoch.
+    var started: Double?
+    enum CodingKeys: String, CodingKey { case blockID = "block_id", running, exitCode = "exit_code", statuses, title, pwd, foreground, parent, started }
 }
 struct ForegroundProcess: Codable {
     var name: String

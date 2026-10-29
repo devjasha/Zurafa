@@ -469,10 +469,19 @@ struct VerticalTabSidebar: View {
                             .padding(.horizontal, 12)
                             .padding(.top, 10)
                             .padding(.bottom, 4)
-                        ForEach(ws.tabs(in: session)) { tab in
-                            SidebarTabRow(tab: tab, on: current && tab.id == ws.tab.id) {
+                        let tabs = ws.tabs(in: session)
+                        let family = AgentFamily(tabs: tabs, meta: ws.meta)
+                        ForEach(tabs.filter { !family.isNested($0) }) { tab in
+                            let select = {
                                 if !current { ws.selectSession(session.sessionID) }
                                 ws.focus(tab.focus)
+                            }
+                            if family.agents(of: tab).isEmpty {
+                                SidebarTabRow(tab: tab, on: current && tab.id == ws.tab.id, select: select)
+                            } else {
+                                AgentCard(tab: tab, family: family, local: session.remote == nil,
+                                          on: current && tab.id == ws.tab.id,
+                                          focusedPane: current ? ws.tab.focus : nil, select: select)
                             }
                         }
                     }

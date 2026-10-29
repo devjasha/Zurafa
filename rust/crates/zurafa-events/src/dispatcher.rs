@@ -165,6 +165,12 @@ pub struct Block {
     pub pwd: Option<String>,
     #[serde(default)]
     pub foreground: Option<crate::Process>,
+    /// The pane that started this one with `zurafa spawn`, while it exists.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// When the pane started, in milliseconds since the Unix epoch.
+    #[serde(default)]
+    pub started: u64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -377,6 +383,7 @@ impl Dispatcher {
         split: Option<&str>,
         axis: Axis,
         label: String,
+        parent: Option<String>,
     ) -> Result<(), String> {
         let mut i = self.inner.lock().unwrap();
         let s = i.snapshot.sessions.get(session).ok_or("unknown session")?;
@@ -390,6 +397,8 @@ impl Dispatcher {
         if split.is_some_and(|b| !s.blocks.contains_key(b)) {
             return Err("unknown block".into());
         }
+        // An unknown parent just means the pane stands on its own.
+        let parent = parent.filter(|p| i.snapshot.sessions.values().any(|s| s.blocks.contains_key(p)));
         i.next_window += 1;
         let next = format!("w{}", i.next_window);
         let s = i.snapshot.sessions.get_mut(session).unwrap();
@@ -403,6 +412,8 @@ impl Dispatcher {
                 title: None,
                 pwd: None,
                 foreground: None,
+                parent,
+                started: now(),
             },
         );
         let (window, created) = if let Some(target) = split {
@@ -752,17 +763,28 @@ impl Dispatcher {
 mod tests {
     use super::*;
     fn add(d: &Dispatcher, id: &str, target: Option<&str>) {
-        d.add_block("default", id, target, Axis::Horizontal, "Shell".into())
+        d.add_block("default", id, target, Axis::Horizontal, "Shell".into(), None)
             .unwrap();
+    }
+    #[test]
+    fn spawned_panes_remember_a_parent_that_exists() {
+        let d = Dispatcher::new(32);
+        add(&d, "a", None);
+        d.add_block("default", "b", None, Axis::Horizontal, "Agent".into(), Some("a".into())).unwrap();
+        d.add_block("default", "c", None, Axis::Horizontal, "Agent".into(), Some("gone".into())).unwrap();
+        let blocks = &d.snapshot().sessions["default"].blocks;
+        assert_eq!(blocks["b"].parent.as_deref(), Some("a"));
+        assert_eq!(blocks["c"].parent, None);
+        assert!(blocks["b"].started > 0);
     }
     #[test]
     fn splits_share_space_evenly_along_their_axis() {
         let d = Dispatcher::new(32);
         add(&d, "a", None);
         add(&d, "b", Some("a"));
-        d.add_block("default", "c", Some("b"), Axis::Vertical, "Shell".into())
+        d.add_block("default", "c", Some("b"), Axis::Vertical, "Shell".into(), None)
             .unwrap();
-        d.add_block("default", "d", Some("c"), Axis::Vertical, "Shell".into())
+        d.add_block("default", "d", Some("c"), Axis::Vertical, "Shell".into(), None)
             .unwrap();
         let layout = d.snapshot().sessions["default"].windows[0].layout.clone();
         let Layout::Split { ratio, second, .. } = layout else {

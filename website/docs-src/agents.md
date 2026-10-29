@@ -79,7 +79,7 @@ Messages are optional, so `zurafa report blocked "Approve the deploy?"` shows th
 claude mcp add --scope user zurafa -- zurafa mcp
 ```
 
-Other agents that support MCP servers over stdio take the same command, `zurafa mcp`. Then ask, for example, "spawn a Codex agent to write tests for this module and tell me when it's done". The tools are `list_panes`, `spawn`, `send`, `key`, `read`, `wait`, and `prompt`; each does what the [CLI command](/docs/cli/) of the same name does. `wait` and `prompt` give up after 10 minutes unless the agent asks for longer.
+Other agents that support MCP servers over stdio take the same command, `zurafa mcp`. Then ask, for example, "spawn a Codex agent to write tests for this module and tell me when it's done". The tools are `list_panes`, `spawn`, `send`, `key`, `read`, `wait`, and `prompt`; each does what the [CLI command](/docs/cli/) of the same name does. `wait` and `prompt` give up after 10 minutes unless the agent asks for longer. `spawn` takes a `worktree` branch to put the new agent in [its own worktree](/docs/cli/#worktrees).
 
 ## When an agent needs you
 

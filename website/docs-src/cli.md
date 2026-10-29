@@ -44,6 +44,24 @@ zurafa spawn codex "review the diff" --split   # beside the current pane instead
 
 The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass `--cwd`. `-s` picks the workspace, `-l` names the tab, and `--split` takes `-b` and `--axis`. Spawning into a remote workspace isn't supported yet.
 
+### Worktrees
+
+Give each agent its own git worktree, so agents working in the same repository don't edit each other's files:
+
+```sh
+zurafa spawn claude "fix the login bug" --worktree fix-login
+zurafa spawn codex "review fix-login" --worktree fix-login --split   # a second agent, same worktree
+```
+
+`--worktree BRANCH` makes a new branch from the current commit, checks it out in `~/.zurafa/worktrees/<repo>/<branch>`, and starts the agent there. An existing branch is checked out as it is, and an existing worktree is reused. Run it inside the repository, or point at it with `--cwd`.
+
+```sh
+zurafa worktree add fix-login      # create the worktree without an agent; prints its path
+zurafa worktree remove fix-login   # remove it once you've merged the work
+```
+
+`worktree remove` stops if a pane is still open in the worktree or it has uncommitted changes, and deletes the branch only when it's merged. `--force` removes it anyway and discards those changes; an unmerged branch is still kept.
+
 ```sh
 zurafa send review "npm run migrate" --enter   # type text, then press Enter
 zurafa send review -e 'y\n'                     # interpret \n \r \t \e \xHH escapes

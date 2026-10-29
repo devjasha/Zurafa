@@ -123,6 +123,8 @@ pub struct SpawnOptions {
     pub label: String,
     /// Pass bytes through untouched (no OSC filtering): a remote client parses them itself.
     pub raw: bool,
+    /// The pane that asked for this one, shown as its parent agent.
+    pub parent: Option<String>,
 }
 
 pub struct Terminals {
@@ -329,6 +331,7 @@ impl Terminals {
             axis: Axis::Horizontal,
             label: "Terminal".into(),
             raw,
+            parent: None,
         })
     }
 
@@ -343,6 +346,7 @@ impl Terminals {
             axis,
             label,
             raw,
+            parent,
         } = options;
         let session = session.as_str();
         let split = split.as_deref();
@@ -412,7 +416,7 @@ impl Terminals {
         let mut child = pair.slave.spawn_command(cmd).map_err(err)?;
         drop(pair.slave); // otherwise the reader never sees EOF
         self.dispatcher
-            .add_block(session, &id, split, axis, label)?;
+            .add_block(session, &id, split, axis, label, parent)?;
         let (input, input_rx) = mpsc::sync_channel::<Vec<u8>>(64);
         thread::spawn(move || {
             while let Ok(bytes) = input_rx.recv() {

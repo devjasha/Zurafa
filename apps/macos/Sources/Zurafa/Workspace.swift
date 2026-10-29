@@ -71,6 +71,9 @@ struct PaneMeta {
     var label: String?
     var ended: String?
     var statuses: [String: ProgramStatus] = [:]
+    /// The pane that spawned this one, and when this one started.
+    var parent: String?
+    var started: Date?
     var statusItems: [StatusItem] {
         statuses.map { StatusItem(id: $0.key, record: $0.value) }
             .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
@@ -256,6 +259,8 @@ enum EditorKind: String, Identifiable {
         m.pwd = URL(string: block.pwd ?? "")?.isFileURL == true ? URL(string: block.pwd!)!.path : block.pwd
         m.ended = block.running ? nil : "exited"
         m.statuses = block.statuses.records
+        m.parent = block.parent
+        m.started = block.started.map { Date(timeIntervalSince1970: $0 / 1000) }
         m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
                                    argv: block.foreground?.argv, remote: session.remote != nil,
                                    remoteShell: session.remote?.shellProgram ?? .ssh)

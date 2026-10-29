@@ -111,6 +111,8 @@ enum Request {
         command: Option<Vec<String>>,
         #[serde(default = "label")]
         label: String,
+        #[serde(default)]
+        parent: Option<String>,
     },
     #[serde(rename = "layout.split")]
     Split {
@@ -122,6 +124,8 @@ enum Request {
         rows: u16,
         cwd: Option<String>,
         command: Option<Vec<String>>,
+        #[serde(default)]
+        parent: Option<String>,
     },
     #[serde(rename = "layout.preview")]
     Preview {
@@ -339,6 +343,7 @@ async fn request(
             cwd,
             command,
             label,
+            parent,
         } => {
             let t = terms.clone();
             spawn_reply(
@@ -354,6 +359,7 @@ async fn request(
                         axis: Axis::Horizontal,
                         label,
                         raw: false,
+                        parent,
                     })
                 })
                 .await,
@@ -368,6 +374,7 @@ async fn request(
             rows,
             cwd,
             command,
+            parent,
         } => {
             let t = terms.clone();
             spawn_reply(
@@ -383,6 +390,7 @@ async fn request(
                         axis,
                         label: label(),
                         raw: false,
+                        parent,
                     })
                 })
                 .await,
