@@ -120,10 +120,15 @@ pub enum TerminalEvent {
         id: String,
         record: crate::status::Record,
         reason: String,
+        /// The pane's turn after this change (see `status::Records::turn`).
+        #[serde(default)]
+        turn: u64,
     },
     ProgramStatusRemoved {
         ids: Vec<String>,
         reason: String,
+        #[serde(default)]
+        turn: u64,
     },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -288,8 +293,8 @@ mod tests {
             json!({"name":"progress_report","payload":{"state":1,"progress":20}}),
             json!({"name":"clipboard_written","payload":{"text":"copy"}}),
             json!({"name":"preview_requested","payload":{"path":"/tmp/a.md"}}),
-            json!({"name":"program_status_changed","payload":{"id":"a","record":{"state":"working"},"reason":"report"}}),
-            json!({"name":"program_status_removed","payload":{"ids":["a"],"reason":"clear"}}),
+            json!({"name":"program_status_changed","payload":{"id":"a","record":{"state":"working"},"reason":"report","turn":0}}),
+            json!({"name":"program_status_removed","payload":{"ids":["a"],"reason":"clear","turn":1}}),
         ];
         for v in terminal {
             let e: TerminalEvent = serde_json::from_value(v.clone()).unwrap();

@@ -181,6 +181,12 @@ pub fn parse(body: &str) -> Option<Report> {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Records {
     pub records: BTreeMap<String, Record>,
+    /// Goes up each time the root record leaves `working`, for any reason.
+    #[serde(default)]
+    pub turn: u64,
+    /// The program has reported a status; until then it is still starting.
+    #[serde(default)]
+    pub reported: bool,
     #[serde(skip)]
     order: BTreeMap<String, u64>,
     #[serde(skip)]
@@ -199,6 +205,23 @@ impl Records {
             current = current.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
         }
     }
+    fn root_working(&self) -> bool {
+        self.records.get("").is_some_and(|r| r.state == State::Working)
+    }
+    /// Counts a turn that just ended and stamps the events with the turn.
+    fn end_turn(&mut self, was_working: bool, mut events: Vec<TerminalEvent>) -> Vec<TerminalEvent> {
+        if was_working && !self.root_working() {
+            self.turn += 1;
+        }
+        for e in &mut events {
+            if let TerminalEvent::ProgramStatusChanged { turn, .. }
+            | TerminalEvent::ProgramStatusRemoved { turn, .. } = e
+            {
+                *turn = self.turn;
+            }
+        }
+        events
+    }
     fn remove(&mut self, ids: Vec<String>, reason: &str) -> Vec<TerminalEvent> {
         for id in &ids {
             self.records.remove(id);
@@ -210,10 +233,12 @@ impl Records {
             vec![TerminalEvent::ProgramStatusRemoved {
                 ids,
                 reason: reason.into(),
+                turn: self.turn,
             }]
         }
     }
     pub fn lifecycle(&mut self, reason: &str) -> Vec<TerminalEvent> {
+        let was_working = self.root_working();
         let ids = self
             .records
             .iter()
@@ -222,10 +247,14 @@ impl Records {
             })
             .map(|(id, _)| id.clone())
             .collect();
-        self.remove(ids, reason)
+        let events = self.remove(ids, reason);
+        self.end_turn(was_working, events)
     }
     pub fn apply(&mut self, report: Report) -> Vec<TerminalEvent> {
-        match report {
+        let was_working = self.root_working();
+        // Only a status counts: Claude's SessionStart hook clears its subagents before any turn.
+        self.reported |= matches!(report, Report::Set(..));
+        let events = match report {
             Report::Query => vec![],
             Report::Clear(id) => {
                 let prefix = format!("{id}/");
@@ -259,10 +288,12 @@ impl Records {
                     id,
                     record,
                     reason: "report".into(),
+                    turn: self.turn,
                 });
                 events
             }
-        }
+        };
+        self.end_turn(was_working, events)
     }
 }
 #[cfg(test)]
@@ -286,6 +317,25 @@ mod tests {
         assert_eq!(r.records.len(), 2);
         r.apply(parse("state=clear").unwrap());
         assert!(r.records.is_empty());
+    }
+    #[test]
+    fn the_turn_counts_each_time_the_root_leaves_working() {
+        let mut r = Records::default();
+        r.apply(parse("state=clear:id=agent").unwrap());
+        assert!(!r.reported);
+        r.apply(parse("state=idle").unwrap());
+        assert!(r.reported);
+        r.apply(parse("state=working").unwrap());
+        r.apply(parse("state=working:id=agent/a").unwrap());
+        assert_eq!(r.turn, 0);
+        let events = r.apply(parse("state=done").unwrap());
+        assert!(matches!(events[..], [TerminalEvent::ProgramStatusChanged { turn: 1, .. }]));
+        r.apply(parse("state=done:id=agent/a").unwrap());
+        r.apply(parse("state=working").unwrap());
+        r.lifecycle("process_exit");
+        assert_eq!(r.turn, 2, "exiting mid-turn ends it too");
+        r.apply(parse("state=idle").unwrap());
+        assert_eq!(r.turn, 2, "only leaving working counts");
     }
     #[test]
     fn limits_and_invalid_reports_are_atomic() {

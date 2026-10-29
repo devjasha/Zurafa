@@ -272,6 +272,7 @@ fn cmd_pane_inspect(
     if !pane["exit_code"].is_null() {
         println!("Exit code: {}", pane["exit_code"]);
     }
+    println!("Turn: {}", pane["statuses"]["turn"].as_u64().unwrap_or(0));
     Ok(())
 }
 
@@ -775,28 +776,42 @@ fn cmd_read(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
         .flatten()
         .map(|(k, r)| (k.clone(), strv(&r["state"])))
         .collect();
-    let busy = pane_state(&records, true) == "working";
+    let busy = pane_state(&records, true, true) == "working";
     println!("{}", screen(client, &pane, lines, busy)?);
     Ok(())
 }
 
-const STATES: [&str; 6] = ["idle", "working", "blocked", "done", "error", "exited"];
+const STATES: [&str; 7] = ["starting", "idle", "working", "blocked", "done", "error", "exited"];
 
-/// A pane's status, as the app shows it: the record that most needs you wins.
-fn pane_state(records: &BTreeMap<String, String>, running: bool) -> &'static str {
+/// A pane's status, as the app shows it: the record that most needs you wins. Subagent
+/// records (`agent/…`) never stand for the pane, and a program that has reported no
+/// status yet is still starting.
+fn pane_state(records: &BTreeMap<String, String>, reported: bool, running: bool) -> &'static str {
     if !running {
         return "exited";
     }
+    if !reported {
+        return "starting";
+    }
     ["blocked", "error", "working", "done"]
         .into_iter()
-        .find(|s| records.values().any(|r| r == s))
+        .find(|s| records.iter().any(|(id, r)| r == s && !id.starts_with("agent/")))
         .unwrap_or("idle")
 }
 
-/// Watches one pane's status records and whether it still runs.
+/// Whether a block's program has reported a status (a daemon without `reported` shows records).
+fn reported(block: &Value) -> bool {
+    block["statuses"]["reported"].as_bool().unwrap_or(false)
+        || block["statuses"]["records"].as_object().is_some_and(|m| !m.is_empty())
+}
+
+/// Watches one pane's status records, turn and whether it still runs.
 struct Watch {
     pane: String,
     records: BTreeMap<String, String>,
+    msgs: BTreeMap<String, String>,
+    reported: bool,
+    turn: u64,
     running: bool,
 }
 impl Watch {
@@ -806,33 +821,53 @@ impl Watch {
                 json!({"type":"events.subscribe","subscription":"wait","filter":{"block":pane}}),
             )
             .map_err(|e| (1, e))?;
-        let block = &reply["snapshot"]["sessions"][session]["blocks"][pane];
-        let records = block["statuses"]["records"]
-            .as_object()
-            .map(|m| {
-                m.iter()
-                    .map(|(k, r)| (k.clone(), strv(&r["state"])))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Ok(Self {
+        Ok(Self::new(pane, &reply["snapshot"]["sessions"][session]["blocks"][pane]))
+    }
+    fn new(pane: &str, block: &Value) -> Self {
+        let records = block["statuses"]["records"].as_object();
+        let field = |k: &str| {
+            records
+                .into_iter()
+                .flatten()
+                .map(|(id, r)| (id.clone(), strv(&r[k])))
+                .collect()
+        };
+        Self {
             pane: pane.to_owned(),
-            records,
+            records: field("state"),
+            msgs: field("msg"),
+            reported: reported(block),
+            turn: block["statuses"]["turn"].as_u64().unwrap_or(0),
             running: block["running"].as_bool().unwrap_or(false),
-        })
+        }
     }
     fn state(&self) -> &'static str {
-        pane_state(&self.records, self.running)
+        pane_state(&self.records, self.reported, self.running)
+    }
+    /// The message of the record that stands for the pane's state.
+    fn message(&self) -> &str {
+        let state = self.state();
+        self.records
+            .iter()
+            .find(|(id, r)| *r == state && !id.starts_with("agent/"))
+            .and_then(|(id, _)| self.msgs.get(id))
+            .map_or("", String::as_str)
     }
     fn apply(&mut self, event: &Value) {
+        let payload = &event["payload"];
+        if event["type"] == "block_closed" && strv(&payload["block_id"]) == self.pane {
+            self.running = false;
+        }
         if strv(&event["block_id"]) != self.pane {
             return;
         }
-        let payload = &event["payload"];
+        let was_working = self.state() == "working";
         match event["name"].as_str() {
             Some("program_status_changed") => {
-                self.records
-                    .insert(strv(&payload["id"]), strv(&payload["record"]["state"]));
+                let id = strv(&payload["id"]);
+                self.msgs.insert(id.clone(), strv(&payload["record"]["msg"]));
+                self.records.insert(id, strv(&payload["record"]["state"]));
+                self.reported = true;
             }
             Some("program_status_removed") => {
                 for id in payload["ids"].as_array().into_iter().flatten() {
@@ -842,16 +877,22 @@ impl Watch {
             Some("child_exited") => self.running = false,
             _ => {}
         }
+        match payload["turn"].as_u64() {
+            Some(turn) => self.turn = turn,
+            // A daemon from before turns: count one when the pane stops working.
+            None if was_working && self.state() != "working" => self.turn += 1,
+            None => {}
+        }
     }
-    /// Waits until `until` accepts the state; returns it, or None at the deadline.
+    /// Waits until `until` accepts the watch; returns its state, or None at the deadline.
     fn until(
         &mut self,
         client: &mut Client,
         deadline: Option<Instant>,
-        until: impl Fn(&str) -> bool,
+        until: impl Fn(&Self) -> bool,
     ) -> Result<Option<&'static str>, (i32, String)> {
         loop {
-            if until(self.state()) {
+            if until(self) {
                 return Ok(Some(self.state()));
             }
             match client.event(deadline).map_err(|e| (1, e))? {
@@ -902,6 +943,9 @@ fn deadline(args: &[String]) -> Result<Option<Instant>, (i32, String)> {
 }
 
 fn cmd_wait(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
+    if let Some(mode) = option_value(args, &["--children"]) {
+        return wait_children(client, args, &mode);
+    }
     let wanted = option_value(args, &["--for"])
         .map(|l| parse_states(&l))
         .transpose()?;
@@ -909,10 +953,17 @@ fn cmd_wait(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
     let snapshot = client.snapshot().map_err(|e| (1, e))?;
     let (session, pane) = target_pane(&snapshot, args, positionals(args).into_iter().next())?;
     let mut watch = Watch::start(client, &session, &pane)?;
-    // Without --for, wait until it stops working.
-    let state = watch.until(client, deadline, |s| match &wanted {
-        Some(w) => w.iter().any(|x| x == s),
-        None => s != "working",
+    // --next ignores a status left from an earlier turn: the current or next turn has to end,
+    // unless the pane is stuck on you or gone.
+    let after = has_flag(args, &["--next"]).then_some(watch.turn);
+    // Without --for, wait until it stops working (or starting).
+    let state = watch.until(client, deadline, |w| {
+        let s = w.state();
+        after.is_none_or(|t| w.turn > t || matches!(s, "blocked" | "error" | "exited"))
+            && match &wanted {
+                Some(want) => want.iter().any(|x| x == s),
+                None => s != "working" && s != "starting",
+            }
     })?;
     match state {
         Some(state) => {
@@ -920,6 +971,67 @@ fn cmd_wait(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
             Ok(())
         }
         None => Err((5, format!("timed out; {pane} is {}", watch.state()))),
+    }
+}
+
+/// `wait --children any|all`: the panes `zurafa spawn` started from a pane (this one by
+/// default). any: until one has news, a state it did not have when the wait began that is
+/// not working or starting, or all have exited; all: until none is working or starting.
+/// Prints one line per child: pane, label, state and status message.
+fn wait_children(client: &mut Client, args: &[String], mode: &str) -> Result<(), (i32, String)> {
+    let any = match mode {
+        "any" => true,
+        "all" => false,
+        _ => return Err((2, "--children takes any or all".into())),
+    };
+    let deadline = deadline(args)?;
+    let snapshot = client.snapshot().map_err(|e| (1, e))?;
+    let (_, parent) = target_pane(&snapshot, args, first_positional(args))?;
+    let reply = client
+        .request(json!({"type":"events.subscribe","subscription":"wait","filter":{}}))
+        .map_err(|e| (1, e))?;
+    let mut kids = vec![];
+    for session in sessions(&reply["snapshot"]) {
+        for tab in session["windows"].as_array().into_iter().flatten() {
+            let mut ids = vec![];
+            layout_panes(&tab["layout"], &mut ids);
+            for id in ids {
+                let block = &session["blocks"][&id];
+                if strv(&block["parent"]) == parent {
+                    kids.push((Watch::new(&id, block), strv(&tab["label"])));
+                }
+            }
+        }
+    }
+    if kids.is_empty() {
+        return Err((3, format!("{parent} has no children")));
+    }
+    let start: Vec<&str> = kids.iter().map(|(w, _)| w.state()).collect();
+    let busy = |w: &Watch| matches!(w.state(), "working" | "starting");
+    let print = |kids: &[(Watch, String)]| {
+        for (w, label) in kids {
+            println!("{}\t{}\t{}\t{}", w.pane, label, w.state(), w.message());
+        }
+    };
+    loop {
+        let done = match any {
+            true => {
+                kids.iter().zip(&start).any(|((w, _), s)| w.state() != *s && !busy(w))
+                    || kids.iter().all(|(w, _)| !w.running)
+            }
+            false => !kids.iter().any(|(w, _)| busy(w)),
+        };
+        if done {
+            print(&kids);
+            return Ok(());
+        }
+        match client.event(deadline).map_err(|e| (1, e))? {
+            Some(event) => kids.iter_mut().for_each(|(w, _)| w.apply(&event)),
+            None => {
+                print(&kids);
+                return Err((5, format!("timed out; children of {parent} are still working")));
+            }
+        }
     }
 }
 
@@ -939,10 +1051,10 @@ fn cmd_prompt(client: &mut Client, args: &[String]) -> Result<(), (i32, String)>
         .until(
             client,
             Some(deadline.map_or(started, |d| d.min(started))),
-            |s| s == "working",
+            |w| w.state() == "working",
         )?
         .is_some()
-        && watch.until(client, deadline, |s| s != "working")?.is_none()
+        && watch.until(client, deadline, |w| w.state() != "working")?.is_none()
     {
         return Err((5, format!("timed out; {pane} is still working")));
     }
@@ -1031,7 +1143,7 @@ fn cmd_panes(client: &mut Client, as_json: bool) -> Result<(), (i32, String)> {
                     .flatten()
                     .map(|(k, r)| (k.clone(), strv(&r["state"])))
                     .collect::<BTreeMap<_, _>>();
-                let status = pane_state(&states, pane["running"].as_bool().unwrap_or(false));
+                let status = pane_state(&states, reported(pane), pane["running"].as_bool().unwrap_or(false));
                 let message = records
                     .into_iter()
                     .flatten()
@@ -1114,8 +1226,11 @@ fn mcp_tools() -> Value {
          "inputSchema":{"type":"object","properties":{"pane":pane,"keys":{"type":"array","items":{"type":"string"}}},"required":["pane","keys"]}},
         {"name":"read","description":"Read a pane's screen as text, or its last N lines including scrollback. A full-screen app that isn't working, such as Claude Code, is scrolled up and back to read its history.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"lines":{"type":"integer","minimum":1}},"required":["pane"]}},
-        {"name":"wait","description":"Wait until a pane stops working, or reaches one of the given statuses, and return its status. Needs the pane's program to report status.",
-         "inputSchema":{"type":"object","properties":{"pane":pane,"for":{"type":"array","items":{"type":"string","enum":["idle","working","blocked","done","error","exited"]}},"timeout":timeout},"required":["pane"]}},
+        {"name":"wait","description":"Wait until a pane stops working, or reaches one of the given statuses, and return its status. A pane whose program has not reported a status yet is starting, and is waited on. With children, wait on the panes spawned from this pane (or from pane) instead and return each one's pane, label, status and message.",
+         "inputSchema":{"type":"object","properties":{"pane":pane,"for":{"type":"array","items":{"type":"string","enum":STATES}},
+            "next":{"type":"boolean","description":"Ignore a status left from an earlier turn: wait for the current or next turn to end, e.g. right after send."},
+            "children":{"type":"string","enum":["any","all"],"description":"any: return when the first child has news; all: when none is working or starting."},
+            "timeout":timeout}}},
         {"name":"prompt","description":"Send text and Enter to a pane, wait until its agent finishes, and return the screen. The quickest way to ask another agent something.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"timeout":timeout},"required":["pane","text"]}}
     ])
@@ -1170,7 +1285,15 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
             v
         }
         "wait" => {
-            let mut v = vec!["wait".into(), need("pane")?, "-t".into(), timeout()];
+            let mut v = vec!["wait".into()];
+            match s("children") {
+                Some(c) => v.extend(["--children".into(), c].into_iter().chain(s("pane"))),
+                None => v.push(need("pane")?),
+            }
+            v.extend(["-t".into(), timeout()]);
+            if a["next"] == true {
+                v.push("--next".into());
+            }
             if let Some(states) = a["for"].as_array().filter(|s| !s.is_empty()) {
                 v.extend(["--for".into(), states.iter().map(strv).collect::<Vec<_>>().join(",")]);
             }
@@ -2000,7 +2123,7 @@ fn option_value(args: &[String], names: &[&str]) -> Option<String> {
         .map(|w| w[1].clone())
 }
 /// Options that take a value, so their values are not mistaken for positional arguments.
-const VALUED: [&str; 20] = [
+const VALUED: [&str; 21] = [
     "--worktree",
     "-s",
     "--session",
@@ -2014,6 +2137,7 @@ const VALUED: [&str; 20] = [
     "-n",
     "--lines",
     "--for",
+    "--children",
     "-t",
     "--timeout",
     "--progress",
@@ -2033,7 +2157,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n    [--next]                           ...ignoring a status left from an earlier turn\n  wait --children any|all [TARGET]     Wait for the panes spawned from TARGET (this pane):\n                                       any: first with news; all: none working or starting\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: subagents and spawn guidance\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
 }
 
 #[cfg(test)]
@@ -2068,11 +2192,30 @@ mod tests {
     }
 
     #[test]
+    fn watch_counts_turns_without_a_daemon_turn() {
+        let mut w = Watch::new("t1", &json!({"running":true,"statuses":{"records":{"":{"state":"done"}}}}));
+        let report = |state| json!({"block_id":"t1","name":"program_status_changed","payload":{"id":"","record":{"state":state}}});
+        w.apply(&report("working"));
+        assert_eq!(w.turn, 0);
+        w.apply(&report("done"));
+        assert_eq!(w.turn, 1);
+        w.apply(&json!({"block_id":"t1","name":"program_status_changed","payload":{"id":"","record":{"state":"idle"},"turn":7}}));
+        assert_eq!(w.turn, 7, "the daemon's turn wins");
+    }
+
+    #[test]
     fn state_most_needing_you_wins() {
         let records = BTreeMap::from([("a".into(), "done".into()), ("b".into(), "blocked".into())]);
-        assert_eq!(pane_state(&records, true), "blocked");
-        assert_eq!(pane_state(&BTreeMap::new(), true), "idle");
-        assert_eq!(pane_state(&records, false), "exited");
+        assert_eq!(pane_state(&records, true, true), "blocked");
+        assert_eq!(pane_state(&BTreeMap::new(), true, true), "idle");
+        assert_eq!(pane_state(&records, true, false), "exited");
+    }
+
+    #[test]
+    fn unreported_panes_are_starting_and_subagents_never_stand_for_the_pane() {
+        assert_eq!(pane_state(&BTreeMap::new(), false, true), "starting");
+        let records = BTreeMap::from([("".into(), "done".into()), ("agent/a1".into(), "working".into())]);
+        assert_eq!(pane_state(&records, true, true), "done");
     }
 
     #[test]
@@ -2190,6 +2333,7 @@ mod tests {
         assert_eq!(args("send", json!({"pane":"t3","text":"y","enter":false})), ["send", "t3", "--", "y"]);
         assert_eq!(args("prompt", json!({"pane":"t3","text":"-v?"})), ["prompt", "t3", "-t", "10m", "--", "-v?"]);
         assert_eq!(args("wait", json!({"pane":"t3","for":["blocked","done"]})), ["wait", "t3", "-t", "10m", "--for", "blocked,done"]);
+        assert_eq!(args("wait", json!({"children":"all","next":true})), ["wait", "--children", "all", "-t", "10m", "--next"]);
         assert_eq!(
             args("spawn", json!({"agent":"claude","task":"fix it","split":true,"pane":"t1"})),
             ["spawn", "claude", "fix it", "--split", "-b", "t1"]
