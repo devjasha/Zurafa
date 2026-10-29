@@ -2,6 +2,15 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.26
+
+**October 29, 2026**
+
+- Every tab and sidebar row shows its program as a colored badge with the tool's logo: Claude, Codex, Gemini, Pi, Emacs, Git, Kali, GitHub and Copilot, plus common tools like Node, Python, Neovim, Vim, Docker, Rust, Go, tmux and htop. Black logos switch to white in dark mode.
+- Subagents that Claude Code and Codex start on their own show as rows in the agent's card, the tab mark and its hover list, with their last answer on hover. They go away once the agent quits.
+- In a Zurafa pane, Claude Code and Codex are pointed to `zurafa spawn` for real work instead of their built-in subagents; read-only lookups still run inside the agent. Run `zurafa setup claude` or `zurafa setup codex` again to add the new hooks.
+- Go to Directory opens as a small popup at the cursor, starting at `~/`. Tab completes, and at a shell prompt it runs `cd` in that pane instead of opening a new tab.
+
 ## 0.1.25
 
 **October 29, 2026**
