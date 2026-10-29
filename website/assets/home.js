@@ -106,3 +106,38 @@
   };
   new IntersectionObserver(([entry]) => entry.isIntersecting ? play() : stop(), { threshold: 0.3 }).observe(mock);
 })();
+
+// How it works: each step sets the agents' states and reveals what happened so far.
+(() => {
+  const flow = document.querySelector('[data-flow]');
+  if (!flow) return;
+  const win = flow.querySelector('.flow-window');
+  const buttons = [...flow.querySelectorAll('[data-step]')].filter(b => b !== win);
+  const states = [
+    { lead: 'working' },
+    { lead: 'working', build: 'working', tests: 'working' },
+    { lead: 'working', build: 'working', tests: 'blocked' },
+    { lead: 'done', build: 'done', tests: 'done' }
+  ];
+  const show = step => {
+    win.dataset.step = step;
+    buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(i === step)));
+    flow.querySelectorAll('[data-agent]').forEach(node => {
+      node.dataset.state = states[step][node.dataset.agent] || '';
+      if (node.tagName === 'EM') node.textContent = node.dataset.state.replace(/^./, c => c.toUpperCase());
+    });
+    const team = [states[step].build, states[step].tests];
+    win.querySelector('[data-done]').textContent = `${team.filter(s => s === 'done').length}/2 done`;
+    flow.querySelectorAll('[data-from], [data-until]').forEach(node => {
+      const visible = step >= Number(node.dataset.from || 0) && step < Number(node.dataset.until || Infinity);
+      const appearing = visible && node.classList.contains('off');
+      node.classList.toggle('off', !visible);
+      if (appearing) { node.classList.add('enter'); requestAnimationFrame(() => requestAnimationFrame(() => node.classList.remove('enter'))); }
+    });
+    for (const state of ['blocked', 'working', 'done']) {
+      win.querySelector(`[data-count=${state}]`).textContent = Object.values(states[step]).filter(s => s === state).length;
+    }
+  };
+  buttons.forEach((b, i) => b.addEventListener('click', () => show(i)));
+  show(0);
+})();

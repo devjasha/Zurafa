@@ -128,6 +128,26 @@ Other agents that support MCP servers over stdio take the same command, `zurafa 
 
 In a Zurafa pane, agents that do work get a terminal of their own: when Claude reaches for its built-in Agent tool with a general-purpose or custom agent, Zurafa turns the call down and Claude starts it with `zurafa spawn` instead, so it shows in the parent's card where you can watch it, type into it and stop it. Read-only lookups (Explore, Plan and claude-code-guide) stay inside Claude. They have no terminal, so they show in the same card by their task, as **Working** and then **Done**. Hover one for its last answer, or click it to go to the Claude that runs it. Codex gets the same through `zurafa setup codex`, with `explorer` as its lookup type. Outside Zurafa, both agents' subagent tools work as usual. If you set up Claude before this release, run `zurafa setup claude` again to add the four new hooks.
 
+## Try a delegated workflow
+
+After setting up Claude Code or Codex above, open your project in a Zurafa pane and start the agent. Try a focused request such as:
+
+```
+Add CSV export to the orders page. Delegate the implementation and tests,
+then review the changes with me. Use separate git worktrees for agents
+that edit files in parallel. Tell the test agent which behavior to cover.
+Bring their changes together and run the tests before showing me the diff.
+```
+
+Use a feature that makes sense for your project. The coordinator decides how to divide the work; this prompt is an example, not a built-in workflow preset.
+
+1. **Give the coordinator the goal.** Explain the expected behavior and ask it to delegate explicitly.
+2. **Follow the team.** Working agents started with `zurafa spawn` get live terminals grouped under the coordinator. Open one to watch its output, type into it, or stop it. Separate worktrees let agents edit without touching each other's working files; the coordinator still needs to bring their changes together.
+3. **Answer when needed.** If an agent reports blocked, open its pane or press `⌘J` and respond to its prompt. The other agents can keep working.
+4. **Review the result.** The coordinator can wait for agents and read their terminal output, then integrate their changes and run checks. Review the diff and test results before deciding to merge.
+
+For direct control, the [CLI guide](/docs/cli/#worktrees) covers spawning agents in worktrees. To let your coordinator discover these actions as tools, use the [MCP setup](#let-agents-drive-zurafa) above.
+
 ## When an agent needs you
 
 A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. When Claude Code asks for permission, hover the notification and choose **Approve** or **Deny** to answer without leaving what you're doing. If the prompt was already answered or changed, Zurafa takes you to the pane instead of pressing anything. The Dock icon counts the panes waiting on you, and `⌘J` jumps to the next one.

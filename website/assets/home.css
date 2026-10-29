@@ -191,3 +191,67 @@
   .home .rhythm-grid,.home .proof-code{gap:32px}
 }
 @media(prefers-reduced-motion:reduce){.home .scene *{animation:none!important}.home .hero-visual{transform:none}.js .home .reveal{transform:none}.js .home .tagline .word{transition:opacity .3s!important}}
+
+/* How it works: a stepped product window */
+.home .flow{display:grid;grid-template-columns:minmax(260px,.75fr) minmax(0,1.6fr);gap:48px;align-items:start}
+.home .flow-steps{display:grid;gap:4px}
+.home .flow-steps button{display:flex;gap:16px;padding:16px;text-align:left;border:1px solid transparent;border-radius:16px;background:none;color:var(--muted);font:inherit;cursor:pointer;transition:background-color .2s,border-color .2s}
+.home .flow-steps button:hover{background:var(--panel)}
+.home .flow-steps button[aria-pressed=true]{background:var(--panel);border-color:var(--line-strong);color:var(--ink)}
+.home .flow-steps b{font:12px/28px ui-monospace,monospace;color:var(--accent)}
+.home .flow-steps strong,.home .flow-steps small{display:block}
+.home .flow-steps strong{font-size:16px;line-height:28px;color:var(--ink)}
+.home .flow-steps small{font-size:14px;line-height:20px}
+.home .flow-steps code{font:13px/20px ui-monospace,SFMono-Regular,monospace;background:var(--panel-2);padding:1px 4px;border-radius:4px}
+.home .flow-links{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0 0;padding-left:16px;font-size:14px}
+.home .flow-window{position:relative;display:grid;grid-template-columns:240px minmax(0,1fr);gap:8px;height:520px;padding:8px;border-radius:24px;border:1px solid var(--line-strong);background:var(--bg-alt);box-shadow:var(--shadow);overflow:hidden;font:12px/18px ui-monospace,SFMono-Regular,Menlo,monospace}
+.home .flow-window p{margin:0}
+.home .flow-side{display:flex;flex-direction:column;gap:4px;padding:8px 4px;font-family:Geist,-apple-system,sans-serif;font-size:13px;line-height:18px;white-space:nowrap}
+.home .flow-side .mock-lights{padding:0 8px 16px}
+.home .flow-ws{padding:8px 8px 4px;color:var(--faint)}
+.home .flow-card{display:grid;gap:6px;padding:10px;border-radius:12px;background:var(--panel);border:1px solid var(--line)}
+.home .flow-card-meta{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.home .flow-card-meta span{margin-left:auto}
+.home .flow-card-title{font-weight:600;font-size:15px;line-height:20px}
+.home .flow-row{display:flex;align-items:center;gap:8px;padding:2px 0}
+.home .flow-row em{margin-left:auto;font-style:normal;font-size:12px}
+.home .flow-row em[data-state=working]{color:var(--accent)}
+.home .flow-row em[data-state=blocked]{color:var(--amber);font-weight:600}
+.home .flow-row em[data-state=done]{color:var(--green)}
+.home .flow-branch{display:flex;align-items:center;gap:6px;color:var(--faint);font-size:12px}
+.home .flow-branch svg{width:12px;height:12px}.home .flow-branch s{margin-left:auto}
+.home .flow-tab{display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--ink)}
+.home .flow-counts{margin-top:auto;display:flex;gap:12px;padding:8px;color:var(--muted);font-size:12px}
+.home .flow-counts span{display:flex;align-items:center;gap:4px}.home .flow-counts i{font-style:normal}
+.home .flow-counts [data-show]{display:none}.home .flow-window[data-step="2"] .flow-counts [data-show]{display:flex}
+.home .flow-pane{min-width:0;display:flex;flex-direction:column;border-radius:16px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+.home .brand{flex:none;display:inline-grid;place-items:center;width:22px;height:16px;border-radius:5px;background:var(--ink);color:var(--panel)}
+.home .brand svg{width:11px;height:11px;fill:currentColor}
+.home .brand.claude{background:#d97757;color:#fff}
+.home .brand.shell{background:var(--panel-2);color:var(--muted)}
+.home .flow .mock-head{padding:10px 16px;font-size:13px}
+.home .flow-spark{width:14px;height:14px;color:#d97757}
+.home .flow .mock-body{padding:4px 16px 16px;gap:8px}
+.home .flow-window[data-step="2"] .flow-row:has([data-state=blocked]){margin:0 -6px;padding:2px 6px;border-radius:6px;background:color-mix(in srgb,var(--amber) 16%,transparent)}
+.home .flow-toast{position:absolute;z-index:3;right:16px;bottom:16px;display:flex;align-items:center;gap:12px;width:min(380px,calc(100% - 32px));padding:12px;border-radius:14px;border:1px solid var(--line-strong);background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow);font-family:Geist,-apple-system,sans-serif;font-size:13px;line-height:18px}
+.home .flow-toast .brand{width:28px;height:28px;border-radius:8px}.home .flow-toast .brand svg{width:16px;height:16px}
+.home .flow-toast p{display:grid;min-width:0}.home .flow-toast p span{color:var(--muted)}
+.home .flow-toast code{font-size:12px}
+.home .flow-toast-actions{margin-left:auto;display:grid;gap:4px}
+.home .flow-toast-actions span{padding:2px 10px;border-radius:6px;background:var(--panel-2);text-align:center;font-size:12px}
+.home .flow-toast-actions span:first-child{background:var(--accent);color:#fff}
+.home .flow s{flex:none;display:inline-block;width:10px;height:10px;border-radius:50%;text-decoration:none;transition:background-color .3s,box-shadow .3s}
+.home .flow s[data-state=working]{background:var(--accent);animation:pulse 1.6s var(--ease) infinite alternate}
+.home .flow s[data-state=blocked]{background:var(--amber);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 25%,transparent)}
+.home .flow s[data-state=done]{background:var(--green)}
+.home .flow [data-from],.home .flow [data-until]{transition:opacity .4s var(--ease),transform .4s var(--ease)}
+.home .flow .off{display:none}
+.js .home .flow .enter{opacity:0;transform:translateY(8px)}
+@media(max-width:1000px){.home .flow{grid-template-columns:1fr;gap:24px}.home .flow-steps{grid-template-columns:1fr 1fr}.home .flow-links{grid-column:1/-1}}
+@media(max-width:690px){
+  .home .flow-steps{grid-template-columns:1fr}.home .flow-steps button{padding:12px}
+  .home .flow-window{height:560px}
+  .home .flow-window{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}
+  .home .flow-side .mock-lights,.home .flow-ws,.home .flow-tab,.home .flow-counts{display:none}
+  .home .flow-toast-actions{display:none}
+}
