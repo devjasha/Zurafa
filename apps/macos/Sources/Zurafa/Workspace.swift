@@ -21,16 +21,22 @@ enum Program {
     case claude, codex, gemini, pi, emacs, git, dev, ssh, vm, kali, shell
     static func detect(_ name: String?, executable: String? = nil, argv: [String]? = nil, remote: Bool, remoteShell: Program = .ssh) -> Program {
         guard let name else { return remote ? remoteShell : .shell }
-        let n = ([name, executable] + (argv ?? [])).compactMap { $0 }.joined(separator: " ").lowercased()
+        let base = name.lowercased()
+        // Only what's being run counts, never its arguments: a task or model name like "claude-…" would pick the wrong icon.
+        let argv = argv ?? []
+        var run = argv.prefix(1).map { $0 }
+        if ["sh", "bash", "zsh", "fish"].contains(base), let c = argv.firstIndex(of: "-c"), c + 1 < argv.count {
+            // A spawned agent runs as `fish -l -c "pi <task>; exec fish -l"` in the shell's process group.
+            run = [argv[c + 1].split(whereSeparator: { " \t\n;&|".contains($0) }).first.map(String.init) ?? ""]
+        } else if argv.count > 1, ["node", "bun", "deno"].contains(URL(fileURLWithPath: argv[0]).lastPathComponent.lowercased()) {
+            run.append(argv[1])
+        }
+        let commands = ([name, executable].compactMap { $0 } + run).map { $0.lowercased() }
+        let n = commands.joined(separator: " ")
         if n.contains("claude") { return .claude }
         if n.contains("codex") { return .codex }
         if n.contains("gemini") { return .gemini }
-        let base = name.lowercased()
-        let argvParts = (argv ?? []).flatMap { arg -> [String] in
-            let path = URL(fileURLWithPath: arg)
-            return [path.lastPathComponent.lowercased(), arg.lowercased()]
-        }
-        if base == "pi" || argvParts.contains("pi") || argvParts.contains(where: { $0.contains("pi-coding-agent") }) { return .pi }
+        if commands.contains(where: { URL(fileURLWithPath: $0).lastPathComponent == "pi" || $0.contains("pi-coding-agent") }) { return .pi }
         // Homebrew builds run as `emacs` or `emacs-31.1`; any Emacs gets the Doom icon.
         if base.hasPrefix("emacs") { return .emacs }
         if base == "git" || base == "lazygit" { return .git }
@@ -143,6 +149,7 @@ enum EditorKind: String, Identifiable {
     /// VMs on this Mac's shared network not saved yet, offered by Add Host.
     @Published private(set) var vmHosts: [RemoteHost] = []
     @Published var paletteOpen = false
+    @Published var sidebarHidden = false
     @Published var sessionPickerOpen = false
     @Published var editor: EditorKind?
     @Published private(set) var editingHost: RemoteHost?
@@ -163,6 +170,16 @@ enum EditorKind: String, Identifiable {
     /// Open preview per workspace, so it stays behind when switching workspaces.
     @Published private var previews: [String: FilePreview] = [:]
     var preview: FilePreview? { previews[sessionID] }
+    /// A spawned agent's pane shown beside the tab, per workspace, instead of switching to its own tab.
+    @Published private var peeks: [String: String] = [:]
+    /// The agent pane has the keyboard; clicking it must not switch to the agent's own tab.
+    @Published var peekFocused = false
+    /// Nil once the pane is gone, or while its own tab is in view: a terminal shows in one place at a time.
+    var peek: String? {
+        guard let pane = peeks[sessionID], tabs.contains(where: { $0.layout.panes.contains(pane) }),
+              !tab.layout.panes.contains(pane) else { return nil }
+        return pane
+    }
     @Published private(set) var backgroundImage = BackgroundImageStore.load()
     @Published private(set) var backgroundImageEnabled = UserDefaults.standard.object(forKey: "backgroundImageEnabled") as? Bool ?? true
 
@@ -190,7 +207,10 @@ enum EditorKind: String, Identifiable {
     }
 
     init() {
-        TerminalStore.shared.onFocus = { [weak self] id in self?.focus(id) }
+        TerminalStore.shared.onFocus = { [weak self] id in
+            guard let self else { return }
+            if id == peek { peekFocused = true } else { focus(id) }
+        }
         TerminalStore.shared.onOpenLink = { [weak self] id, link in self?.openPreview(link, from: id) ?? false }
         Attention.shared.start(onOpen: { [weak self] pane in self?.jump(to: pane) },
                                onAnswer: { [weak self] pane, approve in self?.answerPermission(pane, approve: approve) })
@@ -255,8 +275,10 @@ enum EditorKind: String, Identifiable {
     private func paneMeta(_ block: BlockSnapshot, in session: SessionSnapshot, base: PaneMeta = PaneMeta()) -> PaneMeta {
         var m = base
         m.title = block.title ?? m.title
-        m.cwd = displayPath(block.pwd)
-        m.pwd = URL(string: block.pwd ?? "")?.isFileURL == true ? URL(string: block.pwd!)!.path : block.pwd
+        // An agent started in a pane never shows a shell prompt, so no OSC 7; its process's folder stands in.
+        let pwd = block.pwd ?? block.foreground?.cwd
+        m.cwd = displayPath(pwd)
+        m.pwd = URL(string: pwd ?? "")?.isFileURL == true ? URL(string: pwd!)!.path : pwd
         m.ended = block.running ? nil : "exited"
         m.statuses = block.statuses.records
         m.parent = block.parent
@@ -289,6 +311,10 @@ enum EditorKind: String, Identifiable {
                 let executable = event.payload.object?["foreground"]?.object?["executable"]?.string
                 let argv = event.payload.object?["foreground"]?.object?["argv"]?.array?.compactMap(\.string)
                 metas[id]?.program = Program.detect(name, executable: executable, argv: argv, remote: remote != nil, remoteShell: remote?.shellProgram ?? .ssh)
+                if metas[id]?.pwd == nil, let cwd = event.payload.object?["foreground"]?.object?["cwd"]?.string {
+                    metas[id]?.cwd = displayPath(cwd)
+                    metas[id]?.pwd = cwd
+                }
             }
         case "terminal.child_exited":
             if let id = event.blockID { metas[id]?.ended = "exited"; TerminalStore.shared.exited(id, code: event.payload.object?["exit_code"]?.int) }
@@ -357,7 +383,10 @@ enum EditorKind: String, Identifiable {
         perform(["type": .string("layout.command"), "command": .object(body)])
     }
     func close(_ id: String) { command(["op": .string("close"), "session": .string(sessionID), "block": .string(id)]) }
-    func closeFocused() { if !tab.focus.isEmpty { close(tab.focus) } }
+    func closeFocused() {
+        if peekFocused && peek != nil { return closePeek() }
+        if !tab.focus.isEmpty { close(tab.focus) }
+    }
     func openPreview(_ link: String, from pane: String) -> Bool {
         guard var file = FilePreview.load(link: link, currentDirectory: metas[pane]?.pwd) else { return false }
         file.pane = pane
@@ -365,11 +394,14 @@ enum EditorKind: String, Identifiable {
         return true
     }
     func closePreview() { previews[sessionID] = nil }
+    func openPeek(_ pane: String) { peeks[sessionID] = pane }
+    func closePeek() { peeks[sessionID] = nil; peekFocused = false }
     func toggleZoom() {
         guard !tab.focus.isEmpty else { return }
         command(["op": .string("zoom"), "session": .string(sessionID), "block": .string(tab.focus), "enabled": .bool(!tab.zoomed)])
     }
     func focus(_ id: String) {
+        peekFocused = false
         let owner = snapshot?.sessions.first(where: { $0.value.blocks[id] != nil })?.key ?? sessionID
         command(["op": .string("focus"), "session": .string(owner), "block": .string(id)])
     }
@@ -421,10 +453,13 @@ enum EditorKind: String, Identifiable {
         guard !tab.id.isEmpty else { return }
         command(["op": .string("resize"), "session": .string(sessionID), "window": .string(tab.id), "path": .array(path.map { .number(Double($0)) }), "ratio": .number(min(0.95, max(0.05, ratio)))])
     }
+    /// Cycles the tab's panes, then the agent pane beside them when one is open.
     func focusStep(_ step: Int) {
-        let panes = tab.layout.panes
-        guard let i = panes.firstIndex(of: tab.focus), !panes.isEmpty else { return }
-        focus(panes[(i + step + panes.count) % panes.count])
+        let panes = tab.layout.panes + (peek.map { [$0] } ?? [])
+        let current = peekFocused && peek != nil ? peek : tab.focus
+        guard let i = panes.firstIndex(where: { $0 == current }) else { return }
+        let next = panes[(i + step + panes.count) % panes.count]
+        if next == peek { peekFocused = true } else { focus(next) }
     }
 
     func workspaceStep(_ step: Int) {
@@ -775,6 +810,7 @@ struct Command: Identifiable {
         Command(title: "New Tab", key: "t") { $0.newTab() },
         Command(title: "Close Tab", key: "w", mods: [.command, .option]) { $0.closeTab() },
         Command(title: "Toggle Tab Layout", key: "t", mods: [.command, .option]) { $0.toggleTabStripLayout() },
+        Command(title: "Toggle Sidebar", key: "b") { $0.sidebarHidden.toggle() },
         Command(title: "Go to Directory", key: "g", mods: [.command, .shift]) { $0.editor = .goDirectory },
         Command(title: "Refresh Sessions", key: "r") { $0.refreshSessions() },
         Command(title: "Split Right", key: "d") { $0.split(.horizontal) },

@@ -60,6 +60,20 @@ It adds the four hooks below to `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DI
 
 Restart Claude Code in a Zurafa pane. The pane now turns **working** when you send a prompt, **blocked** when Claude asks for permission, back to **working** once you answer, and **done** when it finishes.
 
+## Codex
+
+Run this once:
+
+```
+zurafa setup codex
+```
+
+It adds the same reports to `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`), using Codex's `PermissionRequest` event for **blocked**, and keeps a backup like the Claude setup. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open `/hooks`, and trust the four Zurafa hooks.
+
+## Pi
+
+Pi 1.1 and later report their status to Zurafa without any setup, including **blocked** when an extension dialog or login waits for you. Set `PI_PROGRAM_STATUS=0` to turn that off.
+
 ## Other agents
 
 Any agent that can run a command on an event works the same way. Map its events to these reports:

@@ -399,6 +399,8 @@ impl Dispatcher {
         }
         // An unknown parent just means the pane stands on its own.
         let parent = parent.filter(|p| i.snapshot.sessions.values().any(|s| s.blocks.contains_key(p)));
+        // A spawned agent's tab opens behind the one you are in; the app shows it beside its parent.
+        let background = parent.is_some() && split.is_none() && s.active_window.is_some();
         i.next_window += 1;
         let next = format!("w{}", i.next_window);
         let s = i.snapshot.sessions.get_mut(session).unwrap();
@@ -438,8 +440,10 @@ impl Dispatcher {
             });
             (next, true)
         };
-        let active_changed = s.active_window.as_ref() != Some(&window);
-        s.active_window = Some(window.clone());
+        let active_changed = !background && s.active_window.as_ref() != Some(&window);
+        if active_changed {
+            s.active_window = Some(window.clone());
+        }
         if created {
             i.session_event(
                 session,
@@ -771,7 +775,11 @@ mod tests {
         let d = Dispatcher::new(32);
         add(&d, "a", None);
         d.add_block("default", "b", None, Axis::Horizontal, "Agent".into(), Some("a".into())).unwrap();
+        let s = &d.snapshot().sessions["default"];
+        assert_eq!(s.active_window, Some(s.windows[0].window_id.clone()), "a spawned tab opens in the background");
         d.add_block("default", "c", None, Axis::Horizontal, "Agent".into(), Some("gone".into())).unwrap();
+        let s = &d.snapshot().sessions["default"];
+        assert_eq!(s.active_window, Some(s.windows[2].window_id.clone()));
         let blocks = &d.snapshot().sessions["default"].blocks;
         assert_eq!(blocks["b"].parent.as_deref(), Some("a"));
         assert_eq!(blocks["c"].parent, None);

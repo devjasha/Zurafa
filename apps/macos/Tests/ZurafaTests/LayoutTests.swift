@@ -24,6 +24,10 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(Program.detect("node", argv: ["/opt/homebrew/bin/node", "/Users/test/.local/bin/pi"], remote: false), .pi)
         XCTAssertEqual(Program.detect("2.1.295", executable: "/Users/test/.local/share/claude/versions/2.1.295", remote: false), .claude)
         XCTAssertEqual(Program.detect("codex", remote: false), .codex)
+        // Arguments name tasks and models, not the program.
+        XCTAssertEqual(Program.detect("fish", argv: ["/opt/homebrew/bin/fish", "-l", "-c", "pi 'ask claude'; exec '/opt/homebrew/bin/fish' -l"], remote: false), .pi)
+        XCTAssertEqual(Program.detect("node", argv: ["pi", "--model", "claude-sonnet"], remote: false), .pi)
+        XCTAssertEqual(Program.detect("fish", argv: ["/opt/homebrew/bin/fish", "-l", "-c", "claude 'fix pi'; exec fish -l"], remote: false), .claude)
         XCTAssertEqual(Program.detect("gemini", remote: false), .gemini)
         XCTAssertEqual(Program.detect("pi", remote: false), .pi)
         XCTAssertEqual(Program.detect("emacs", remote: false), .emacs)

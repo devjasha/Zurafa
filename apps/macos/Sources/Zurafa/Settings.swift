@@ -281,12 +281,13 @@ private struct IntegrationsPane: View {
                     }
                 }
                 Section {
-                    LabeledContent("Claude Code status hooks") { Button("Set Up") { setUpClaude(source) } }
+                    LabeledContent("Claude Code status hooks") { Button("Set Up") { setUp("claude", source) } }
+                    LabeledContent("Codex status hooks") { Button("Set Up") { setUp("codex", source) } }
                     if let agentStatus { Text(agentStatus).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                 } header: {
                     Text("Agents")
                 } footer: {
-                    Text("Adds hooks to Claude Code's settings so its panes report working, blocked and done. A backup is kept.")
+                    Text("Adds hooks to the agent's settings so its panes report working, blocked and done. A backup is kept. Codex runs them once you trust them in /hooks. Pi reports on its own.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } else {
@@ -295,12 +296,12 @@ private struct IntegrationsPane: View {
         }
     }
 
-    private func setUpClaude(_ cli: String) {
+    private func setUp(_ agent: String, _ cli: String) {
         agentStatus = "Setting up…"
         Task.detached {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: cli)
-            process.arguments = ["setup", "claude"]
+            process.arguments = ["setup", agent]
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = pipe

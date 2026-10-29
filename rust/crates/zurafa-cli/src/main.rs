@@ -704,7 +704,7 @@ fn cmd_prompt(client: &mut Client, args: &[String]) -> Result<(), (i32, String)>
 fn cmd_spawn(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
     let pos = positionals(args);
     let Some((agent, task)) = pos.split_first() else {
-        return Err((2, "usage: zurafa spawn AGENT [TASK] [--split] [-s S] [-b PANE] [--axis A] [--cwd DIR] [-l LABEL]".into()));
+        return Err((2, "usage: zurafa spawn AGENT [TASK] [--split] [-s S] [-b PANE] [--axis A] [--cwd DIR] [--worktree BRANCH] [-l LABEL]".into()));
     };
     // Goes into the shell script unquoted, so only a plain program name or path.
     if !agent.chars().all(|c| c.is_ascii_alphanumeric() || "._+-/~".contains(c)) {
@@ -1300,22 +1300,49 @@ fn ancestor_tty() -> Option<String> {
 }
 
 /// The hooks the agents guide lists: (event, matcher, command).
-const CLAUDE_HOOKS: [(&str, Option<&str>, &str); 4] = [
+type Hooks = [(&'static str, Option<&'static str>, &'static str); 4];
+
+const CLAUDE_HOOKS: Hooks = [
     ("UserPromptSubmit", None, "zurafa report working"),
     ("PostToolUse", None, "zurafa report working"),
     ("Notification", Some("permission_prompt"), "zurafa report blocked --kind permission"),
     ("Stop", None, "zurafa report done"),
 ];
 
+/// Codex reads Claude's hook format from $CODEX_HOME/hooks.json, with its own event for approvals.
+const CODEX_HOOKS: Hooks = [
+    ("UserPromptSubmit", None, "zurafa report working"),
+    ("PostToolUse", None, "zurafa report working"),
+    ("PermissionRequest", None, "zurafa report blocked --kind permission"),
+    ("Stop", None, "zurafa report done"),
+];
+
 fn cmd_setup(args: &[String]) -> Result<(), (i32, String)> {
-    if positionals(args).first().map(String::as_str) != Some("claude") {
-        return Err((2, "usage: zurafa setup claude".into()));
+    let home = || env::var_os("HOME").map(PathBuf::from).ok_or((1, "HOME is not set".to_owned()));
+    let config_dir = |var: &str, default: &str| env::var_os(var).map(PathBuf::from).map_or_else(|| home().map(|h| h.join(default)), Ok);
+    match positionals(args).first().map(String::as_str) {
+        Some("claude") => setup_hooks(
+            config_dir("CLAUDE_CONFIG_DIR", ".claude")?.join("settings.json"),
+            &CLAUDE_HOOKS,
+            "Claude Code",
+            "Restart Claude Code in a Zurafa pane.",
+        ),
+        Some("codex") => setup_hooks(
+            config_dir("CODEX_HOME", ".codex")?.join("hooks.json"),
+            &CODEX_HOOKS,
+            "Codex",
+            "Restart Codex in a Zurafa pane, then trust them in /hooks: Codex skips hooks you have not reviewed.",
+        ),
+        Some("pi") => {
+            println!("Pi 1.1 and later report to Zurafa on their own, so there is nothing to set up.");
+            Ok(())
+        }
+        _ => Err((2, "usage: zurafa setup claude|codex|pi".into())),
     }
-    let dir = env::var_os("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude")))
-        .ok_or((1, "HOME is not set".to_owned()))?;
-    let mut path = dir.join("settings.json");
+}
+
+/// Merges `hooks` into the agent's JSON hook settings at `path`, keeping everything else.
+fn setup_hooks(mut path: PathBuf, hooks: &Hooks, agent: &str, next: &str) -> Result<(), (i32, String)> {
     // Write through a symlinked settings.json (dotfiles) instead of replacing the link.
     if let Ok(real) = std::fs::canonicalize(&path) {
         path = real;
@@ -1330,9 +1357,9 @@ fn cmd_setup(args: &[String]) -> Result<(), (i32, String)> {
             .map_err(|e| (1, format!("{} is not valid JSON, left unchanged: {e}", path.display())))?,
         _ => json!({}),
     };
-    let added = add_claude_hooks(&mut settings).map_err(|e| (1, format!("{}: {e}, left unchanged", path.display())))?;
+    let added = add_hooks(&mut settings, hooks).map_err(|e| (1, format!("{}: {e}, left unchanged", path.display())))?;
     if added == 0 {
-        println!("Claude Code already reports to Zurafa ({}).", path.display());
+        println!("{agent} already reports to Zurafa ({}).", path.display());
         return Ok(());
     }
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| (1, e.to_string()))?;
@@ -1355,23 +1382,23 @@ fn cmd_setup(args: &[String]) -> Result<(), (i32, String)> {
         .and_then(|_| keep_perms(&tmp))
         .and_then(|_| std::fs::rename(&tmp, &path))
         .map_err(|e| (1, format!("cannot write {}: {e}", path.display())))?;
-    println!("Added {added} Zurafa hooks to {}. Restart Claude Code in a Zurafa pane.", path.display());
+    println!("Added {added} Zurafa hooks to {}. {next}", path.display());
     Ok(())
 }
 
 /// Adds the Zurafa hooks that are missing and returns how many it added.
 /// Refuses, without changing anything, when `hooks` has an unexpected shape.
-fn add_claude_hooks(settings: &mut Value) -> Result<usize, String> {
+fn add_hooks(settings: &mut Value, wanted: &Hooks) -> Result<usize, String> {
     let root = settings.as_object_mut().ok_or("settings are not a JSON object")?;
     let hooks = root.entry("hooks").or_insert_with(|| json!({}));
     let hooks = hooks.as_object_mut().ok_or("\"hooks\" is not an object")?;
-    for (event, _, _) in CLAUDE_HOOKS {
-        if hooks.get(event).is_some_and(|v| !v.is_array()) {
+    for (event, _, _) in wanted {
+        if hooks.get(*event).is_some_and(|v| !v.is_array()) {
             return Err(format!("\"hooks.{event}\" is not a list"));
         }
     }
     let mut added = 0;
-    for (event, matcher, command) in CLAUDE_HOOKS {
+    for &(event, matcher, command) in wanted {
         let list = hooks.entry(event).or_insert_with(|| json!([])).as_array_mut().unwrap();
         let present = list.iter().any(|entry| {
             entry["hooks"].as_array().is_some_and(|hs| hs.iter().any(|h| h["command"] == command))
@@ -1524,7 +1551,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude                         Add the status hooks to Claude Code's settings\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  spawn AGENT [TASK] [--split]         Start AGENT with TASK in a new tab (or split); prints the pane\n    [--worktree BRANCH]                ...in its own git worktree on BRANCH\n  worktree add|remove BRANCH           Create (and print) or remove an agent worktree\n  send TARGET TEXT [--enter] [-e]      Type TEXT into a pane (-e reads \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.");
 }
 
 #[cfg(test)]
@@ -1562,17 +1589,21 @@ mod tests {
             "model": "opus",
             "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] }
         });
-        assert_eq!(add_claude_hooks(&mut settings).unwrap(), 4);
+        assert_eq!(add_hooks(&mut settings, &CLAUDE_HOOKS).unwrap(), 4);
         assert_eq!(settings["model"], "opus");
         assert_eq!(settings["hooks"]["Stop"][0]["hooks"][0]["command"], "say done");
         assert_eq!(settings["hooks"]["Stop"][1]["hooks"][0]["command"], "zurafa report done");
         assert_eq!(settings["hooks"]["Notification"][0]["matcher"], "permission_prompt");
-        assert_eq!(add_claude_hooks(&mut settings).unwrap(), 0);
+        assert_eq!(add_hooks(&mut settings, &CLAUDE_HOOKS).unwrap(), 0);
 
         let mut odd = json!({ "hooks": { "Stop": "nope" } });
-        assert!(add_claude_hooks(&mut odd).is_err());
+        assert!(add_hooks(&mut odd, &CLAUDE_HOOKS).is_err());
         assert_eq!(odd, json!({ "hooks": { "Stop": "nope" } }));
-        assert!(add_claude_hooks(&mut json!([])).is_err());
+        assert!(add_hooks(&mut json!([]), &CLAUDE_HOOKS).is_err());
+
+        let mut codex = json!({});
+        assert_eq!(add_hooks(&mut codex, &CODEX_HOOKS).unwrap(), 4);
+        assert_eq!(codex["hooks"]["PermissionRequest"][0]["hooks"][0]["command"], "zurafa report blocked --kind permission");
     }
 
     #[test]

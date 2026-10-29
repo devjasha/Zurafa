@@ -91,7 +91,7 @@ zurafa report done "Deployed to staging"
 zurafa report clear
 ```
 
-`zurafa setup claude` adds these reports to Claude Code's hooks for you. See [Connect your agents](/docs/agents/).
+`zurafa setup claude` and `zurafa setup codex` add these reports to the agent's hooks for you; Pi sends them on its own. See [Connect your agents](/docs/agents/).
 
 `--id` and `--title` report one of several tasks in a pane, and `--app` names the program.
 

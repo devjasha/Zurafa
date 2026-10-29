@@ -37,14 +37,38 @@ struct AgentFamily {
         }
     }
 
-    /// A spawned tab is named "agent: task", and the row's icon already shows the agent.
+    /// A spawned tab is named "agent: task" or by its -l label; the row's icon already shows the agent.
     func label(of pane: String) -> String {
-        if let tab = tabOfPane[pane], tab.layout.panes.first == pane, let colon = tab.label.range(of: ": "),
-           !tab.label[..<colon.lowerBound].contains(" ") {
-            return String(tab.label[colon.upperBound...])
+        if let tab = tabOfPane[pane], tab.layout.panes.first == pane {
+            if let colon = tab.label.range(of: ": "), !tab.label[..<colon.lowerBound].contains(" ") {
+                return String(tab.label[colon.upperBound...])
+            }
+            return tab.label
         }
         let m = meta(pane)
         return m.label ?? m.title
+    }
+
+    /// The branch an agent works on, when it is not `head`, the "repo/branch" its card already shows.
+    func branch(of pane: String, besides head: String?) -> String? {
+        guard let own = GitHead.describe(meta(pane).pwd), own != head else { return nil }
+        return own.split(separator: "/", maxSplits: 1).last.map(String.init)
+    }
+}
+
+/// One row per spawned agent, shared by the sidebar card and the tab bar's hover popover.
+struct AgentList: View {
+    let agents: [String], family: AgentFamily, focusedPane: String?
+    /// The parent's "repo/branch", or nil for a remote workspace, whose paths are not on this Mac.
+    let head: String?, local: Bool
+    /// What clicking a row does; nil jumps to the agent's pane.
+    var open: ((String) -> Void)? = nil
+
+    var body: some View {
+        ForEach(agents, id: \.self) { pane in
+            AgentRow(pane: pane, label: family.label(of: pane), on: pane == focusedPane,
+                     branch: local ? family.branch(of: pane, besides: head) : nil, open: open)
+        }
     }
 }
 
@@ -121,16 +145,19 @@ struct AgentCard: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            ForEach(agents, id: \.self) { pane in
-                AgentRow(pane: pane, label: family.label(of: pane), on: pane == focusedPane)
+            let head = local ? GitHead.describe(meta.pwd) : nil
+            AgentList(agents: agents, family: family, focusedPane: focusedPane, head: head, local: local)
+            HStack {
+                if let head {
+                    Label(head, systemImage: "arrow.triangle.branch")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.inkSoft)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                OrchestratorMark()
             }
-            if local, let head = GitHead.describe(meta.pwd) {
-                Label(head, systemImage: "arrow.triangle.branch")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.inkSoft)
-                    .lineLimit(1)
-                    .padding(.top, 4)
-            }
+            .padding(.top, 4)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -148,17 +175,39 @@ struct AgentCard: View {
     }
 }
 
+/// Marks a tab whose agent is orchestrating others.
+struct OrchestratorMark: View {
+    var size: CGFloat = 13
+    var body: some View {
+        Image(systemName: "point.3.connected.trianglepath.dotted")
+            .font(.system(size: size))
+            .foregroundStyle(.purple)
+            .help("Orchestrating agents")
+    }
+}
+
 struct AgentRow: View {
     let pane: String, label: String, on: Bool
+    /// Shown when the agent works on another branch than its parent, as in its own worktree.
+    var branch: String? = nil
+    var open: ((String) -> Void)? = nil
     @EnvironmentObject var ws: Workspace
 
     var body: some View {
         let meta = ws.meta(pane)
         let (state, color) = Self.state(meta)
-        Button { ws.jump(to: pane) } label: {
+        Button { if let open { open(pane) } else { ws.jump(to: pane) } } label: {
             HStack(spacing: 8) {
                 Tile(program: meta.program, size: 14)
-                Text(label).foregroundStyle(Theme.ink).lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label).foregroundStyle(Theme.ink).lineLimit(1)
+                    if let branch {
+                        Label(branch, systemImage: "arrow.triangle.branch")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.inkSoft)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 6)
                 Text(state).foregroundStyle(color)
             }

@@ -775,6 +775,7 @@ struct CommandPicker: View {
                   detail: nil, shortcut: "⌥⌘T") { ws.toggleTabStripLayout() },
             .init(id: "Toggle Sidebar Position", title: ws.style.sidebarOnRight ? "Move Sidebar to Left" : "Move Sidebar to Right",
                   detail: nil, shortcut: nil) { ws.toggleSidebarPosition() },
+            .init(id: "Toggle Sidebar", title: ws.sidebarHidden ? "Show Sidebar" : "Hide Sidebar", detail: nil, shortcut: "⌘B") { ws.sidebarHidden.toggle() },
             .init(id: "Settings…", detail: nil, shortcut: "⌘,") { openWindow(id: "settings") },
             .init(id: "Open Config File", detail: nil, shortcut: nil) { ws.openConfig() },
             .init(id: "Import Ghostty Settings", detail: nil, shortcut: nil) { ws.importGhosttySettings() },

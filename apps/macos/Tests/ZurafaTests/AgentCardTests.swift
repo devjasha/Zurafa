@@ -28,6 +28,27 @@ final class AgentCardTests: XCTestCase {
         XCTAssertTrue(family.agents(of: tabs[4]).isEmpty)
     }
 
+    func testAgentRowsUseTheSpawnLabelAndNameAnotherBranch() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let repo = base.appendingPathComponent("Zurafa"), git = repo.appendingPathComponent(".git")
+        try FileManager.default.createDirectory(at: git.appendingPathComponent("worktrees/zt-a"), withIntermediateDirectories: true)
+        try "ref: refs/heads/main\n".write(to: git.appendingPathComponent("HEAD"), atomically: true, encoding: .utf8)
+        try "ref: refs/heads/agent/zt-a\n".write(to: git.appendingPathComponent("worktrees/zt-a/HEAD"), atomically: true, encoding: .utf8)
+        let worktree = base.appendingPathComponent("worktrees/zt-a")
+        try FileManager.default.createDirectory(at: worktree, withIntermediateDirectories: true)
+        try "gitdir: \(git.path)/worktrees/zt-a\n".write(to: worktree.appendingPathComponent(".git"), atomically: true, encoding: .utf8)
+
+        let metas = ["t2": PaneMeta(title: "HELLO_A.txt file created", pwd: worktree.path, parent: "t1"),
+                     "t3": PaneMeta(pwd: repo.path, parent: "t1")]
+        let tabs = [tab("w1", "Shell", "t1"), tab("w2", "agent A", "t2"), tab("w3", "claude: tests", "t3")]
+        let family = AgentFamily(tabs: tabs, meta: { metas[$0] ?? PaneMeta() })
+
+        XCTAssertEqual(family.label(of: "t2"), "agent A")
+        XCTAssertEqual(family.branch(of: "t2", besides: "Zurafa/main"), "agent/zt-a")
+        XCTAssertNil(family.branch(of: "t3", besides: "Zurafa/main"))
+    }
+
     func testGitHeadNamesTheRepositoryAndBranchAlsoInsideAWorktree() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: base) }

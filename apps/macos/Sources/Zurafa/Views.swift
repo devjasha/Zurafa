@@ -298,13 +298,13 @@ struct RootView: View {
             if ws.tabStripLayout == .vertical {
                 // The sidebar holds the top-bar controls, so panes reach the top edge.
                 HStack(spacing: 0) {
-                    if ws.style.sidebarOnRight {
+                    if ws.sidebarHidden || ws.style.sidebarOnRight {
                         // The traffic lights stay top-left, so the panes start below them.
                         VStack(spacing: 0) {
                             WindowDragView().frame(height: ws.windowControls.height)
                             terminalContent.padding([.horizontal, .bottom], edge)
                         }
-                        VerticalTabSidebar()
+                        if !ws.sidebarHidden { VerticalTabSidebar() }
                     } else {
                         VerticalTabSidebar()
                         terminalContent.padding(edge)
@@ -342,7 +342,10 @@ struct RootView: View {
                     LayoutView(layout: ws.tab.layout, window: ws.tab.id)
                 }
             }
-            if let preview = ws.preview {
+            if let peek = ws.peek {
+                AgentPeek(pane: peek)
+                    .frame(minWidth: 320, idealWidth: 480, maxWidth: 640)
+            } else if let preview = ws.preview {
                 FilePreviewPane(preview: preview) { ws.closePreview() }
                     .frame(minWidth: 280, idealWidth: 420, maxWidth: 560)
             }
@@ -359,11 +362,15 @@ struct TopBar: View {
             WorkspacePickerButton()
                 .padding(.trailing, 20)
             HStack(spacing: 0) {
-                ForEach(Array(ws.tabs.enumerated()), id: \.element.id) { i, t in
-                    if i > 0 { // hairline between two inactive tabs only
-                        Rectangle().fill(Color.black.opacity(i == ws.selected || i - 1 == ws.selected ? 0 : 0.12)).frame(width: 1, height: 16)
+                // Spawned agents show beside their parent's tab, not as tabs of their own, unless you are in one.
+                let family = AgentFamily(tabs: ws.tabs, meta: ws.meta)
+                let shown = ws.tabs.indices.filter { $0 == ws.selected || !family.isNested(ws.tabs[$0]) }
+                ForEach(Array(shown.enumerated()), id: \.element) { k, i in
+                    if k > 0 { // hairline between two inactive tabs only
+                        Rectangle().fill(Color.black.opacity(i == ws.selected || shown[k - 1] == ws.selected ? 0 : 0.12)).frame(width: 1, height: 16)
                     }
-                    TabItem(tab: t, on: i == ws.selected).onTapGesture { ws.selectTab(i) }
+                    TabItem(tab: ws.tabs[i], on: i == ws.selected, agents: family.agents(of: ws.tabs[i]))
+                        .onTapGesture { ws.selectTab(i) }
                 }
             }
             .padding(1)
@@ -522,12 +529,14 @@ struct SidebarTabRow: View {
                         + Text(title.hasSuffix(meta.cwd) ? "" : " " + meta.cwd).foregroundStyle(Theme.inkSoft))
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
-                    if state.working { WorkingDots() }
+                    if state.working { Spinner().frame(width: 12, height: 12) }
                     Spacer(minLength: 0)
                 }
                 ForEach(tab.layout.panes, id: \.self) { paneID in
                     let pane = ws.meta(paneID)
-                    ForEach(pane.statusItems) { item in
+                    // The tab's logo, spinner and done dot already show the program's own status; a row
+                    // adds only named tasks, or that it needs you.
+                    ForEach(pane.statusItems.filter { !$0.id.isEmpty || $0.record.title?.isEmpty == false || ["blocked", "error"].contains($0.record.state) }) { item in
                         StatusRecordRow(item: item, fallback: pane.program.title)
                             .padding(.leading, 29)
                     }
@@ -576,23 +585,6 @@ struct TaskDoneDot: View {
             .frame(width: 8, height: 8)
             .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 0.75))
             .shadow(color: Theme.accent.opacity(0.45), radius: 2)
-    }
-}
-
-struct WorkingDots: View {
-    @State private var blink = false
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(StatusDot.colors["working"] ?? Theme.accent)
-                    .frame(width: 4, height: 4)
-                    .opacity(blink ? 1 : 0.25)
-                    .animation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true).delay(Double(i) * 0.12), value: blink)
-            }
-        }
-        .onAppear { blink = true }
     }
 }
 
@@ -658,6 +650,8 @@ struct Spinner: View {
 
 struct TabItem: View {
     let tab: Tab, on: Bool
+    /// The agents spawned from this tab, which open beside it from the hover popover.
+    let agents: [String]
     @EnvironmentObject var ws: Workspace
     @State private var hovering = false
 
@@ -681,9 +675,20 @@ struct TabItem: View {
                 .clipped()
                 // fade the overflow instead of an ellipsis
                 .mask(LinearGradient(stops: [.init(color: .black, location: 0.82), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
-                if state.working { WorkingDots() }
+                if state.working || agents.contains(where: { ws.meta($0).status == "working" }) { Spinner().frame(width: 13, height: 13) }
             }
             .frame(minWidth: 50, maxWidth: 150, alignment: .leading)
+            if !agents.isEmpty {
+                HStack(spacing: 3) {
+                    OrchestratorMark(size: 11)
+                    Text("\(agents.count)")
+                        .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(Theme.inkSoft)
+                }
+                .padding(.horizontal, 6).frame(height: 18)
+                .background(Theme.activeTab.opacity(0.6), in: Capsule())
+                .help(agents.count == 1 ? "1 agent" : "\(agents.count) agents")
+            }
             Button { ws.closeTab(tab) } label: {
                 Image(systemName: "xmark").font(.system(size: 11, weight: .medium))
                     .frame(width: 18, height: 18).contentShape(Rectangle())
@@ -701,7 +706,37 @@ struct TabItem: View {
             }
         }
         .contentShape(Capsule())
-        .onHover { hovering = $0 }
+        .onHover { hovering = $0; updateAgents() }
+        .popover(isPresented: $showAgents, arrowEdge: .bottom) {
+            let family = AgentFamily(tabs: ws.tabs, meta: ws.meta)
+            let local = ws.currentSession?.remote == nil
+            VStack(alignment: .leading, spacing: 4) {
+                Text(agents.count == 1 ? "1 agent" : "\(agents.count) agents")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.inkSoft)
+                AgentList(agents: agents, family: family, focusedPane: ws.peek,
+                          head: local ? GitHead.describe(m.pwd) : nil, local: local) { pane in
+                    showAgents = false
+                    ws.openPeek(pane)
+                }
+            }
+            .padding(12)
+            .frame(width: 280, alignment: .leading)
+            .onHover { overAgents = $0; updateAgents() }
+            .environmentObject(ws)
+        }
+    }
+
+    @State private var showAgents = false
+    @State private var overAgents = false
+
+    /// Opens the spawned agents after a short hover, and keeps them open while the pointer is on them.
+    private func updateAgents() {
+        let wanted = hovering || overAgents
+        DispatchQueue.main.asyncAfter(deadline: .now() + (wanted ? 0.4 : 0.25)) {
+            guard wanted == (hovering || overAgents) else { return }
+            showAgents = wanted && !agents.isEmpty
+        }
     }
 }
 
@@ -736,6 +771,25 @@ struct PaletteButton: View {
     @EnvironmentObject var ws: Workspace
     var body: some View {
         BarButton(symbol: "command", help: "Command Palette (⌘K)") { ws.sessionPickerOpen = false; ws.paletteOpen.toggle() }
+    }
+}
+
+/// A spawned agent's live terminal beside the tab, so it needs no tab of its own.
+struct AgentPeek: View {
+    let pane: String
+    @EnvironmentObject var ws: Workspace
+
+    var body: some View {
+        PaneView(id: pane, entrance: .trailing, peek: true)
+            .overlay(alignment: .topTrailing) {
+                HStack(spacing: 4) {
+                    IconButton(symbol: "arrow.up.forward.square", help: "Open in Its Tab") { ws.closePeek(); ws.jump(to: pane) }
+                    IconButton(symbol: "xmark", help: "Close") { ws.closePeek() }
+                }
+                // Sits in the pane's 38pt header, inside the pane's own gap.
+                .padding(.top, 7 + ws.style.paneGap / 2)
+                .padding(.trailing, 8 + ws.style.paneGap / 2)
+            }
     }
 }
 
@@ -790,19 +844,23 @@ struct LayoutView: View {
 struct PaneView: View {
     let id: String
     var entrance: Edge?
+    /// Shown as the agent pane beside the tab, which keeps its own focus and header buttons.
+    var peek = false
     @EnvironmentObject var ws: Workspace
     @State private var shown: Bool
     /// Pane ids already on screen, so tab switches and re-splits don't replay the entrance animation.
     private static var seen = Set<String>()
 
-    init(id: String, entrance: Edge? = nil) {
+    init(id: String, entrance: Edge? = nil, peek: Bool = false) {
         self.id = id
         self.entrance = entrance
+        self.peek = peek
         _shown = State(initialValue: Self.seen.contains(id))
     }
 
     var body: some View {
-        let m = ws.meta(id), focused = ws.tab.focus == id, style = ws.style
+        let m = ws.meta(id), style = ws.style
+        let focused = peek ? ws.peekFocused : ws.tab.focus == id && !(ws.peekFocused && ws.peek != nil)
         let shape = RoundedRectangle(cornerRadius: style.paneCornerRadius, style: .continuous)
         VStack(spacing: 0) {
             HStack(spacing: 7) {
@@ -825,13 +883,13 @@ struct PaneView: View {
                                help: "Toggle Zoom") { ws.focus(id); ws.toggleZoom() }
                     IconButton(symbol: "xmark", help: "Close Pane") { ws.close(id) }
                 }
-                .opacity(focused ? 1 : 0)
-                .allowsHitTesting(focused)
+                .opacity(focused && !peek ? 1 : 0)
+                .allowsHitTesting(focused && !peek)
             }
             .foregroundStyle(focused ? Theme.ink : Theme.inkSoft)
             .padding(.leading, style.panePadding ?? 14).padding(.trailing, 8).frame(height: 38)
             .contentShape(Rectangle())
-            .onTapGesture { ws.focus(id) }
+            .onTapGesture { if peek { ws.peekFocused = true } else { ws.focus(id) } }
             TerminalHost(id: id, program: m.program,
                          focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
                 .padding(.leading, style.panePadding ?? 14).padding(.trailing, style.panePadding ?? 8)
