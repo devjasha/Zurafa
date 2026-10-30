@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.27-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.28-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -73,6 +73,16 @@
 </div>
     </div></aside>
     <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Reference</div><h1>Changelog</h1><div class="prose"><p>What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on <a href="https://github.com/devjasha/Zurafa/releases">GitHub releases</a>.</p>
+<h2 id="0-1-28">0.1.28</h2>
+<p><strong>October 30, 2026</strong></p>
+<ul>
+<li>After a server restart, your workspaces, tabs and splits come back, each pane in the folder it was in, and Claude Code and Codex sessions resume in their panes. Programs that were running don&#x27;t come back, and commands aren&#x27;t run again.</li>
+<li>Zurafa tells you when an update left its server on the old version: the menu bar item turns into circular arrows with <strong>Restart Server to Finish Update…</strong>, and <code>zurafa</code> explains the problem instead of failing with &quot;unknown field&quot;. This update needs that one restart; it closes open terminals, and from now on their layout comes back afterwards.</li>
+<li><strong>Settings → Server</strong> shows whether Zurafa&#x27;s server is running and for how long, restarts it, and can let your other Tailscale devices connect to this Mac (your own Tailscale account only, port 7297).</li>
+<li>Zurafa stays in the menu bar after you close its last window. The menu bar item shows whether the server is running and has Check for Updates, Settings and Quit.</li>
+<li><code>--help</code> prints help for every command; <code>zurafa tab new --help</code> used to open a tab. A <code>zurafa spawn</code> that fails removes the worktree it made, and a successful one says where its worktree is. <code>zurafa send</code> confirms where the text went, and agent answers longer than 1,200 characters end in <code>…</code>.</li>
+<li>Spawned agents finish with their final answer, which <code>zurafa wait</code> prints, and send their parent only questions, so the parent no longer gets each result twice.</li>
+</ul>
 <h2 id="0-1-27">0.1.27</h2>
 <p><strong>October 29, 2026</strong></p>
 <ul>
@@ -291,7 +301,7 @@
 <li>The first public beta: a Rust backed terminal workspace with tabs, split panes, sessions, system SSH remote hosts, an event driven UI, Ghostty settings import, and an optional dithered background image.</li>
 <li>Built for Apple Silicon Macs on macOS 14 or newer.</li>
 </ul></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/troubleshooting/"><small>← Previous</small><strong>Troubleshooting &amp; limits</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#0-1-27">0.1.27</a><a href="#0-1-26">0.1.26</a><a href="#0-1-25">0.1.25</a><a href="#0-1-24">0.1.24</a><a href="#0-1-23">0.1.23</a><a href="#0-1-22">0.1.22</a><a href="#0-1-21">0.1.21</a><a href="#0-1-20">0.1.20</a><a href="#0-1-19">0.1.19</a><a href="#0-1-18">0.1.18</a><a href="#0-1-17">0.1.17</a><a href="#0-1-16">0.1.16</a><a href="#0-1-15">0.1.15</a><a href="#0-1-14">0.1.14</a><a href="#0-1-13">0.1.13</a><a href="#0-1-12">0.1.12</a><a href="#0-1-11">0.1.11</a><a href="#0-1-10">0.1.10</a><a href="#0-1-9">0.1.9</a><a href="#0-1-8">0.1.8</a><a href="#0-1-7">0.1.7</a><a href="#0-1-6">0.1.6</a><a href="#0-1-5">0.1.5</a><a href="#0-1-4">0.1.4</a><a href="#0-1-3">0.1.3</a><a href="#0-1-2">0.1.2</a><a href="#0-1-1">0.1.1</a><a href="#0-1-0-beta-2">0.1.0 beta 2</a><a href="#0-1-0-beta-1">0.1.0 beta 1</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#0-1-28">0.1.28</a><a href="#0-1-27">0.1.27</a><a href="#0-1-26">0.1.26</a><a href="#0-1-25">0.1.25</a><a href="#0-1-24">0.1.24</a><a href="#0-1-23">0.1.23</a><a href="#0-1-22">0.1.22</a><a href="#0-1-21">0.1.21</a><a href="#0-1-20">0.1.20</a><a href="#0-1-19">0.1.19</a><a href="#0-1-18">0.1.18</a><a href="#0-1-17">0.1.17</a><a href="#0-1-16">0.1.16</a><a href="#0-1-15">0.1.15</a><a href="#0-1-14">0.1.14</a><a href="#0-1-13">0.1.13</a><a href="#0-1-12">0.1.12</a><a href="#0-1-11">0.1.11</a><a href="#0-1-10">0.1.10</a><a href="#0-1-9">0.1.9</a><a href="#0-1-8">0.1.8</a><a href="#0-1-7">0.1.7</a><a href="#0-1-6">0.1.6</a><a href="#0-1-5">0.1.5</a><a href="#0-1-4">0.1.4</a><a href="#0-1-3">0.1.3</a><a href="#0-1-2">0.1.2</a><a href="#0-1-1">0.1.1</a><a href="#0-1-0-beta-2">0.1.0 beta 2</a><a href="#0-1-0-beta-1">0.1.0 beta 1</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>

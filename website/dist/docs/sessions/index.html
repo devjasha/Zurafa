@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.27-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.28-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -75,7 +75,7 @@
     <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Workspace</div><h1>Sessions, tabs &amp; panes</h1><div class="prose"><p>Zurafa uses a hierarchy that lets you separate work without losing spatial context. In the backend, a <strong>session</strong> contains windows and terminal blocks. The macOS app presents these as a workspace session, tabs, and panes.</p>
 <h2 id="sessions">Sessions</h2>
 <p>A session is an independent workspace with a label, tabs, and optional remote host. Use the session picker from the top bar or <strong>Change Session</strong> in <code>⌘K</code>. Choose <strong>New Session</strong> or press <code>⇧⌘N</code> to create one, <strong>Rename Session</strong> or press <code>⇧⌘E</code> to update its label, and <strong>Delete Workspace</strong> or press <code>⌥⇧⌘W</code> to end it. Closing a session closes its terminals.</p>
-<p>Open sessions live in daemon memory. They remain while the daemon is running, including when the Swift app disconnects, but they disappear on daemon restart. Saved SSH host definitions are stored separately and survive daemon restarts.</p>
+<p>Open sessions live in daemon memory. They remain while the daemon is running, including when the Swift app disconnects. The daemon also saves the layout to <code>layout.json</code> beside its socket, and a restarted daemon (after an update, say) rebuilds it: the same workspaces, tabs, splits and sizes, each pane a fresh shell in the folder it was in. Running programs don&#x27;t survive a restart and commands aren&#x27;t run again, except that a Claude Code or Codex session reported by Zurafa&#x27;s hooks resumes in its pane (<code>claude --resume</code>, <code>codex resume</code>). If a workspace can&#x27;t be restored, the saved file is kept as <code>layout-failed.json</code>. Saved SSH host definitions are stored separately and survive daemon restarts.</p>
 <h2 id="tabs">Tabs</h2>
 <p>A tab is a top-level terminal layout. Add one with <code>⌘T</code>, the plus button, or the command picker. Select tabs in the top bar or with <code>⌘1</code> through <code>⌘9</code>. Press <code>⌥⌘T</code> to switch between horizontal and vertical tab bars. Rename the current tab from <code>⌘K</code>. The <strong>Close Tab</strong> command is <code>⌥⌘W</code> and closes every pane in that tab.</p>
 <h2 id="panes">Panes</h2>
