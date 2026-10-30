@@ -230,7 +230,7 @@ struct AgentRow: View {
         Button { if let open { open(pane) } else { ws.jump(to: pane) } } label: {
             HStack(spacing: 8) {
                 Tile(program: meta.program, size: 14)
-                VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
                     Text(label).foregroundStyle(Theme.ink).lineLimit(1)
                     if let branch {
                         Label(branch, systemImage: "arrow.triangle.branch")
