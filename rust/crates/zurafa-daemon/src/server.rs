@@ -68,7 +68,8 @@ fn reply(msg: Msg, t: &Arc<Terminals>) -> Option<Value> {
     })
 }
 #[derive(Deserialize)]
-#[serde(tag = "type", deny_unknown_fields)]
+// Unknown fields are ignored, so a newer client's optional fields work with this daemon.
+#[serde(tag = "type")]
 enum Request {
     #[serde(rename = "hosts.list")]
     HostsList { id: u64 },
@@ -300,7 +301,7 @@ async fn request(
                 .unwrap_or(Value::Null);
             let me = &status["Self"];
             let login = me["UserID"].as_u64().and_then(|uid| status["User"][uid.to_string()]["LoginName"].as_str());
-            json!({"id":id,"type":"server.status","pid":std::process::id(),
+            json!({"id":id,"type":"server.status","stale":crate::stale(),"pid":std::process::id(),
                 "started_at":crate::STARTED.get(),"listening":crate::listen::switched_addresses().await,
                 // null when no Tailscale CLI answers; otherwise Running, NeedsLogin, Stopped, …
                 "tailscale_state":status["BackendState"],"tailscale_login":login,
@@ -545,7 +546,7 @@ where
     let mut output = terms.events.subscribe();
     if write_frame(
         &mut w,
-        json!({"id":id,"type":"hello_ok","protocol":version,"version":env!("CARGO_PKG_VERSION"),"user":std::env::var("USER").ok()})
+        json!({"id":id,"type":"hello_ok","protocol":version,"version":env!("CARGO_PKG_VERSION"),"user":std::env::var("USER").ok(),"stale":crate::stale()})
             .to_string()
             .as_bytes(),
     )

@@ -363,9 +363,10 @@ struct ServerPane: View {
                     Text("Zurafa Server")
                     if daemon.down {
                         Text("Not running")
+                    } else if daemon.stale {
+                        Text("Running an older version. Restart it to finish the update; agents and \"zurafa\" commands need the new one.")
                     } else if let statusError {
-                        // A daemon left running from before an update answers with an unknown-request error.
-                        Text(statusError.contains("unknown variant") ? "Running an older version. Restart it to manage it here." : statusError)
+                        Text(statusError)
                     } else if status == nil {
                         Text("Checking…")
                     } else if let started = status?.started_at {

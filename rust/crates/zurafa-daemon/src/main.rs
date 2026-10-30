@@ -20,6 +20,22 @@ use tokio::signal::unix::{signal, SignalKind};
 /// When this daemon started, in seconds since the Unix epoch, for the app's Server settings.
 pub static STARTED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
 
+/// This executable as it was on disk at start: (device, inode, modified).
+static EXE: std::sync::OnceLock<Option<(u64, u64, std::time::SystemTime)>> = std::sync::OnceLock::new();
+
+fn exe_identity() -> Option<(u64, u64, std::time::SystemTime)> {
+    use std::os::unix::fs::MetadataExt;
+    let meta = fs::metadata(env::current_exe().ok()?).ok()?;
+    Some((meta.dev(), meta.ino(), meta.modified().ok()?))
+}
+
+/// True once an update has replaced this daemon's executable on disk: clients then run newer
+/// code than this daemon, which keeps running until it is restarted.
+pub fn stale() -> bool {
+    let start = EXE.get().copied().flatten();
+    start.is_some() && exe_identity() != start
+}
+
 fn socket_path() -> PathBuf {
     let mut args = env::args().skip(1);
     while let Some(a) = args.next() {
@@ -120,6 +136,7 @@ async fn main() -> io::Result<()> {
         signal(SignalKind::terminate())?,
         signal(SignalKind::interrupt())?,
     );
+    EXE.get_or_init(exe_identity);
     STARTED.get_or_init(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()));
     let terms = pty::Terminals::new();
     tokio::spawn(notes::run(terms.clone()));

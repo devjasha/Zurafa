@@ -24,7 +24,8 @@ struct Msg: Codable {
     var after_sequence: UInt64?
     var missed: UInt64?
     var end: UInt64? // output byte offset, so a replay and live output can be merged
-    // server.status
+    // hello_ok and server.status
+    var stale: Bool?
     var pid: Int32?
     var started_at: Double?
     var listening: [String]?
@@ -74,6 +75,9 @@ struct FrameDecoder {
 
     /// True when the daemon is unreachable; the top bar shows a Reconnect banner.
     @Published private(set) var down = false
+    /// The daemon runs older code than this app: an update replaced it on disk, or it predates
+    /// the `stale` field. It keeps running until it is restarted.
+    @Published private(set) var stale = false
     var onDisconnect: () -> Void = {}
     var onSnapshot: (EventSnapshot) -> Void = { _ in }
     var onEvent: (EventEnvelope) -> Void = { _ in }
@@ -147,6 +151,7 @@ struct FrameDecoder {
         receive(c)
         let hello = try await call(Msg(type: "hello", protocol: 2), on: c)
         guard hello.type == "hello_ok", hello.protocol == 2 else { throw DaemonError("daemon requires protocol 2") }
+        stale = hello.stale ?? true
         guard let snapshot = try await call(try JSONEncoder().encode(["type": JSONValue.string("events.subscribe_all"), "subscription": .string("app")]), on: c).snapshot else {
             throw DaemonError("subscription reply missing snapshot")
         }

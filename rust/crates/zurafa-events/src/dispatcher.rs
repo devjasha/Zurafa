@@ -203,7 +203,8 @@ pub struct Snapshot {
     pub clients: BTreeMap<String, Client>,
 }
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
+// Unknown fields are ignored, so a newer client's optional fields work with this daemon.
+#[serde(tag = "op", rename_all = "snake_case")]
 pub enum Command {
     Focus {
         session: String,

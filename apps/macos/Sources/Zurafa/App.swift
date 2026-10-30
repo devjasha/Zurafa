@@ -67,8 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
 private struct ServerMenuIcon: View {
     @ObservedObject private var daemon = DaemonClient.shared
     var body: some View {
-        Image(systemName: daemon.down ? "exclamationmark.triangle" : "server.rack")
-            .help(daemon.down ? "Zurafa Server is not running" : "Zurafa Server is running")
+        Image(systemName: daemon.down ? "exclamationmark.triangle" : daemon.stale ? "arrow.triangle.2.circlepath" : "server.rack")
+            .help(daemon.down ? "Zurafa Server is not running" : daemon.stale ? "Restart Zurafa Server to finish the update" : "Zurafa Server is running")
     }
 }
 
@@ -81,6 +81,7 @@ private struct ServerMenu: View {
     var body: some View {
         // Menus drop a label's subtitle and icon, so the state goes in the title.
         Button("Zurafa Server: \(daemon.down ? "Not running" : "Running")") { openSettings(.server) }
+        if !daemon.down && daemon.stale { Button("Restart Server to Finish Update…") { openSettings(.server) } }
         if !daemon.down && listen { Text("Open to your Tailscale devices") }
         if daemon.down { Button("Reconnect") { daemon.start() } }
         Divider()

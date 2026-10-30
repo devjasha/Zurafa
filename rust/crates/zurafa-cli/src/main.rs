@@ -22,6 +22,9 @@ fn socket_path(explicit: Option<String>) -> PathBuf {
         })
 }
 
+const STALE: &str = "Zurafa's server is older than this zurafa command: Zurafa was updated while the server kept running. \
+Restart it from the menu bar (Zurafa Server → Restart Server…) or with `pkill -f \"zurafa-daemon --socket\"`; this closes its terminals.";
+
 struct Client {
     stream: UnixStream,
     next_id: u64,
@@ -35,6 +38,9 @@ impl Client {
             next_id: 1,
         };
         let reply = client.request(json!({"type":"hello","protocol":PROTOCOL}))?;
+        if reply["stale"] == true {
+            eprintln!("warning: {STALE}");
+        }
         if reply["type"] != "hello_ok" {
             return Err(reply["message"]
                 .as_str()
@@ -54,10 +60,12 @@ impl Client {
                     .map_err(|e| e.to_string())?;
             if reply["id"] == id {
                 if reply["type"] == "error" {
-                    return Err(reply["message"]
-                        .as_str()
-                        .unwrap_or("request failed")
-                        .to_owned());
+                    let message = reply["message"].as_str().unwrap_or("request failed");
+                    // What a daemon from before this CLI says to a request it doesn't know yet.
+                    if message.starts_with("unknown field") || message.starts_with("unknown variant") {
+                        return Err(format!("{message}\n{STALE}"));
+                    }
+                    return Err(message.to_owned());
                 }
                 return Ok(reply);
             }
