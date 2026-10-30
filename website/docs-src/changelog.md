@@ -2,6 +2,19 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.27
+
+**October 29, 2026**
+
+- Agents started with `zurafa spawn` report back to the agent that started them. When a child is blocked, hits an error or exits, Zurafa types a short `<zurafa from="t7 review">` note into its parent, and children close with their parent unless started with `--outlive-parent`. Set `agent-notes = false` in `config.zurafa` to turn the notes off.
+- `zurafa wait` prints the agent's final answer next to its status, and `--json` gives the pane, state, kind, message and turn. `wait --children any|all` waits on every agent a pane started, and `wait --next` skips a status left from an earlier turn. A freshly spawned agent counts as starting, so waiting on it no longer returns at once.
+- `zurafa send --enter`, `key enter` and `prompt` now submit in Claude Code: the text goes in as a paste and Enter follows on its own. Put `--` before text that starts with `-`.
+- `zurafa read -n N` returns the history of an idle full-screen agent like Claude Code, not just its visible screen.
+- `zurafa spawn` passes options to the agent after `--`, as in `zurafa spawn claude "TASK" -- --model haiku`, and sets `ZURAFA_PARENT` so a child can report back with `zurafa send $ZURAFA_PARENT`.
+- Claude Code's question prompts show as blocked, and a failed turn (a rate limit or an API error) shows as an error. Run `zurafa setup claude` again to add the new hooks.
+- The agent summary shows finished agents with a green checkmark and waiting ones with a yellow icon.
+- The background image has a Filter picker with Floyd-Steinberg, Atkinson, Bayer 8x8, PICO-8 and C64 dithers.
+
 ## 0.1.26
 
 **October 29, 2026**

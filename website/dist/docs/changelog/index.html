@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.26-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.27-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -73,6 +73,18 @@
 </div>
     </div></aside>
     <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Reference</div><h1>Changelog</h1><div class="prose"><p>What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on <a href="https://github.com/devjasha/Zurafa/releases">GitHub releases</a>.</p>
+<h2 id="0-1-27">0.1.27</h2>
+<p><strong>October 29, 2026</strong></p>
+<ul>
+<li>Agents started with <code>zurafa spawn</code> report back to the agent that started them. When a child is blocked, hits an error or exits, Zurafa types a short <code>&lt;zurafa from=&quot;t7 review&quot;&gt;</code> note into its parent, and children close with their parent unless started with <code>--outlive-parent</code>. Set <code>agent-notes = false</code> in <code>config.zurafa</code> to turn the notes off.</li>
+<li><code>zurafa wait</code> prints the agent&#x27;s final answer next to its status, and <code>--json</code> gives the pane, state, kind, message and turn. <code>wait --children any|all</code> waits on every agent a pane started, and <code>wait --next</code> skips a status left from an earlier turn. A freshly spawned agent counts as starting, so waiting on it no longer returns at once.</li>
+<li><code>zurafa send --enter</code>, <code>key enter</code> and <code>prompt</code> now submit in Claude Code: the text goes in as a paste and Enter follows on its own. Put <code>--</code> before text that starts with <code>-</code>.</li>
+<li><code>zurafa read -n N</code> returns the history of an idle full-screen agent like Claude Code, not just its visible screen.</li>
+<li><code>zurafa spawn</code> passes options to the agent after <code>--</code>, as in <code>zurafa spawn claude &quot;TASK&quot; -- --model haiku</code>, and sets <code>ZURAFA_PARENT</code> so a child can report back with <code>zurafa send $ZURAFA_PARENT</code>.</li>
+<li>Claude Code&#x27;s question prompts show as blocked, and a failed turn (a rate limit or an API error) shows as an error. Run <code>zurafa setup claude</code> again to add the new hooks.</li>
+<li>The agent summary shows finished agents with a green checkmark and waiting ones with a yellow icon.</li>
+<li>The background image has a Filter picker with Floyd-Steinberg, Atkinson, Bayer 8x8, PICO-8 and C64 dithers.</li>
+</ul>
 <h2 id="0-1-26">0.1.26</h2>
 <p><strong>October 29, 2026</strong></p>
 <ul>
@@ -279,7 +291,7 @@
 <li>The first public beta: a Rust backed terminal workspace with tabs, split panes, sessions, system SSH remote hosts, an event driven UI, Ghostty settings import, and an optional dithered background image.</li>
 <li>Built for Apple Silicon Macs on macOS 14 or newer.</li>
 </ul></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/troubleshooting/"><small>← Previous</small><strong>Troubleshooting &amp; limits</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#0-1-26">0.1.26</a><a href="#0-1-25">0.1.25</a><a href="#0-1-24">0.1.24</a><a href="#0-1-23">0.1.23</a><a href="#0-1-22">0.1.22</a><a href="#0-1-21">0.1.21</a><a href="#0-1-20">0.1.20</a><a href="#0-1-19">0.1.19</a><a href="#0-1-18">0.1.18</a><a href="#0-1-17">0.1.17</a><a href="#0-1-16">0.1.16</a><a href="#0-1-15">0.1.15</a><a href="#0-1-14">0.1.14</a><a href="#0-1-13">0.1.13</a><a href="#0-1-12">0.1.12</a><a href="#0-1-11">0.1.11</a><a href="#0-1-10">0.1.10</a><a href="#0-1-9">0.1.9</a><a href="#0-1-8">0.1.8</a><a href="#0-1-7">0.1.7</a><a href="#0-1-6">0.1.6</a><a href="#0-1-5">0.1.5</a><a href="#0-1-4">0.1.4</a><a href="#0-1-3">0.1.3</a><a href="#0-1-2">0.1.2</a><a href="#0-1-1">0.1.1</a><a href="#0-1-0-beta-2">0.1.0 beta 2</a><a href="#0-1-0-beta-1">0.1.0 beta 1</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#0-1-27">0.1.27</a><a href="#0-1-26">0.1.26</a><a href="#0-1-25">0.1.25</a><a href="#0-1-24">0.1.24</a><a href="#0-1-23">0.1.23</a><a href="#0-1-22">0.1.22</a><a href="#0-1-21">0.1.21</a><a href="#0-1-20">0.1.20</a><a href="#0-1-19">0.1.19</a><a href="#0-1-18">0.1.18</a><a href="#0-1-17">0.1.17</a><a href="#0-1-16">0.1.16</a><a href="#0-1-15">0.1.15</a><a href="#0-1-14">0.1.14</a><a href="#0-1-13">0.1.13</a><a href="#0-1-12">0.1.12</a><a href="#0-1-11">0.1.11</a><a href="#0-1-10">0.1.10</a><a href="#0-1-9">0.1.9</a><a href="#0-1-8">0.1.8</a><a href="#0-1-7">0.1.7</a><a href="#0-1-6">0.1.6</a><a href="#0-1-5">0.1.5</a><a href="#0-1-4">0.1.4</a><a href="#0-1-3">0.1.3</a><a href="#0-1-2">0.1.2</a><a href="#0-1-1">0.1.1</a><a href="#0-1-0-beta-2">0.1.0 beta 2</a><a href="#0-1-0-beta-1">0.1.0 beta 1</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>

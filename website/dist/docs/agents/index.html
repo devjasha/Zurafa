@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.26-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.27-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -80,7 +80,7 @@
 <h2 id="claude-code">Claude Code</h2>
 <p>Run this once from any terminal:</p>
 <pre><code>zurafa setup claude</code></pre>
-<p>It adds the eight hooks below to <code>~/.claude/settings.json</code> (or <code>$CLAUDE_CONFIG_DIR/settings.json</code>), keeps your other settings and hooks, and saves the old file as <code>settings.json.zurafa-backup</code>. Running it again changes nothing. To set it up by hand instead, add these hooks to <code>~/.claude/settings.json</code>. If the file already has a <code>hooks</code> object, merge the eight entries into it.</p>
+<p>It adds the nine hooks below to <code>~/.claude/settings.json</code> (or <code>$CLAUDE_CONFIG_DIR/settings.json</code>), keeps your other settings and hooks, and saves the old file as <code>settings.json.zurafa-backup</code>. Running it again changes nothing. To set it up by hand instead, add these hooks to <code>~/.claude/settings.json</code>. If the file already has a <code>hooks</code> object, merge the nine entries into it.</p>
 <pre><code>{
   &quot;hooks&quot;: {
     &quot;UserPromptSubmit&quot;: [
@@ -99,16 +99,23 @@
     ],
     &quot;Notification&quot;: [
       {
-        &quot;matcher&quot;: &quot;permission_prompt&quot;,
+        &quot;matcher&quot;: &quot;permission_prompt|elicitation_dialog&quot;,
         &quot;hooks&quot;: [
-          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa report blocked --kind permission&quot; }
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa hook claude&quot; }
         ]
       }
     ],
     &quot;Stop&quot;: [
       {
         &quot;hooks&quot;: [
-          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa report done&quot; }
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa hook claude&quot; }
+        ]
+      }
+    ],
+    &quot;StopFailure&quot;: [
+      {
+        &quot;hooks&quot;: [
+          { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa hook claude&quot; }
         ]
       }
     ],
@@ -135,7 +142,7 @@
     ],
     &quot;PreToolUse&quot;: [
       {
-        &quot;matcher&quot;: &quot;Agent|Task&quot;,
+        &quot;matcher&quot;: &quot;Agent|Task|AskUserQuestion&quot;,
         &quot;hooks&quot;: [
           { &quot;type&quot;: &quot;command&quot;, &quot;command&quot;: &quot;zurafa hook claude&quot; }
         ]
@@ -143,11 +150,11 @@
     ]
   }
 }</code></pre>
-<p>Restart Claude Code in a Zurafa pane. The pane now turns <strong>working</strong> when you send a prompt, <strong>blocked</strong> when Claude asks for permission, back to <strong>working</strong> once you answer, and <strong>done</strong> when it finishes.</p>
+<p>Restart Claude Code in a Zurafa pane. The pane now turns <strong>working</strong> when you send a prompt, <strong>blocked</strong> when Claude asks for permission or asks you a question, back to <strong>working</strong> once you answer, <strong>done</strong> with Claude&#x27;s final answer as the message when it finishes, and <strong>error</strong> when the turn fails on an API error. Running <code>zurafa setup claude</code> again replaces the hooks an older Zurafa set up.</p>
 <h2 id="codex">Codex</h2>
 <p>Run this once:</p>
 <pre><code>zurafa setup codex</code></pre>
-<p>It adds eight hooks to <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>), all running <code>zurafa hook codex</code>, and keeps a backup like the Claude setup. They report the same states, using Codex&#x27;s <code>PermissionRequest</code> event for <strong>blocked</strong>, and give Codex the same [subagent](#subagents) handling as Claude: <code>explorer</code> subagents show in the card, and other subagents go to <code>zurafa spawn</code>. Codex runs hooks in a background server that all its sessions share, so they reach Zurafa through its daemon and find the pane running Codex in the hook&#x27;s folder. Two Codex panes in the same folder can&#x27;t be told apart, so neither gets those reports. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open <code>/hooks</code>, and trust the Zurafa hooks. If you set up Codex before this release, remove its old <code>zurafa report</code> hooks from <code>hooks.json</code>.</p>
+<p>It adds eight hooks to <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>), all running <code>zurafa hook codex</code>, and keeps a backup like the Claude setup. They report the same states, using Codex&#x27;s <code>PermissionRequest</code> event for <strong>blocked</strong> and Codex&#x27;s final answer as <strong>done</strong>&#x27;s message, and give Codex the same [subagent](#subagents) handling as Claude: <code>explorer</code> subagents show in the card, and other subagents go to <code>zurafa spawn</code>. Codex runs hooks in a background server that all its sessions share, so they reach Zurafa through its daemon and find the pane running Codex in the hook&#x27;s folder. Two Codex panes in the same folder can&#x27;t be told apart, so neither gets those reports. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open <code>/hooks</code>, and trust the Zurafa hooks. If you set up Codex before this release, remove its old <code>zurafa report</code> hooks from <code>hooks.json</code>.</p>
 <h2 id="pi">Pi</h2>
 <p>Pi 1.1 and later report their status to Zurafa without any setup, including <strong>blocked</strong> when an extension dialog or login waits for you. Set <code>PI_PROGRAM_STATUS=0</code> to turn that off.</p>
 <h2 id="other-agents">Other agents</h2>

@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.26-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.27-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -93,9 +93,11 @@ zurafa preview README.md          # open a file in the preview beside the curren
 <p>Agents running in a Zurafa pane can use the CLI the way you would: start a test run beside themselves, type into another agent, wait for it and read its screen.</p>
 <p><code>zurafa spawn</code> starts an agent with a task in a new tab, named after the task, and prints the new pane:</p>
 <pre><code>p=$(zurafa spawn claude &quot;fix the flaky login test&quot;)
-zurafa wait $p &amp;&amp; zurafa read $p -n 40
+zurafa wait $p          # prints its status and final answer
+zurafa read $p -n 40
 zurafa spawn codex &quot;review the diff&quot; --split   # beside the current pane instead</code></pre>
-<p>The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass <code>--cwd</code>. <code>-s</code> picks the workspace, <code>-l</code> names the tab, and <code>--split</code> takes <code>-b</code> and <code>--axis</code>. Spawning into a remote workspace isn&#x27;t supported yet.</p>
+<p>The new pane gets <code>ZURAFA_PARENT</code>, the pane that ran <code>spawn</code>, so the agent can report back with <code>zurafa send $ZURAFA_PARENT --enter -- &quot;result&quot;</code>. The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass <code>--cwd</code>. <code>-s</code> picks the workspace, <code>-l</code> names the tab, and <code>--split</code> takes <code>-b</code> and <code>--axis</code>. Spawning into a remote workspace isn&#x27;t supported yet.</p>
+<p>When a spawned agent gets blocked, hits an error or exits, Zurafa types a short note into the agent that spawned it, like <code>&lt;zurafa from=&quot;t7 review&quot;&gt;is blocked (permission); see zurafa read t7&lt;/zurafa&gt;</code>, once it can take one (it has reported a status and isn&#x27;t waiting on a dialog itself). Set <code>agent-notes = false</code> in <code>config.zurafa</code> to turn notes off. Spawned panes close when the pane that spawned them closes or its agent exits; <code>--outlive-parent</code> keeps one running.</p>
 <h3 id="worktrees">Worktrees</h3>
 <p>Give each agent its own git worktree, so agents working in the same repository don&#x27;t edit each other&#x27;s files:</p>
 <pre><code>zurafa spawn claude &quot;fix the login bug&quot; --worktree fix-login
@@ -114,7 +116,7 @@ zurafa prompt review &quot;summarize the diff&quot;      # send + Enter, wait, p
 zurafa events --for blocked                    # print status changes as they happen
 zurafa panes                                   # every pane: tab, program, status, directory</code></pre>
 <p>A target is a pane, or a session for its focused pane. Without <code>-s</code>, agent commands search every session. <code>read</code>, <code>wait</code> and <code>events</code> default to the current pane inside Zurafa.</p>
-<p><code>wait</code> prints the pane&#x27;s status when it returns: <code>idle</code>, <code>working</code>, <code>blocked</code>, <code>done</code>, <code>error</code> or <code>exited</code>. A pane whose program reports nothing is <code>idle</code>, so <code>wait</code> and <code>prompt</code> rely on <a href="/docs/status/">status reports</a>. <code>prompt</code> treats a program that doesn&#x27;t start working within 10 seconds as answered. <code>--timeout</code> (<code>30s</code>, <code>10m</code>, <code>1h</code>) makes <code>wait</code>, <code>prompt</code> and <code>events</code> exit with status 5.</p>
+<p><code>wait</code> prints the pane&#x27;s status when it returns: <code>starting</code>, <code>idle</code>, <code>working</code>, <code>blocked</code>, <code>done</code>, <code>error</code> or <code>exited</code>, then its status message on the next line, if it has one: a finished agent&#x27;s final answer, an error, or the question a blocked agent asks. <code>zurafa --json wait</code> prints <code>pane</code>, <code>state</code>, <code>kind</code> (<code>permission</code>, <code>question</code> or <code>auth</code> when blocked), <code>msg</code> and <code>turn</code>. A pane whose program reports nothing is <code>idle</code>, so <code>wait</code> and <code>prompt</code> rely on <a href="/docs/status/">status reports</a>. <code>prompt</code> treats a program that doesn&#x27;t start working within 10 seconds as answered. <code>--timeout</code> (<code>30s</code>, <code>10m</code>, <code>1h</code>) makes <code>wait</code>, <code>prompt</code> and <code>events</code> exit with status 5.</p>
 <p><code>zurafa events --json</code> prints one daemon event per line. <code>--once</code> exits after the first matching event. <code>zurafa --json panes</code> lists the panes as JSON; your own pane has <code>&quot;current&quot;: true</code>.</p>
 <p><code>zurafa mcp</code> offers these commands to agents as MCP tools. See <a href="/docs/agents/#let-agents-drive-zurafa">Let agents drive Zurafa</a>.</p>
 <p>Programs and agents report their own status with <code>zurafa report</code>, which writes an OSC 7501 sequence to the terminal:</p>
@@ -141,6 +143,7 @@ zurafa report clear</code></pre>
 <tr><td><code>ZURAFA_SESSION</code></td><td>The current session ID</td></tr>
 <tr><td><code>ZURAFA_PANE</code></td><td>The current pane ID</td></tr>
 <tr><td><code>ZURAFA_BLOCK</code></td><td>Compatibility alias for the current pane ID</td></tr>
+<tr><td><code>ZURAFA_PARENT</code></td><td>The pane that ran <code>zurafa spawn</code>, in the agent it started</td></tr>
 </table></div>
 <p>Outside a Zurafa terminal, commands default to the standard daemon socket and the <code>default</code> session. Use flags when you want another target:</p>
 <div class="table-scroll"><table>
