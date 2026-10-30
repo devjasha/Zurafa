@@ -85,6 +85,8 @@ enum Request {
     HostsRemove { id: u64, host_id: String },
     #[serde(rename = "hosts.service")]
     HostsService { id: u64, host_id: String, enable: bool },
+    #[serde(rename = "layout.resume")]
+    LayoutResume { id: u64, block: String, agent: String, session: String },
     #[serde(rename = "server.status")]
     ServerStatus { id: u64 },
     #[serde(rename = "server.listen")]
@@ -306,6 +308,12 @@ async fn request(
                 // null when no Tailscale CLI answers; otherwise Running, NeedsLogin, Stopped, …
                 "tailscale_state":status["BackendState"],"tailscale_login":login,
                 "tailscale_name":me["DNSName"].as_str().map(|n| n.trim_end_matches('.'))})
+        }
+        Request::LayoutResume { id, block, agent, session } => {
+            match zurafa_events::Resume::new(&agent, &session).and_then(|r| terms.dispatcher.set_resume(&block, r)) {
+                Ok(()) => json!({"id":id,"type":"ok"}),
+                Err(e) => error(id, e),
+            }
         }
         Request::ServerListen { id, enable } => match crate::listen::switch_tailnet(terms.clone(), enable).await {
             Ok(()) => json!({"id":id,"type":"ok"}),

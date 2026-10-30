@@ -6,6 +6,7 @@ mod osc7501;
 mod protocol;
 mod pty;
 mod remote;
+mod restore;
 mod server;
 mod service;
 
@@ -140,6 +141,18 @@ async fn main() -> io::Result<()> {
     STARTED.get_or_init(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()));
     let terms = pty::Terminals::new();
     tokio::spawn(notes::run(terms.clone()));
+    // Daemons a bridge starts on a remote host stop once nothing uses them, so old builds don't pile up.
+    let exit_when_idle = env::args().any(|a| a == "--exit-when-idle");
+    // Before clients connect, so the app finds the restored workspaces instead of making a new one.
+    if !exit_when_idle {
+        let layout = restore::path(&path);
+        match restore::restore(&terms, &layout) {
+            Ok(0) => {}
+            Ok(n) => eprintln!("zurafa-daemon restored {n} panes from {}", layout.display()),
+            Err(e) => eprintln!("zurafa-daemon cannot restore the layout: {e}"),
+        }
+        tokio::spawn(restore::save(terms.clone(), layout));
+    }
     let allow_identified = env::args().any(|a| a == "--tailnet-allow-identified");
     let allow_anonymous = env::args().any(|a| a == "--allow-anonymous");
     let mut args = env::args();
@@ -149,8 +162,6 @@ async fn main() -> io::Result<()> {
             listen::start(spec, listen::Target::Daemon(terms.clone()), allow_identified, allow_anonymous).await?;
         }
     }
-    // Daemons a bridge starts on a remote host stop once nothing uses them, so old builds don't pile up.
-    let exit_when_idle = env::args().any(|a| a == "--exit-when-idle");
     let mut idle_check = tokio::time::interval(std::time::Duration::from_secs(60));
     idle_check.tick().await;
     loop {

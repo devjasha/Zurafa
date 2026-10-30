@@ -174,6 +174,35 @@ pub struct Block {
     /// When the pane started, in milliseconds since the Unix epoch.
     #[serde(default)]
     pub started: u64,
+    /// The agent session running here, which a restarted daemon resumes in this pane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume: Option<Resume>,
+}
+/// An agent and its session id, as its hooks report them. The daemon builds the resume command
+/// itself from these, never from text a program wrote to the terminal.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Resume {
+    pub agent: String,
+    pub session: String,
+}
+impl Resume {
+    /// Only agents whose resume command Zurafa knows, with an id that is safe on a command line.
+    pub fn new(agent: &str, session: &str) -> Result<Self, String> {
+        if !matches!(agent, "claude" | "codex") {
+            return Err(format!("cannot resume {agent:?} sessions"));
+        }
+        if session.is_empty() || session.len() > 128 || !session.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
+            return Err("invalid agent session id".into());
+        }
+        Ok(Self { agent: agent.into(), session: session.into() })
+    }
+    /// What runs in the restored pane.
+    pub fn command(&self) -> String {
+        match self.agent.as_str() {
+            "codex" => format!("codex resume {}", self.session),
+            _ => format!("claude --resume {}", self.session),
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -422,6 +451,7 @@ impl Dispatcher {
                 parent,
                 outlive_parent,
                 started: now(),
+                resume: None,
             },
         );
         let (window, created) = if let Some(target) = split {
@@ -685,6 +715,13 @@ impl Dispatcher {
             _ => (),
         }
         i.terminal(&sid, block, event);
+    }
+    pub fn set_resume(&self, block: &str, resume: Resume) -> Result<(), String> {
+        let mut i = self.inner.lock().unwrap();
+        let sid = i.snapshot.sessions.iter().find(|(_, s)| s.blocks.contains_key(block)).map(|(id, _)| id.clone()).ok_or("unknown block")?;
+        i.snapshot.sessions.get_mut(&sid).unwrap().blocks.get_mut(block).unwrap().resume = Some(resume);
+        i.changed(&sid);
+        Ok(())
     }
     pub fn report(&self, block: &str, report: status::Report) {
         self.status_update(block, Some(report), "");

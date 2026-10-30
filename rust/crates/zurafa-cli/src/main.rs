@@ -1856,6 +1856,11 @@ fn cmd_hook(args: &[String]) -> Result<(), (i32, String)> {
     std::io::stdin().read_to_string(&mut input).map_err(|e| (1, e.to_string()))?;
     let event: Value = serde_json::from_str(&input).map_err(|e| (1, format!("hook input is not JSON: {e}")))?;
     let (output, fields) = agent_hook(agent, &event);
+    if event["hook_event_name"] == "SessionStart" {
+        if let Err(e) = report_session(agent.name, &event) {
+            eprintln!("zurafa: {e}");
+        }
+    }
     if let Some(output) = output {
         println!("{output}");
     }
@@ -1867,6 +1872,21 @@ fn cmd_hook(args: &[String]) -> Result<(), (i32, String)> {
             }
         }
     }
+    Ok(())
+}
+
+/// Tells the daemon which agent session runs in this pane, so a restarted daemon resumes it there.
+fn report_session(agent: &str, event: &Value) -> Result<(), String> {
+    let Some(session) = event["session_id"].as_str() else { return Ok(()) };
+    let mut client = Client::connect(None)?;
+    // Claude's hooks run in its pane; Codex's run in a shared server, so find its pane by folder.
+    let block = match (agent, env::var("ZURAFA_PANE")) {
+        ("claude", Ok(pane)) => pane,
+        _ => agent_pane(&client.snapshot()?, agent, event["cwd"].as_str().unwrap_or(""), None)
+            .ok_or("no single pane runs this agent here")?
+            .1,
+    };
+    client.request(json!({"type": "layout.resume", "block": block, "agent": agent, "session": session}))?;
     Ok(())
 }
 

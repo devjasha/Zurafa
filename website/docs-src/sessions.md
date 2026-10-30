@@ -6,7 +6,7 @@ Zurafa uses a hierarchy that lets you separate work without losing spatial conte
 
 A session is an independent workspace with a label, tabs, and optional remote host. Use the session picker from the top bar or **Change Session** in `⌘K`. Choose **New Session** or press `⇧⌘N` to create one, **Rename Session** or press `⇧⌘E` to update its label, and **Delete Workspace** or press `⌥⇧⌘W` to end it. Closing a session closes its terminals.
 
-Open sessions live in daemon memory. They remain while the daemon is running, including when the Swift app disconnects, but they disappear on daemon restart. Saved SSH host definitions are stored separately and survive daemon restarts.
+Open sessions live in daemon memory. They remain while the daemon is running, including when the Swift app disconnects. The daemon also saves the layout to `layout.json` beside its socket, and a restarted daemon (after an update, say) rebuilds it: the same workspaces, tabs, splits and sizes, each pane a fresh shell in the folder it was in. Running programs don't survive a restart and commands aren't run again, except that a Claude Code or Codex session reported by Zurafa's hooks resumes in its pane (`claude --resume`, `codex resume`). If a workspace can't be restored, the saved file is kept as `layout-failed.json`. Saved SSH host definitions are stored separately and survive daemon restarts.
 
 ## Tabs
 

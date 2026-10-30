@@ -191,7 +191,7 @@ fn login_shell() -> Option<String> {
     (!shell.is_empty()).then(|| shell.to_owned())
 }
 
-fn default_shell() -> String {
+pub(crate) fn default_shell() -> String {
     choose_shell(login_shell().as_deref(), env::var("SHELL").ok().as_deref())
 }
 
