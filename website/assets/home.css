@@ -225,16 +225,16 @@
 .home .flow-counts span{display:flex;align-items:center;gap:4px}.home .flow-counts i{font-style:normal}
 .home .flow-counts [data-show]{display:none}.home .flow-window[data-step="2"] .flow-counts [data-show]{display:flex}
 .home .flow-pane{min-width:0;display:flex;flex-direction:column;border-radius:16px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
-.home .brand{flex:none;display:inline-grid;place-items:center;width:22px;height:16px;border-radius:5px;background:var(--ink);color:var(--panel)}
-.home .brand svg{width:11px;height:11px;fill:currentColor}
-.home .brand.claude{background:#d97757;color:#fff}
-.home .brand.shell{background:var(--panel-2);color:var(--muted)}
+.home i.brand{flex:none;display:inline-grid;place-items:center;width:22px;height:16px;border-radius:5px;background:var(--ink);color:var(--panel)}
+.home i.brand svg{width:11px;height:11px;fill:currentColor}
+.home i.brand.claude{background:#d97757;color:#fff}
+.home i.brand.shell{background:var(--panel-2);color:var(--muted)}
 .home .flow .mock-head{padding:10px 16px;font-size:13px}
 .home .flow-spark{width:14px;height:14px;color:#d97757}
 .home .flow .mock-body{padding:4px 16px 16px;gap:8px}
 .home .flow-window[data-step="2"] .flow-row:has([data-state=blocked]){margin:0 -6px;padding:2px 6px;border-radius:6px;background:color-mix(in srgb,var(--amber) 16%,transparent)}
 .home .flow-toast{position:absolute;z-index:3;right:16px;bottom:16px;display:flex;align-items:center;gap:12px;width:min(380px,calc(100% - 32px));padding:12px;border-radius:14px;border:1px solid var(--line-strong);background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow);font-family:Geist,-apple-system,sans-serif;font-size:13px;line-height:18px}
-.home .flow-toast .brand{width:28px;height:28px;border-radius:8px}.home .flow-toast .brand svg{width:16px;height:16px}
+.home .flow-toast i.brand{width:28px;height:28px;border-radius:8px}.home .flow-toast i.brand svg{width:16px;height:16px}
 .home .flow-toast p{display:grid;min-width:0}.home .flow-toast p span{color:var(--muted)}
 .home .flow-toast code{font-size:12px}
 .home .flow-toast-actions{margin-left:auto;display:grid;gap:4px}
