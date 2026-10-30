@@ -1,0 +1,5 @@
+- **Settings → Server → Stay reachable with the lid closed** keeps your Mac running when you close it on power, so your other devices can still reach Zurafa. On battery it sleeps as usual, and unplugging with the lid closed puts it to sleep. It asks for your password once.
+- While connections from your devices are allowed, Zurafa keeps the Mac from idle sleep as long as a device is connected or an agent is working.
+- Light mode now uses Zurafa's terminal colors and your theme's colors; before, they were ignored and terminals fell back to plain defaults.
+- Groundwork for the Zurafa iPhone app: your Mac shares its appearance and theme with it, and sends it notifications when an agent finishes, fails or needs permission while you're away from the Mac.
+- This update needs a server restart (**Restart Server to Finish Update…** in the menu bar); it closes open terminals, and their layout comes back afterwards.

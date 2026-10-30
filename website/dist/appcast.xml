@@ -3,6 +3,24 @@
     <channel>
         <title>Zurafa</title>
         <item>
+            <title>0.1.30</title>
+            <pubDate>Fri, 30 Oct 2026 18:10:17 +0100</pubDate>
+            <link>https://zurafa-website.vercel.app/</link>
+            <sparkle:version>31</sparkle:version>
+            <sparkle:shortVersionString>0.1.30</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <sparkle:releaseNotesLink>https://zurafa-website.vercel.app/Zurafa-0.1.30-macos-arm64.md</sparkle:releaseNotesLink>
+            <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa-0.1.30-macos-arm64.zip" length="18070149" type="application/octet-stream" sparkle:edSignature="vnV2+dop7XugCMumG6PTuwhey/tWuPD1XrRDrIZ4PVckhHKNLQzDl5CxaIweI/CIdEGUwu93GzA3nO01ZA5VBA=="/>
+            <sparkle:deltas>
+                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa31-30.delta" sparkle:deltaFrom="30" length="1572482" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="YAxxB+1sBozMzeIzaVfqA5wsJbT53FTzIvmBFDkNExN3qo/abNOQYmkdJwDNe9CrKRM6RH1xy2/rQBO5ciNdCw=="/>
+                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa31-29.delta" sparkle:deltaFrom="29" length="2538674" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="GweN+2YwZ6lQEXFydCX7bc1hlFvN/LVHEWQJd+Zhr2/rJ8jLmJW7aB+bwtCj5cYve36lVk/4TP3VJND1/d5NDQ=="/>
+                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa31-28.delta" sparkle:deltaFrom="28" length="3046202" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="an/L9tqZ7FqeZZnqIEEfIKio80BViOVoFfNO1rOsiUdx9PsAKmRgaPdhFrwWEsc59Nj6RrMsiRwUxBzFl4QWAA=="/>
+                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa31-27.delta" sparkle:deltaFrom="27" length="3219006" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ronTksBhI4fnDi8VDwS/HpZIDWiUD3pRdGxEWO7Vm4pk9ByidAmnpnb02iuQsRrjCWN1NNrAKJOnlcV0RIJmCA=="/>
+                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa31-26.delta" sparkle:deltaFrom="26" length="3326162" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="LPrz0QHjwMwGRpFeo98+1lyLyix80Smpm4enEajez6DfoUp0K1XbAjBaNazoq0FAARzyBrAGbQvUJhKL2ncsBw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.1.29</title>
             <pubDate>Fri, 30 Oct 2026 15:57:12 +0100</pubDate>
             <link>https://zurafa-website.vercel.app/</link>
@@ -36,24 +54,6 @@
                 <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa29-26.delta" sparkle:deltaFrom="26" length="2214290" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="uEIaQsuJWuh01M2SJZJa7u53DcgLDvLyjSNwTSKQ2qgnYUtPttNukb2C25sT/kUm4DB/X+hlrY5jMZvMSxLiBQ=="/>
                 <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa29-25.delta" sparkle:deltaFrom="25" length="2255678" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="PKG+mjnFyPxFZqAskp4QmI7y/k9woAEk855C+XF9oZ53DPBkr0KgTW+tT1vFtu/U1dqSxRkbEQusbKYMQyCbBA=="/>
                 <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa29-24.delta" sparkle:deltaFrom="24" length="2455774" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="1QLqM5SmKjSGoiK4C5V6gV/LcAJDwqz6rfEFkEOkR25WjL1+ogt5QPhvpL792V6qx3O4wloENqHh8j/NSAtuAw=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>0.1.27</title>
-            <pubDate>Thu, 29 Oct 2026 22:41:14 +0100</pubDate>
-            <link>https://zurafa-website.vercel.app/</link>
-            <sparkle:version>28</sparkle:version>
-            <sparkle:shortVersionString>0.1.27</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <sparkle:releaseNotesLink>https://zurafa-website.vercel.app/Zurafa-0.1.27-macos-arm64.md</sparkle:releaseNotesLink>
-            <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa-0.1.27-macos-arm64.zip" length="18019343" type="application/octet-stream" sparkle:edSignature="Ozcvj59Ot2c5XZLBzgNpSmfqezZFIWba/A43m3ZQe+S+KG7sukMZN7PJQODvlNIidw7jGUhw2Hd9xglJIECdBg=="/>
-            <sparkle:deltas>
-                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa28-27.delta" sparkle:deltaFrom="27" length="1455786" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="lEY81RPpzhCz8bss91LaUrlgeKEcReeEuUQrmYByF4YB07zXHqfYlZ1SlDNhMWDGrA6gD0dHjQLLWllIZJmvBg=="/>
-                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa28-26.delta" sparkle:deltaFrom="26" length="1679674" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="5pGimCm7mE46i/aTmTcKxJBJF/ekN8z85f31Ne62oCC5A2TAVV+jnwrEdUK7yS5+uk4vDFUtz2RiU3GDXJUvBQ=="/>
-                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa28-25.delta" sparkle:deltaFrom="25" length="1735238" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="OZ3haF1dNw0Ibs/aldGO28fD93aduXsxTklUKxdMOcQxEs1fBb7YeifbgJdcobFlSf+VErVLyhtK39+a103YCA=="/>
-                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa28-24.delta" sparkle:deltaFrom="24" length="1968698" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="UHWwe4c5UNcfj1joSGrK81TFy9J/igv1Qb5bjsycjb8v3N8Js05rx+p3XoxYc4ZR1DZX3UagdQSWZjwbn/BUCw=="/>
-                <enclosure url="https://zurafa-website.vercel.app/releases/Zurafa28-23.delta" sparkle:deltaFrom="23" length="2030298" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="976432" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="Tey9vvd0P9VY87c8Kv71x813G1sgzwO9npWfFIKGknjvtO3ihOqZwqhDCmiziPaqF3bPKMdWq4aA2JZi+dBkBg=="/>
             </sparkle:deltas>
         </item>
     </channel>
