@@ -1,0 +1,1 @@
+- Zurafa has a new app icon: a giraffe peeking up from the bottom of an orange tile.

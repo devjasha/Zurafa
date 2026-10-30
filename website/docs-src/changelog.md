@@ -2,6 +2,12 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.29
+
+**October 30, 2026**
+
+- Zurafa has a new app icon: a giraffe peeking up from the bottom of an orange tile.
+
 ## 0.1.28
 
 **October 30, 2026**

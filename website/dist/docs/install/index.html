@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.28-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.29-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
   </div></header>
   <div class="docs-layout shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
@@ -75,14 +75,14 @@
     <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Start here</div><h1>Install on macOS</h1><div class="prose"><p>The current release supports <strong>Apple Silicon</strong> Macs with <strong>macOS 14 or newer</strong>. An Intel build is not available yet.</p>
 <h2 id="download-and-install">Download and install</h2>
 <ol>
-<li>Download <a href="/releases/Zurafa-0.1.28-macos-arm64.dmg">Zurafa 0.1.28 for macOS</a>.</li>
+<li>Download <a href="/releases/Zurafa-0.1.29-macos-arm64.dmg">Zurafa 0.1.29 for macOS</a>.</li>
 <li>Open the DMG.</li>
 <li>Drag <code>Zurafa.app</code> into your Applications folder and open it.</li>
 </ol>
 <p>Zurafa is signed with Developer ID and notarized by Apple.</p>
 <h2 id="verify-the-download">Verify the download</h2>
 <p>To check the DMG in Terminal, run:</p>
-<pre><code>shasum -a 256 Zurafa-0.1.28-macos-arm64.dmg</code></pre>
+<pre><code>shasum -a 256 Zurafa-0.1.29-macos-arm64.dmg</code></pre>
 <p>The expected SHA-256 is <code>a8376314672d4998fde78547e7ad097f7075db595cae8a8cd54a26cf74496b07</code>.</p>
 <h2 id="what-starts-with-the-app">What starts with the app</h2>
 <p>Zurafa connects to a per-user Rust daemon over a Unix socket. If no daemon is running, the app starts the bundled one. Closing the app does not immediately stop that daemon or its terminal processes. Sessions and PTYs remain available while that daemon is alive; they are not restored after it exits.</p>
