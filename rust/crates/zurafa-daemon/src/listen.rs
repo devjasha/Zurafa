@@ -10,6 +10,7 @@
 //! An admitted caller sends an HTTP/1.1 `GET` with `Upgrade: zurafa`; after the 101 the
 //! connection carries the same length-prefixed frames as the daemon's own Unix socket.
 use crate::{hosts::tailscale, login, pty::Terminals, server};
+use tokio::task::AbortHandle;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -93,7 +94,7 @@ pub async fn start(listen: Listen, target: Target, allow_identified: bool, allow
     }
     let (me, owner) = whoami().await?;
     match listen {
-        Listen::Tailnet(port) => start_tailnet(port, me, target, allow_identified).await,
+        Listen::Tailnet(port) => start_tailnet(port, me, target, allow_identified).await.map(drop),
         Listen::Serve(path) => start_serve(path, owner, target, allow_identified),
         Listen::Anonymous(_) => unreachable!(),
     }
@@ -146,8 +147,33 @@ where
     }
 }
 
+/// The listener the app's Server settings switch on and off: its accept loops and their addresses.
+static SWITCHED: tokio::sync::Mutex<Vec<(SocketAddr, AbortHandle)>> = tokio::sync::Mutex::const_new(Vec::new());
+
+/// Starts or stops `tailnet://:7297` for this daemon's owner, without touching open terminals.
+/// Callers already connected stay connected after it stops.
+/// Boxed with an explicit `Send`: the connections it accepts can call it again, and the compiler
+/// cannot infer `Send` through that cycle.
+pub fn switch_tailnet(terms: Arc<Terminals>, on: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+    Box::pin(async move {
+        let mut running = SWITCHED.lock().await;
+        if !on {
+            running.drain(..).for_each(|(_, task)| task.abort());
+        } else if running.is_empty() {
+            let (me, _) = whoami().await?;
+            *running = start_tailnet(DEFAULT_PORT, me, Target::Daemon(terms), false).await?;
+        }
+        Ok(())
+    })
+}
+
+/// Addresses the switched listener is bound to; empty while it is off.
+pub async fn switched_addresses() -> Vec<String> {
+    SWITCHED.lock().await.iter().map(|(addr, _)| addr.to_string()).collect()
+}
+
 /// Binds every Tailscale address of this machine, never a wildcard address.
-async fn start_tailnet(port: u16, me: Value, target: Target, allow_identified: bool) -> io::Result<()> {
+async fn start_tailnet(port: u16, me: Value, target: Target, allow_identified: bool) -> io::Result<Vec<(SocketAddr, AbortHandle)>> {
     let ips: Vec<IpAddr> = me["TailscaleIPs"]
         .as_array()
         .into_iter()
@@ -158,6 +184,7 @@ async fn start_tailnet(port: u16, me: Value, target: Target, allow_identified: b
         return Err(io::Error::other("Tailscale reports no addresses for this machine"));
     }
     let me = Arc::new(me);
+    let mut tasks = Vec::new();
     for ip in ips {
         let addr = SocketAddr::new(ip, port);
         let listener = match TcpListener::bind(addr).await {
@@ -171,7 +198,7 @@ async fn start_tailnet(port: u16, me: Value, target: Target, allow_identified: b
         };
         eprintln!("zurafa-daemon listening on tailnet {addr}");
         let (target, me) = (target.clone(), me.clone());
-        tokio::spawn(async move {
+        let task = tokio::spawn(async move {
             loop {
                 match listener.accept().await {
                     Ok((stream, peer)) => {
@@ -182,8 +209,12 @@ async fn start_tailnet(port: u16, me: Value, target: Target, allow_identified: b
                 }
             }
         });
+        tasks.push((addr, task.abort_handle()));
     }
-    Ok(())
+    if tasks.is_empty() {
+        return Err(io::Error::other("no Tailscale address of this machine can be bound"));
+    }
+    Ok(tasks)
 }
 
 /// The caller's identity comes from headers, so only this user (and root's tailscaled) may connect.

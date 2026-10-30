@@ -17,6 +17,9 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::signal::unix::{signal, SignalKind};
 
+/// When this daemon started, in seconds since the Unix epoch, for the app's Server settings.
+pub static STARTED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+
 fn socket_path() -> PathBuf {
     let mut args = env::args().skip(1);
     while let Some(a) = args.next() {
@@ -117,6 +120,7 @@ async fn main() -> io::Result<()> {
         signal(SignalKind::terminate())?,
         signal(SignalKind::interrupt())?,
     );
+    STARTED.get_or_init(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()));
     let terms = pty::Terminals::new();
     tokio::spawn(notes::run(terms.clone()));
     let allow_identified = env::args().any(|a| a == "--tailnet-allow-identified");

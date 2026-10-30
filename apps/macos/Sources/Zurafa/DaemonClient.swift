@@ -24,6 +24,13 @@ struct Msg: Codable {
     var after_sequence: UInt64?
     var missed: UInt64?
     var end: UInt64? // output byte offset, so a replay and live output can be merged
+    // server.status
+    var pid: Int32?
+    var started_at: Double?
+    var listening: [String]?
+    var tailscale_state: String?
+    var tailscale_login: String?
+    var tailscale_name: String?
 }
 
 struct DaemonError: LocalizedError {

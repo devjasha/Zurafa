@@ -3,18 +3,21 @@ import SwiftUI
 
 /// ⌘, window. Every control writes through the same paths as the palette: config.zurafa, UserDefaults or the daemon.
 struct SettingsView: View {
-    @State private var pane: SettingsPane? = .general
+    static let paneKey = "settingsPane"
+    /// Stored, so the menu bar's Zurafa Server item can open Settings on the Server pane.
+    @AppStorage(paneKey) private var pane: SettingsPane = .general
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsPane.allCases, selection: $pane) { pane in
+            List(SettingsPane.allCases, selection: Binding(get: { pane }, set: { pane = $0 ?? pane })) { pane in
                 Label(pane.title, systemImage: pane.symbol).tag(pane)
             }
             .navigationSplitViewColumnWidth(200)
         } detail: {
             Group {
-                switch pane ?? .general {
+                switch pane {
                 case .general: GeneralPane()
+                case .server: ServerPane()
                 case .appearance: AppearancePane()
                 case .themes: ThemesPane()
                 case .terminal: TerminalPane()
@@ -27,18 +30,19 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .background(.background)
-            .navigationTitle((pane ?? .general).title)
+            .navigationTitle(pane.title)
         }
         .frame(width: 800, height: 580)
     }
 }
 
-private enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, appearance, themes, terminal, shortcuts, integrations, notifications, connections
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general, server, appearance, themes, terminal, shortcuts, integrations, notifications, connections
     var id: Self { self }
     var title: String {
         switch self {
         case .general: "General"
+        case .server: "Server"
         case .appearance: "Interface"
         case .themes: "Themes"
         case .terminal: "Terminal"
@@ -51,6 +55,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: "gearshape"
+        case .server: "server.rack"
         case .appearance: "macwindow"
         case .themes: "paintpalette"
         case .terminal: "terminal"
@@ -334,6 +339,121 @@ private struct NotificationsPane: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// The local zurafa-daemon, and whether your other Tailscale devices may reach it.
+struct ServerPane: View {
+    static let listenKey = "serverListenOnTailnet"
+    @ObservedObject private var daemon = DaemonClient.shared
+    @AppStorage(listenKey) private var listen = false
+    @State private var status: Msg?
+    @State private var error: String?
+    @State private var statusError: String?
+    @State private var confirmingRestart = false
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent {
+                    Button("Restart Server…", role: .destructive) { confirmingRestart = true }
+                        .disabled(daemon.down)
+                } label: {
+                    Text("Zurafa Server")
+                    if daemon.down {
+                        Text("Not running")
+                    } else if let statusError {
+                        // A daemon left running from before an update answers with an unknown-request error.
+                        Text(statusError.contains("unknown variant") ? "Running an older version. Restart it to manage it here." : statusError)
+                    } else if status == nil {
+                        Text("Checking…")
+                    } else if let started = status?.started_at {
+                        Text("Running for \(Text(Date(timeIntervalSince1970: started), style: .relative))")
+                    }
+                }
+            }
+            if let status { Section {
+                switch status.tailscale_state {
+                case nil:
+                    LabeledContent {
+                        Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download/mac")!)
+                    } label: {
+                        Text("Tailscale is not installed")
+                        Text("Access Zurafa securely from your other devices.")
+                    }
+                case "Running":
+                    LabeledContent("Account", value: status.tailscale_login ?? "—")
+                    LabeledContent("This Mac", value: status.tailscale_name ?? "—")
+                    Toggle(isOn: Binding(get: { listen }, set: setListen)) {
+                        Text("Allow connections from your devices")
+                        Text(status.listening?.isEmpty == false
+                             ? "Listening on \(status.listening!.joined(separator: ", "))"
+                             : "Only devices signed in to \(status.tailscale_login ?? "your account") can connect, on port 7297.")
+                    }
+                    if let error { Text(error).font(.caption).foregroundStyle(.red) }
+                case let state?:
+                    LabeledContent {
+                        Button("Open Tailscale") { openTailscale() }
+                    } label: {
+                        Text("Sign in to Tailscale")
+                        Text(state == "NeedsLogin" ? "Access Zurafa securely from your other devices."
+                                                   : "Tailscale is \(state == "Stopped" ? "turned off" : state).")
+                    }
+                }
+            } header: {
+                Text("Tailscale")
+            } }
+        }
+        // Again after a restart, and when coming back from Tailscale.app.
+        .task(id: daemon.down) { await refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await refresh() }
+        }
+        .confirmationDialog("Restart Zurafa Server?", isPresented: $confirmingRestart) {
+            Button("Restart Server", role: .destructive) { restart() }
+        } message: {
+            Text("Every terminal closes, including those running agents. Zurafa starts a new server right away.")
+        }
+    }
+
+    private func refresh() async {
+        do {
+            status = try await daemon.request(["type": .string("server.status")])
+            statusError = nil
+        } catch {
+            (status, statusError) = (nil, error.localizedDescription)
+        }
+    }
+
+    /// The app relaunches the daemon as soon as it goes away. Daemons from before server.status
+    /// do not report their pid, so find those by the socket the app started them with.
+    private func restart() {
+        if let pid = status?.pid { kill(pid, SIGTERM); return }
+        let pkill = Process()
+        pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        pkill.arguments = ["-TERM", "-f", "zurafa-daemon --socket \(DaemonClient.socket)$"]
+        try? pkill.run()
+    }
+
+    private func setListen(_ on: Bool) {
+        listen = on
+        Task {
+            do {
+                _ = try await daemon.request(["type": .string("server.listen"), "enable": .bool(on)])
+                error = nil
+            } catch {
+                self.error = error.localizedDescription
+                if on { listen = false }
+            }
+            await refresh()
+        }
+    }
+
+    private func openTailscale() {
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "io.tailscale.ipn.macos")
+            ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: "io.tailscale.ipn.macsys") {
+            NSWorkspace.shared.openApplication(at: app, configuration: .init())
         }
     }
 }

@@ -84,6 +84,10 @@ enum Request {
     HostsRemove { id: u64, host_id: String },
     #[serde(rename = "hosts.service")]
     HostsService { id: u64, host_id: String, enable: bool },
+    #[serde(rename = "server.status")]
+    ServerStatus { id: u64 },
+    #[serde(rename = "server.listen")]
+    ServerListen { id: u64, enable: bool },
     #[serde(rename = "events.subscribe")]
     Subscribe {
         id: u64,
@@ -234,7 +238,7 @@ async fn request(
 ) -> Option<Value> {
     let id = v.get("id").cloned();
     let ty = v.get("type").and_then(Value::as_str).unwrap_or("");
-    if !ty.starts_with("events.") && !ty.starts_with("layout.") && !ty.starts_with("hosts.") && !ty.starts_with("status.") {
+    if !ty.starts_with("events.") && !ty.starts_with("layout.") && !ty.starts_with("hosts.") && !ty.starts_with("status.") && !ty.starts_with("server.") {
         let t = terms.clone();
         return match serde_json::from_value::<Msg>(v) {
             Ok(m) => tokio::task::spawn_blocking(move || reply(m, &t))
@@ -284,6 +288,25 @@ async fn request(
             return None;
         }
         Request::HostsRemove { id, host_id } => match terms.remove_host(&host_id) {
+            Ok(()) => json!({"id":id,"type":"ok"}),
+            Err(e) => error(id, e),
+        },
+        Request::ServerStatus { id } => {
+            let status: Value = tokio::task::spawn_blocking(|| crate::hosts::tailscale(&["status", "--json"]))
+                .await
+                .ok()
+                .flatten()
+                .and_then(|out| serde_json::from_slice(&out).ok())
+                .unwrap_or(Value::Null);
+            let me = &status["Self"];
+            let login = me["UserID"].as_u64().and_then(|uid| status["User"][uid.to_string()]["LoginName"].as_str());
+            json!({"id":id,"type":"server.status","pid":std::process::id(),
+                "started_at":crate::STARTED.get(),"listening":crate::listen::switched_addresses().await,
+                // null when no Tailscale CLI answers; otherwise Running, NeedsLogin, Stopped, …
+                "tailscale_state":status["BackendState"],"tailscale_login":login,
+                "tailscale_name":me["DNSName"].as_str().map(|n| n.trim_end_matches('.'))})
+        }
+        Request::ServerListen { id, enable } => match crate::listen::switch_tailnet(terms.clone(), enable).await {
             Ok(()) => json!({"id":id,"type":"ok"}),
             Err(e) => error(id, e),
         },

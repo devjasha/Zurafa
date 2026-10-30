@@ -30,7 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
         updaterController.checkForUpdates(nil)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    /// Like Rex, Zurafa stays in the menu bar after its last window closes; Quit is in that menu.
+    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { false }
 }
 
 @main struct ZurafaApp: App {
@@ -58,6 +59,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
         // A Window, not a Settings scene: the Settings scene gives a split view a doubled title bar.
         Window("Settings", id: "settings") { SettingsView().environmentObject(ws).environmentObject(delegate) }
             .windowResizability(.contentSize)
+        MenuBarExtra { ServerMenu().environmentObject(delegate) } label: { ServerMenuIcon() }
+    }
+}
+
+/// Menu bar status of the local zurafa-daemon: a server while it answers, a warning when it does not.
+private struct ServerMenuIcon: View {
+    @ObservedObject private var daemon = DaemonClient.shared
+    var body: some View {
+        Image(systemName: daemon.down ? "exclamationmark.triangle" : "server.rack")
+            .help(daemon.down ? "Zurafa Server is not running" : "Zurafa Server is running")
+    }
+}
+
+private struct ServerMenu: View {
+    @ObservedObject private var daemon = DaemonClient.shared
+    @EnvironmentObject var app: AppDelegate
+    @AppStorage(ServerPane.listenKey) private var listen = false
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        // Menus drop a label's subtitle and icon, so the state goes in the title.
+        Button("Zurafa Server: \(daemon.down ? "Not running" : "Running")") { openSettings(.server) }
+        if !daemon.down && listen { Text("Open to your Tailscale devices") }
+        if daemon.down { Button("Reconnect") { daemon.start() } }
+        Divider()
+        Text("Zurafa \(CLIInstaller.appVersion) (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")
+        Divider()
+        Button("Check for Updates…") { app.checkForUpdates() }
+        Button("Settings…") { openSettings(nil) }.keyboardShortcut(",")
+        Divider()
+        Button("Quit Zurafa") { NSApp.terminate(nil) }.keyboardShortcut("q")
+    }
+
+    private func openSettings(_ pane: SettingsPane?) {
+        if let pane { UserDefaults.standard.set(pane.rawValue, forKey: SettingsView.paneKey) }
+        openWindow(id: "settings")
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 

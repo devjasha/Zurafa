@@ -249,7 +249,13 @@ enum EditorKind: String, Identifiable {
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.reloadConfigIfChanged() }
         }
-        daemon.onSnapshot = { [weak self] snapshot in self?.apply(snapshot) }
+        daemon.onSnapshot = { [weak self] snapshot in
+            self?.apply(snapshot)
+            // A restarted daemon starts with its tailnet listener off; turn it back on if Settings has it on.
+            if UserDefaults.standard.bool(forKey: ServerPane.listenKey) {
+                Task { _ = try? await DaemonClient.shared.request(["type": .string("server.listen"), "enable": .bool(true)]) }
+            }
+        }
         daemon.onEvent = { [weak self] event in self?.apply(event) }
         daemon.onDisconnect = { [weak self] in self?.commandError = "Reconnecting to daemon…" }
         daemon.start()
