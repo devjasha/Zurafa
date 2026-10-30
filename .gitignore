@@ -2,3 +2,5 @@
 rust/target/
 apps/macos/.build/
 /build/
+.DS_Store
+xcuserdata/

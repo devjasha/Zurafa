@@ -87,6 +87,19 @@ enum Request {
     HostsService { id: u64, host_id: String, enable: bool },
     #[serde(rename = "layout.resume")]
     LayoutResume { id: u64, block: String, agent: String, session: String },
+    /// With `appearance` the Mac app publishes its look; without, a client asks for it.
+    #[serde(rename = "ui.appearance")]
+    UiAppearance { id: u64, appearance: Option<Value> },
+    /// A phone's pasted image, saved on the Mac so the pane's agent can read it by path.
+    #[serde(rename = "ui.paste_image")]
+    UiPasteImage { id: u64, data: String },
+    /// A phone asking for agent notifications, and the Mac app reading who to notify.
+    #[serde(rename = "push.register")]
+    PushRegister { id: u64, device: crate::push::Device },
+    #[serde(rename = "push.unregister")]
+    PushUnregister { id: u64, token: String },
+    #[serde(rename = "push.list")]
+    PushList { id: u64 },
     #[serde(rename = "server.status")]
     ServerStatus { id: u64 },
     #[serde(rename = "server.listen")]
@@ -154,6 +167,14 @@ enum Request {
         block: String,
         body: String,
     },
+}
+/// Named like the Mac app's own pastes, so agents treat both alike.
+fn save_image(bytes: &[u8]) -> std::io::Result<String> {
+    let ext = if bytes.starts_with(b"\x89PNG") { "png" } else { "jpg" };
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let path = std::env::temp_dir().join(format!("zurafa-paste-{nanos}.{ext}"));
+    std::io::Write::write_all(&mut std::fs::OpenOptions::new().write(true).create_new(true).open(&path)?, bytes)?;
+    Ok(path.to_string_lossy().into_owned())
 }
 fn label() -> String {
     "Terminal".into()
@@ -241,7 +262,7 @@ async fn request(
 ) -> Option<Value> {
     let id = v.get("id").cloned();
     let ty = v.get("type").and_then(Value::as_str).unwrap_or("");
-    if !ty.starts_with("events.") && !ty.starts_with("layout.") && !ty.starts_with("hosts.") && !ty.starts_with("status.") && !ty.starts_with("server.") {
+    if !ty.starts_with("events.") && !ty.starts_with("layout.") && !ty.starts_with("hosts.") && !ty.starts_with("status.") && !ty.starts_with("server.") && !ty.starts_with("ui.") && !ty.starts_with("push.") {
         let t = terms.clone();
         return match serde_json::from_value::<Msg>(v) {
             Ok(m) => tokio::task::spawn_blocking(move || reply(m, &t))
@@ -309,6 +330,25 @@ async fn request(
                 "tailscale_state":status["BackendState"],"tailscale_login":login,
                 "tailscale_name":me["DNSName"].as_str().map(|n| n.trim_end_matches('.'))})
         }
+        Request::PushRegister { id, device } => match terms.push.lock().unwrap().register(device) {
+            Ok(()) => json!({"id":id,"type":"ok"}),
+            Err(e) => error(id, e),
+        },
+        Request::PushUnregister { id, token } => match terms.push.lock().unwrap().unregister(&token) {
+            Ok(()) => json!({"id":id,"type":"ok"}),
+            Err(e) => error(id, e),
+        },
+        Request::PushList { id } => json!({"id":id,"type":"push.list","devices":terms.push.lock().unwrap().list()}),
+        Request::UiAppearance { id, appearance } => {
+            if let Some(a) = appearance {
+                terms.set_appearance(a);
+            }
+            json!({"id":id,"type":"ui.appearance","appearance":terms.appearance()})
+        }
+        Request::UiPasteImage { id, data } => match B64.decode(data).map_err(|e| e.to_string()).and_then(|b| save_image(&b).map_err(|e| e.to_string())) {
+            Ok(path) => json!({"id":id,"type":"ui.paste_image","path":path}),
+            Err(e) => error(id, e),
+        },
         Request::LayoutResume { id, block, agent, session } => {
             match zurafa_events::Resume::new(&agent, &session).and_then(|r| terms.dispatcher.set_resume(&block, r)) {
                 Ok(()) => json!({"id":id,"type":"ok"}),
@@ -587,7 +627,7 @@ where
             v=incoming.recv()=>match v {
                 None=>break,
                 Some(v)=>{
-                    if version==1 && v["type"].as_str().is_some_and(|s|s.starts_with("events.")||s.starts_with("layout.")||s.starts_with("hosts.")||s.starts_with("status.")) {
+                    if version==1 && v["type"].as_str().is_some_and(|s|s.starts_with("events.")||s.starts_with("layout.")||s.starts_with("hosts.")||s.starts_with("status.")||s.starts_with("ui.")||s.starts_with("push.")) {
                         Some(error(v.get("id"),"requires protocol 2").to_string())
                     }else{
                         let narrows = v["type"]=="attach" || (v["type"]=="spawn" && v["raw"]==true);
@@ -607,7 +647,8 @@ where
                 Ok(frame)=>{
                     let v = serde_json::from_str::<Value>(&frame).unwrap_or_default();
                     let mine = own.is_empty() || v["terminal"].as_str().is_some_and(|t|own.contains(t));
-                    if mine && (version==1 || v["type"]=="output"){Some(frame)}else{None}
+                    let look = version==2 && v["type"]=="appearance";
+                    if look || (mine && (version==1 || v["type"]=="output")){Some(frame)}else{None}
                 },
                 Err(RecvError::Lagged(missed))=>Some(json!({"type":"output.gap","missed":missed}).to_string()),
                 Err(RecvError::Closed)=>break,
@@ -626,6 +667,27 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pasted_image_is_saved_with_its_type() {
+        let png = save_image(b"\x89PNG rest").unwrap();
+        assert!(png.ends_with(".png"));
+        assert_eq!(std::fs::read(&png).unwrap(), b"\x89PNG rest");
+        assert!(save_image(b"\xff\xd8\xff").unwrap().ends_with(".jpg"));
+    }
+    #[tokio::test]
+    async fn appearance_is_kept_and_broadcast() {
+        let terms = Terminals::new();
+        let mut events = terms.events.subscribe();
+        let (tx, _rx) = mpsc::channel(1);
+        let (late, _late_rx) = mpsc::channel(1);
+        let (mut subs, mut generation) = (HashMap::new(), 0);
+        let look = json!({"mode":"dark"});
+        request(json!({"id":1,"type":"ui.appearance","appearance":look}), &terms, &mut subs, &tx, &mut generation, &late).await;
+        let sent: Value = serde_json::from_str(&events.recv().await.unwrap()).unwrap();
+        assert_eq!(sent, json!({"type":"appearance","appearance":look}));
+        let got = request(json!({"id":2,"type":"ui.appearance"}), &terms, &mut subs, &tx, &mut generation, &late).await.unwrap();
+        assert_eq!(got["appearance"], look);
+    }
     #[tokio::test]
     async fn lag_is_explicit_and_resync_replaces_receiver() {
         let terms = Terminals::new();

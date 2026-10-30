@@ -110,41 +110,6 @@ enum AgentIcon {
     }
 }
 
-struct ProgramGlyph: View {
-    let program: Program
-    var body: some View {
-        if let glyph = AgentIcon.brandGlyph(program) {
-            Image(nsImage: glyph).resizable().scaledToFit()
-        } else {
-            Image(systemName: program.icon).resizable().scaledToFit()
-        }
-    }
-}
-
-/// Landscape badge in the program's color for the process reported by the Rust PTY manager.
-struct Tile: View {
-    static let size: CGFloat = 30
-
-    let program: Program
-    var size: CGFloat = Tile.size
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
-        let color = program.badge.color
-        // Badges without a color (black marks) invert with the theme instead of vanishing on a dark tab bar.
-        let fill = color.map { Color(red: Double($0 >> 16 & 0xFF) / 255, green: Double($0 >> 8 & 0xFF) / 255, blue: Double($0 & 0xFF) / 255) } ?? (colorScheme == .dark ? .white : .black)
-        let ink: Color = color == nil && colorScheme == .dark ? .black : .white
-        shape.fill(fill.gradient)
-            .overlay(shape.strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
-            .overlay(ProgramGlyph(program: program).foregroundStyle(ink).frame(width: size * 0.48, height: size * 0.48))
-            // Landscape badge, centered in a square slot so rows and stacks keep their layout.
-            .frame(width: size, height: size * 0.68)
-            .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
-            .frame(width: size, height: size)
-    }
-}
-
 /// Bundled: Contents/Resources/AppIcon.icns. `swift run`: the SwiftPM resource bundle, which a signed .app cannot hold at its root.
 let appIcon: NSImage = Bundle.main.image(forResource: "AppIcon")
     ?? ZurafaResources.image(named: "Zurafa-iOS-Default-1024@1x")

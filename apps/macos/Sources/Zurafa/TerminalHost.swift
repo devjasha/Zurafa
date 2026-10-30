@@ -101,7 +101,7 @@ final class PaneTerminal: TerminalView {
     private var zurafaSettings: GhosttyTerminalSettings?
     private let daemon = DaemonClient.shared
     private static let ansi: [UInt32] = [
-        0x2a2d35, 0xd04f5a, 0x479a3c, 0xb0832a, 0x2f78e0, 0xa064c8, 0x8a8d93,
+        0x2a2d35, 0xd04f5a, 0x479a3c, 0xb0832a, 0x2f78e0, 0xa064c8, 0x3f8f99, 0x8a8d93,
         0x6b6f78, 0xe0707a, 0x62a072, 0xc49a40, 0x4f8ff0, 0xb490e0, 0x6caeb6, 0xa0a3a8,
     ]
     private static let darkANSI: [UInt32] = [
@@ -116,6 +116,10 @@ final class PaneTerminal: TerminalView {
     override init() {
         super.init()
         daemon.onOutput = { [weak self] id, data, end in self?.receive(id, data, end) }
+        // The iOS app resizes shared terminals to the phone; coming back here takes them back to this window's size.
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.views.values.forEach { $0.onSized?() } }
+        }
     }
 
     func setDark(_ dark: Bool) {
@@ -154,6 +158,18 @@ final class PaneTerminal: TerminalView {
     var currentColors: GhosttyColors {
         let settings = effectiveSettings
         return isDark ? settings.dark : settings.light
+    }
+
+    /// This look resolved for one appearance, defaults filled in, for the phone to draw the same.
+    func resolvedColors(dark: Bool, accent: UInt32?) -> MacAppearance.Colors {
+        let imported = dark ? effectiveSettings.dark : effectiveSettings.light
+        var palette = dark ? Self.darkANSI : Self.ansi
+        for (index, color) in imported.palette where palette.indices.contains(index) { palette[index] = color }
+        let foreground = imported.foreground ?? (dark ? 0xd7dce2 : 0x2a2d35)
+        // Backgrounds and accent default as `Theme` does.
+        return .init(background: imported.background ?? (dark ? 0x141c24 : 0xe6ebf0), foreground: foreground,
+                     accent: accent ?? imported.cursor ?? imported.palette[4] ?? 0x7394eb,
+                     cursor: imported.cursor ?? foreground, selection: imported.selectionBackground, palette: palette)
     }
 
     private func configure(_ view: PaneTerminal) {

@@ -67,6 +67,17 @@ cd apps/macos && ZURAFA_DAEMON=../../rust/target/debug/zurafa-daemon ZURAFA_SOCK
 ```
 
 Tests: `cargo test` in `rust/`, `swift test` in `apps/macos/`.
+
+### iPhone app (early)
+
+`apps/ios/ZurafaMobile.xcodeproj` is a SwiftUI iPhone app with no daemon of its own: it
+connects to the Zurafa server on your Mac over Tailscale (port 7297) and shows the Mac's
+sessions. You can open and type into any pane, open tabs and sessions, and start SSH
+sessions from the Mac's saved hosts, which the Mac connects to for you. On the Mac, turn on
+Settings → Server → "Allow connections from your devices"; sign the iPhone in to the same
+Tailscale account, then enter the Mac's Tailscale name in the app. Open the project in
+Xcode, pick your team, and run it (trust the SwiftTerm build plugin when asked). It shares
+`Protocol.swift`, `EventModels.swift` and `Layout.swift` with the Mac app.
 Stop the daemon with `pkill zurafa-daemon` (this ends every terminal).
 
 The app uses protocol 2. If an older daemon is still running after an upgrade,

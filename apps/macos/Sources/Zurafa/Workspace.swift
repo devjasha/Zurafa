@@ -17,74 +17,6 @@ enum TabStripLayout: String {
     case horizontal, vertical
 }
 
-enum Program: Equatable {
-    case claude, codex, gemini, pi, emacs, git, dev, ssh, vm, kali, shell
-    /// A tool with a brand glyph, keyed by its process name in `Program.tools`.
-    case tool(String)
-    /// Process name → title, glyph in Resources/brands (Simple Icons via gorex, CC0) and brand color; nil color follows the theme.
-    static let tools: [String: (title: String, glyph: String, color: UInt32?)] = [
-        "git": ("Git", "git", 0xF05032), "node": ("Node.js", "nodedotjs", 0x5FA04E), "bun": ("Bun", "bun", nil),
-        "deno": ("Deno", "deno", nil), "npm": ("npm", "npm", 0xCB3837), "pnpm": ("pnpm", "pnpm", 0xF69220),
-        "yarn": ("Yarn", "yarn", 0x2C8EBF), "python": ("Python", "python", 0x3776AB), "python3": ("Python", "python", 0x3776AB),
-        "ruby": ("Ruby", "ruby", 0xCC342D), "irb": ("Ruby", "ruby", 0xCC342D), "go": ("Go", "go", 0x00ADD8),
-        "cargo": ("Rust", "rust", nil), "rustc": ("Rust", "rust", nil), "lua": ("Lua", "lua", 0x2C2D72),
-        "php": ("PHP", "php", 0x777BB4), "swift": ("Swift", "swift", 0xF05138), "kotlin": ("Kotlin", "kotlin", 0x7F52FF),
-        "docker": ("Docker", "docker", 0x2496ED), "mysql": ("MySQL", "mysql", 0x4479A1), "psql": ("PostgreSQL", "postgresql", 0x4169E1),
-        "redis-cli": ("Redis", "redis", 0xFF4438), "vim": ("Vim", "vim", 0x019733), "nvim": ("Neovim", "neovim", 0x57A143),
-        "hx": ("Helix", "helix", 0x281733), "htop": ("htop", "htop", 0x009020), "tmux": ("tmux", "tmux", 0x1BB91F),
-        "gh": ("GitHub", "github", nil), "copilot": ("GitHub Copilot", "githubcopilot", nil),
-    ]
-    static func detect(_ name: String?, executable: String? = nil, argv: [String]? = nil, remote: Bool, remoteShell: Program = .ssh) -> Program {
-        guard let name else { return remote ? remoteShell : .shell }
-        let base = name.lowercased()
-        // Only what's being run counts, never its arguments: a task or model name like "claude-…" would pick the wrong icon.
-        let argv = argv ?? []
-        var run = argv.prefix(1).map { $0 }
-        if ["sh", "bash", "zsh", "fish"].contains(base), let c = argv.firstIndex(of: "-c"), c + 1 < argv.count {
-            // A spawned agent runs as `fish -l -c "pi <task>; exec fish -l"` in the shell's process group.
-            run = [argv[c + 1].split(whereSeparator: { " \t\n;&|".contains($0) }).first.map(String.init) ?? ""]
-        } else if argv.count > 1, ["node", "bun", "deno"].contains(URL(fileURLWithPath: argv[0]).lastPathComponent.lowercased()) {
-            run.append(argv[1])
-        }
-        let commands = ([name, executable].compactMap { $0 } + run).map { $0.lowercased() }
-        let n = commands.joined(separator: " ")
-        if n.contains("claude") { return .claude }
-        if n.contains("codex") { return .codex }
-        if n.contains("gemini") { return .gemini }
-        if commands.contains(where: { URL(fileURLWithPath: $0).lastPathComponent == "pi" || $0.contains("pi-coding-agent") }) { return .pi }
-        // Homebrew builds run as `emacs` or `emacs-31.1`; any Emacs gets the Doom icon.
-        if base.hasPrefix("emacs") { return .emacs }
-        if base == "ssh" { return .ssh }
-        if tools[base] != nil { return .tool(base) }
-        if base == "lazygit" { return .git }
-        if base == "vite" { return .dev }
-        return remote ? remoteShell : .shell
-    }
-    var title: String {
-        switch self { case .claude: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini"; case .pi: "Pi"; case .emacs: "Emacs"; case .git: "Git"; case .dev: "Dev server"; case .ssh: "SSH"; case .vm: "VM"; case .kali: "Kali Linux"; case .shell: "Shell"; case .tool(let n): Program.tools[n]?.title ?? n }
-    }
-    var icon: String {
-        switch self { case .claude: "sparkle"; case .codex: "circle.hexagongrid"; case .gemini: "sparkles"; case .pi: "pi"; case .emacs: "text.cursor"; case .git: "plusminus"; case .dev: "hexagon"; case .ssh: "globe"; case .vm, .kali: "desktopcomputer"; case .shell, .tool: "terminal" }
-    }
-    /// Tile badge: an SVG in Resources/brands (else the SF Symbol `icon`) on its color; nil color follows the theme.
-    var badge: (glyph: String?, color: UInt32?) {
-        switch self {
-        case .claude: ("claude", 0xD97757)
-        case .codex: ("openai", nil)
-        case .gemini: ("googlegemini", 0x8E75B2)
-        case .pi: (nil, 0x7394EB)
-        case .emacs: ("gnuemacs", 0x7F5AB6)
-        case .git: ("git", 0xF05032)
-        case .dev: (nil, 0x54575F)
-        case .ssh: (nil, 0x487891)
-        case .vm: (nil, 0x3D61B8)
-        case .kali: ("kalilinux", 0x557C94)
-        case .shell: ("terminal", nil)
-        case .tool(let n): (Program.tools[n]?.glyph, Program.tools[n]?.color)
-        }
-    }
-}
-
 struct PaneMeta {
     var program: Program = .shell
     var title = "Shell"
@@ -251,6 +183,7 @@ enum EditorKind: String, Identifiable {
         }
         daemon.onSnapshot = { [weak self] snapshot in
             self?.apply(snapshot)
+            self?.publishAppearance() // a restarted daemon has forgotten it
             // A restarted daemon starts with its tailnet listener off; turn it back on if Settings has it on.
             if UserDefaults.standard.bool(forKey: ServerPane.listenKey) {
                 Task { _ = try? await DaemonClient.shared.request(["type": .string("server.listen"), "enable": .bool(true)]) }
@@ -466,15 +399,19 @@ enum EditorKind: String, Identifiable {
     /// Notifies you of a pane that came to need you or finished, unless it is in front of you.
     private func notify(_ pane: String) {
         guard let session = snapshot?.sessions.first(where: { $0.value.blocks[pane] != nil })?.value else { return }
-        if NSApp.isActive && session.sessionID == sessionID && tab.layout.panes.contains(pane) { return }
         let m = meta(pane)
         let failed = m.statuses.values.contains { $0.state == "error" }
         let verb = m.status == "completed" ? "finished" : failed ? "failed" : "needs you"
         let tabLabel = tabs(in: session).first { $0.layout.panes.contains(pane) }?.label
-        Attention.shared.notify(pane: pane, title: "\(m.program.title) \(verb)",
-                                subtitle: [session.label, tabLabel].compactMap { $0 }.joined(separator: " · "),
-                                body: m.statusMessage ?? m.title,
-                                answerable: m.waitingForPermission)
+        let title = "\(m.program.title) \(verb)"
+        let subtitle = [session.label, tabLabel].compactMap { $0 }.joined(separator: " · ")
+        let body = m.statusMessage ?? m.title
+        // Away from the Mac (or its lid closed, where the app still counts as active), the phone hears about every pane.
+        if !PhonePush.userAtMac {
+            PhonePush.send(pane: pane, thread: session.sessionID, title: title, subtitle: subtitle, body: body, answerable: m.waitingForPermission)
+        }
+        if NSApp.isActive && session.sessionID == sessionID && tab.layout.panes.contains(pane) { return }
+        Attention.shared.notify(pane: pane, title: title, subtitle: subtitle, body: body, answerable: m.waitingForPermission)
     }
 
     /// Answers a permission prompt from its notification, if the pane is still asking.
@@ -550,6 +487,16 @@ enum EditorKind: String, Identifiable {
         withAnimation(.easeOut(duration: 0.15)) {
             workspaceBackground = colors.background.map { Color(nsColor: TerminalStore.ns($0)) }
         }
+        publishAppearance()
+    }
+
+    /// Tells the daemon this look, so the iOS app draws the same.
+    private func publishAppearance() {
+        let store = TerminalStore.shared
+        let look = MacAppearance(mode: appearance.rawValue,
+                                 light: store.resolvedColors(dark: false, accent: Theme.customAccent),
+                                 dark: store.resolvedColors(dark: true, accent: Theme.customAccent))
+        Task { _ = try? await daemon.request(Msg(type: "ui.appearance", appearance: look)) }
     }
 
     func themes() -> [ThemeListing] { GhosttyConfigLoader().themes() }

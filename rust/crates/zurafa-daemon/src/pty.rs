@@ -148,6 +148,9 @@ pub struct Terminals {
     map: Mutex<HashMap<String, Arc<Term>>>,
     hosts: Mutex<HostRegistry>,
     next: AtomicU64,
+    /// The Mac app's resolved look, opaque here, for the phone to draw the same.
+    appearance: Mutex<Value>,
+    pub push: Mutex<crate::push::Devices>,
 }
 
 fn err(e: impl ToString) -> String {
@@ -223,7 +226,18 @@ impl Terminals {
             map: Mutex::default(),
             hosts: Mutex::new(HostRegistry::load()),
             next: AtomicU64::new(1),
+            appearance: Mutex::new(Value::Null),
+            push: Mutex::new(crate::push::Devices::load()),
         })
+    }
+
+    pub fn appearance(&self) -> Value {
+        self.appearance.lock().unwrap().clone()
+    }
+
+    pub fn set_appearance(&self, appearance: Value) {
+        *self.appearance.lock().unwrap() = appearance.clone();
+        self.emit(json!({"type":"appearance","appearance":appearance}));
     }
 
     fn emit(&self, event: Value) {

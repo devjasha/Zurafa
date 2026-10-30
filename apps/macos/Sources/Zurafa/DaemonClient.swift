@@ -2,67 +2,6 @@ import Combine
 import Foundation
 import Network
 
-/// Every protocol message in one flat shape (docs/ipc-protocol.md); nil fields are left out on the wire.
-struct Msg: Codable {
-    var type: String
-    var id: Int?
-    var `protocol`: Int?
-    var cols: Int?
-    var rows: Int?
-    var cwd: String?
-    var command: [String]?
-    var terminal: String?
-    var data: Data? // base64, the default Data strategy of JSONEncoder and JSONDecoder
-    var code: Int?
-    var state: String?
-    var message: String?
-    var snapshot: EventSnapshot?
-    var hosts: [RemoteHost]?
-    var event: EventEnvelope?
-    var subscription: String?
-    var instance: String?
-    var after_sequence: UInt64?
-    var missed: UInt64?
-    var end: UInt64? // output byte offset, so a replay and live output can be merged
-    // hello_ok and server.status
-    var stale: Bool?
-    var pid: Int32?
-    var started_at: Double?
-    var listening: [String]?
-    var tailscale_state: String?
-    var tailscale_login: String?
-    var tailscale_name: String?
-}
-
-struct DaemonError: LocalizedError {
-    let errorDescription: String?
-    init(_ s: String) { errorDescription = s }
-}
-
-/// Splits a byte stream into frames: 4-byte big-endian length, then the body.
-struct FrameDecoder {
-    static let max = 16 << 20
-    private var buf = Data()
-
-    static func frame(_ body: Data) -> Data {
-        withUnsafeBytes(of: UInt32(body.count).bigEndian) { Data($0) } + body
-    }
-
-    /// Appends bytes and returns every frame body they complete.
-    mutating func push(_ bytes: Data) throws -> [Data] {
-        buf.append(bytes)
-        var out: [Data] = []
-        while buf.count >= 4 {
-            let n = buf.prefix(4).reduce(0) { $0 << 8 | Int($1) }
-            guard n <= Self.max else { throw DaemonError("frame too large") }
-            guard buf.count >= 4 + n else { break }
-            out.append(Data(buf.dropFirst(4).prefix(n)))
-            buf = Data(buf.dropFirst(4 + n))
-        }
-        return out
-    }
-}
-
 /// The app's single connection to zurafa-daemon. All state lives on the main actor.
 @MainActor final class DaemonClient: ObservableObject {
     static let shared = DaemonClient()

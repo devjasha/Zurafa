@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
         NSApp.applicationIconImage = appIcon
         NSApp.activate(ignoringOtherApps: true)
         CLIInstaller.offerInstallIfNeeded()
+        LidAwake.shared.start()
         // Silent probe: reports through the delegate without showing Sparkle's window.
         updaterController.updater.checkForUpdateInformation()
     }
@@ -28,6 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
     }
     func checkForUpdates() {
         updaterController.checkForUpdates(nil)
+    }
+
+    func applicationWillTerminate(_ n: Notification) {
+        LidAwake.shared.stop()
     }
 
     /// Like Rex, Zurafa stays in the menu bar after its last window closes; Quit is in that menu.

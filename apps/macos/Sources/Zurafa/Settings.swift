@@ -348,6 +348,7 @@ struct ServerPane: View {
     static let listenKey = "serverListenOnTailnet"
     @ObservedObject private var daemon = DaemonClient.shared
     @AppStorage(listenKey) private var listen = false
+    @AppStorage(LidAwake.key) private var lidAwake = false
     @State private var status: Msg?
     @State private var error: String?
     @State private var statusError: String?
@@ -391,6 +392,10 @@ struct ServerPane: View {
                         Text(status.listening?.isEmpty == false
                              ? "Listening on \(status.listening!.joined(separator: ", "))"
                              : "Only devices signed in to \(status.tailscale_login ?? "your account") can connect, on port 7297.")
+                    }
+                    Toggle(isOn: Binding(get: { lidAwake }, set: setLidAwake)) {
+                        Text("Stay reachable with the lid closed")
+                        Text("While on power, this Mac keeps running when you close it. On battery it sleeps as usual. Asks for your password once.")
                     }
                     if let error { Text(error).font(.caption).foregroundStyle(.red) }
                 case let state?:
@@ -449,6 +454,16 @@ struct ServerPane: View {
             }
             await refresh()
         }
+    }
+
+    private func setLidAwake(_ on: Bool) {
+        do {
+            try LidAwake.shared.setEnabled(on)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+        lidAwake = LidAwake.shared.enabled
     }
 
     private func openTailscale() {
