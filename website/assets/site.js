@@ -1,4 +1,14 @@
 (() => {
+  const toggle = document.querySelector('.nav-toggle');
+  if (toggle) {
+    const wrap = toggle.closest('.nav-wrap');
+    const setOpen = open => { wrap.classList.toggle('open', open); toggle.setAttribute('aria-expanded', open); };
+    toggle.addEventListener('click', () => setOpen(!wrap.classList.contains('open')));
+    wrap.querySelector('nav').addEventListener('click', event => { if (event.target.closest('a')) setOpen(false); });
+    document.addEventListener('click', event => { if (!wrap.contains(event.target)) setOpen(false); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && wrap.classList.contains('open')) { setOpen(false); toggle.focus(); } });
+  }
+
   const current = document.body.dataset.page;
   if (current) {
     document.querySelectorAll('.nav-group a[data-page]').forEach(link => {

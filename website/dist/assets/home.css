@@ -178,7 +178,6 @@
 
 @media(max-width:1000px){.home .hero-visual{margin-top:48px}.home .mock{grid-template-columns:200px minmax(0,1fr)}.home .mock-preview{display:none}.home .benefits{grid-template-columns:1fr 1fr}.home .problem{grid-template-columns:1fr;gap:24px}}
 @media(max-width:690px){
-  .home .nav-wrap nav a[href="#how"]{display:none}
   .home .hero{padding-top:48px;padding-bottom:64px}
   .home .hero h1{font-size:36px;line-height:40px}
   .home .lead{font-size:16px;line-height:24px}
