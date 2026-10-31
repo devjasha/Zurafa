@@ -36,6 +36,8 @@ import Network
     private var nextID = 1
     private var pending: [Int: CheckedContinuation<Msg, Error>] = [:]
     private var refreshing = false
+    /// When the Mac last sent anything; tells a live socket from one iOS killed while the app was suspended.
+    private var heard = ContinuousClock.now
 
     /// `my-mac`, `my-mac.tail1234.ts.net`, `100.x.y.z`, optionally with `:port`.
     static func endpoint(_ address: String) -> (host: String, port: UInt16) {
@@ -65,11 +67,24 @@ import Network
             }
         }
         c.start(queue: .main)
+        // A handshake cut off by suspension never answers; fail it so the retry loop takes over.
+        Task {
+            try? await Task.sleep(for: .seconds(10))
+            if conn === c, state == .connecting { drop(c, reason: "Your Mac didn't answer in time.") }
+        }
     }
 
     /// Reconnects after the app comes back, unless the user never connected.
+    /// A suspended app's socket can die without a callback, so a "connected" one must answer within 2 s.
     func resume() {
-        if !address.isEmpty, state != .connected, state != .connecting { connect(to: address) }
+        guard !address.isEmpty else { return }
+        guard state == .connected, let c = conn else { return state == .connecting ? () : connect(to: address) }
+        let asked = ContinuousClock.now
+        refreshHosts()
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            if conn === c, heard < asked { connect(to: address) }
+        }
     }
 
     func disconnect() {
@@ -141,6 +156,7 @@ import Network
         c.receive(minimumIncompleteLength: 1, maximumLength: 1 << 16) { [weak self] data, _, done, err in
             MainActor.assumeIsolated {
                 guard let self, self.conn === c else { return }
+                self.heard = .now
                 do {
                     var bytes = data ?? Data()
                     if !self.upgraded {

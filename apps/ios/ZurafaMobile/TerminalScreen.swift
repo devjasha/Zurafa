@@ -8,6 +8,8 @@ struct TerminalScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var error: String?
     @Environment(\.colorScheme) private var scheme
+    static let keepAwakeKey = "keepScreenOn"
+    @AppStorage(keepAwakeKey) private var keepAwake = false
 
     private var session: SessionSnapshot? { mac.snapshot?.sessions.values.first { $0.blocks[id] != nil } }
     private var block: BlockSnapshot? { session?.blocks[id] }
@@ -34,6 +36,7 @@ struct TerminalScreen: View {
                         .glass(in: Capsule())
                     KeyBar(view: view)
                 }
+                .glassGroup()
                 .padding(.bottom, 8)
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -50,6 +53,8 @@ struct TerminalScreen: View {
             // Without a theme from the Mac the terminal stays dark, so its chrome does too.
             .environment(\.colorScheme, mac.appearance == nil ? .dark : scheme)
             .alert("Zurafa", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {} message: { Text(error ?? "") }
+            .onAppear { UIApplication.shared.isIdleTimerDisabled = keepAwake }
+            .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
             // On open, on switching panes, and again after every reconnect.
             .task(id: "\(id) \(mac.generation)") { if mac.state == .connected { Terminals.shared.attach(id) } }
     }
@@ -177,6 +182,11 @@ struct KeyBar: View {
 }
 
 extension View {
+    /// One glass layer for neighbouring glass shapes, as the system's own toolbars do.
+    @ViewBuilder func glassGroup() -> some View {
+        if #available(iOS 26, *) { GlassEffectContainer(spacing: 10) { self } } else { self }
+    }
+
     /// Liquid Glass where the system has it, a material before.
     @ViewBuilder func glass(in shape: some Shape) -> some View {
         if #available(iOS 26, *) {

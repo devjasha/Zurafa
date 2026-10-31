@@ -21,14 +21,20 @@ import UIKit
         super.init()
         mac.onOutput = { [weak self] id, data, end in self?.receive(id, data, end) }
         NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.views.values.forEach { $0.font = Self.font } }
+            MainActor.assumeIsolated { self?.applyFont() }
         }
     }
 
-    /// SF Mono at the footnote text style: 13 pt like the Mac's default, following the phone's Text Size setting.
+    static let fontSizeKey = "terminalFontSize"
+    static let defaultFontSize = 13.0
+
+    /// SF Mono at the size set in Settings (13 pt like the Mac's default), scaled with the phone's Text Size setting.
     private static var font: UIFont {
-        UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .monospacedSystemFont(ofSize: 13, weight: .regular))
+        let size = UserDefaults.standard.object(forKey: fontSizeKey) as? Double ?? defaultFontSize
+        return UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .monospacedSystemFont(ofSize: size, weight: .regular))
     }
+
+    func applyFont() { views.values.forEach { $0.font = Self.font } }
 
     func view(for id: String) -> TerminalView {
         if let view = views[id] { return view }

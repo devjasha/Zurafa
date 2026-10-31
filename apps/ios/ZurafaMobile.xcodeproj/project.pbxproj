@@ -202,6 +202,7 @@
 				DEVELOPMENT_TEAM = K8T3LW283A;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Zurafa;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_FILE = Info.plist;
 				CODE_SIGN_ENTITLEMENTS = ZurafaMobile.entitlements;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Zurafa connects to your Mac when you enter its local network address.";
@@ -230,6 +231,7 @@
 				DEVELOPMENT_TEAM = K8T3LW283A;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Zurafa;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_FILE = Info.plist;
 				CODE_SIGN_ENTITLEMENTS = ZurafaMobile.entitlements;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Zurafa connects to your Mac when you enter its local network address.";

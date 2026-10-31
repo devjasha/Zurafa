@@ -6,6 +6,7 @@ struct SessionsView: View {
     @AppStorage("macAddress") private var address = ""
     @State private var path: [String] = []
     @State private var error: String?
+    @State private var settings = false
     @Environment(\.colorScheme) private var scheme
 
     private var sessions: [SessionSnapshot] { mac.sessions }
@@ -53,13 +54,9 @@ struct SessionsView: View {
                     }
                 }
                 .disabled(mac.state != .connected)
-                Menu("Mac", systemImage: "ellipsis.circle") {
-                    Button("Disconnect", systemImage: "xmark.circle", role: .destructive) {
-                        mac.disconnect()
-                        address = ""
-                    }
-                }
+                Button("Settings", systemImage: "gearshape") { settings = true }
             }
+            .sheet(isPresented: $settings) { SettingsView() }
             .refreshable { mac.refreshHosts(); mac.resume() }
             .alert("Zurafa", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {} message: { Text(error ?? "") }
         }
