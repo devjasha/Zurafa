@@ -19,7 +19,8 @@
     {"@type":"Question","name":"Can I keep my Ghostty theme?","acceptedAnswer":{"@type":"Answer","text":"Yes. Zurafa imports Ghostty themes, colors, and fonts."}},
     {"@type":"Question","name":"What happens to my panes when the app restarts?","acceptedAnswer":{"@type":"Answer","text":"The Rust daemon keeps your processes running and the app restores pane content after a restart or update. Sessions do not yet survive a restart of the daemon itself."}},
     {"@type":"Question","name":"How do updates work?","acceptedAnswer":{"@type":"Answer","text":"Zurafa checks for new releases through Sparkle and installs them from inside the app."}},
-    {"@type":"Question","name":"Can I work on remote machines?","acceptedAnswer":{"@type":"Answer","text":"Yes. Open tabs on saved SSH hosts and local VMs, or connect directly to machines on your tailnet over Tailscale."}}
+    {"@type":"Question","name":"Can I work on remote machines?","acceptedAnswer":{"@type":"Answer","text":"Yes. Open tabs on saved SSH hosts and local VMs, or connect directly to machines on your tailnet over Tailscale."}},
+    {"@type":"Question","name":"Is there an iPhone app?","acceptedAnswer":{"@type":"Answer","text":"Yes, in early beta. It connects to your Mac over Tailscale, opens any pane in a full terminal, and sends a notification when an agent finishes or needs permission. For now you build it from source in Xcode."}}
   ]}</script>
 </head>
 <body class="home">
@@ -32,7 +33,7 @@
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home" aria-current="page"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
-    <nav id="site-nav" aria-label="Main navigation"><a href="#features">Product</a><a href="#how">How it works</a><a href="/docs/">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
+    <nav id="site-nav" aria-label="Main navigation"><a href="#features">Product</a><a href="#how">How it works</a><a href="#iphone">iPhone</a><a href="/docs/">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
     <a class="nav-download" href="/releases/Zurafa-0.1.30-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
     <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
   </div></header>
@@ -208,6 +209,45 @@
       </div>
     </div></section>
 
+    <section class="section shell reveal" id="iphone" aria-labelledby="iphone-title">
+      <div class="open-design phone-split">
+        <div class="open-copy">
+          <p class="kicker">Zurafa for iPhone</p>
+          <h2 id="iphone-title">Step away.<br>Answer from your pocket.</h2>
+          <p>The iPhone app connects to your Mac over Tailscale and shows every session it runs. Open any pane in a full terminal, start a tab or an SSH session, and approve a blocked agent straight from the notification.</p>
+          <ul class="phone-points">
+            <li><strong>Your Mac’s look</strong><span>The same theme, colors, and program icons as the Mac app.</span></li>
+            <li><strong>A real terminal</strong><span>Esc, Ctrl, Alt, and Shift-Tab above the keyboard, drawn at 120 Hz.</span></li>
+            <li><strong>Always reachable</strong><span>Your Mac stays awake while the phone is connected or an agent is working.</span></li>
+          </ul>
+          <p class="phone-note">Early beta. Build it from source in Xcode, then turn on <em>Allow connections from your devices</em> in the Mac app’s Server settings.</p>
+          <a class="text-link" href="https://github.com/devjasha/Zurafa/tree/main/apps/ios" target="_blank" rel="noopener">Get the iPhone app source <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="phone" role="img" aria-label="Zurafa on an iPhone. A notification says the Fix pane restore agent is blocked and asks to approve cargo test. Below it, the Mac’s sessions list their tabs with status dots.">
+          <div class="phone-screen" aria-hidden="true">
+            <p class="phone-status"><span>9:41</span><i></i></p>
+            <div class="phone-toast">
+              <i class="brand claude"><svg viewBox="0 0 24 24"><use href="#g-claude"/></svg></i>
+              <p><strong>Fix pane restore</strong><span>Blocked · Allow <code>cargo test</code>?</span></p>
+              <span class="flow-toast-actions"><span>Approve</span><span>Deny</span></span>
+            </div>
+            <p class="phone-title">my-mac</p>
+            <p class="phone-group">zurafa</p>
+            <div class="phone-list">
+              <p><i class="brand claude"><svg viewBox="0 0 24 24"><use href="#g-claude"/></svg></i>Fix pane restore<s data-state="blocked"></s></p>
+              <p><i class="brand codex"><svg viewBox="0 0 24 24"><use href="#g-openai"/></svg></i>Tailscale login copy<s data-state="done"></s></p>
+              <p class="c-acc">+ New Tab</p>
+            </div>
+            <p class="phone-group">api · devbox</p>
+            <div class="phone-list">
+              <p><i class="brand claude"><svg viewBox="0 0 24 24"><use href="#g-claude"/></svg></i>Migrate orders table<s data-state="working"></s></p>
+              <p><i class="brand shell"><svg viewBox="0 0 24 24"><path d="m5 17 5-5-5-5M12 19h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></i>cargo watch<s data-state="working"></s></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="section shell reveal" aria-labelledby="proof-title">
       <div class="section-intro"><p class="kicker">Built in the open</p><h2 id="proof-title">See exactly what you install</h2><p>Every line of Zurafa is on GitHub. A Rust daemon owns sessions, layout, and processes, and the event stream it publishes is documented, so your own scripts can drive agents too.</p></div>
       <div class="shots">
@@ -230,6 +270,7 @@ $ zurafa read review -n 3</code></pre></div></div>
       <details><summary>What happens to my panes when the app restarts?</summary><p>The Rust daemon keeps your processes running and the app restores pane content after a restart or update. Sessions do not yet survive a restart of the daemon itself.</p></details>
       <details><summary>How do updates work?</summary><p>Zurafa checks for new releases through Sparkle and installs them from inside the app. The <a href="/docs/changelog/">changelog</a> lists what changed in each one.</p></details>
       <details><summary>Can I work on remote machines?</summary><p>Yes. Open tabs on saved SSH hosts and local VMs, or connect directly to machines on your tailnet. <a href="/docs/remote-access/">See remote access</a>.</p></details>
+      <details><summary>Is there an iPhone app?</summary><p>Yes, in early beta. It connects to your Mac over Tailscale, opens any pane in a full terminal, and sends a notification when an agent finishes or needs permission. For now you build it from <a href="https://github.com/devjasha/Zurafa/tree/main/apps/ios">source in Xcode</a>.</p></details>
     </section>
 
     <section class="download-section reveal" aria-labelledby="cta-title"><div class="shell download-inner"><div><p class="kicker">Free to download</p><h2 id="cta-title">Your agents are waiting.<br>Now you will know it.</h2><p>No account, no trial, no credit card. Zurafa is notarized by Apple and updates itself through Sparkle.</p><div class="hero-actions"><a class="button primary" href="/releases/Zurafa-0.1.30-macos-arm64.dmg" download>Download for macOS <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a></div><small>Open the DMG, drag Zurafa into Applications, then <a class="text-link" href="/docs/agents/">connect your agents</a>.</small></div><div class="download-art" aria-hidden="true"><img class="download-mascot" src="/assets/zurafa-mascot.png" width="900" height="900" alt="" loading="lazy"></div></div></section>

@@ -254,3 +254,41 @@
   .home .flow-side .mock-lights,.home .flow-ws,.home .flow-tab,.home .flow-counts{display:none}
   .home .flow-toast-actions{display:none}
 }
+
+/* iPhone app: copy beside a phone that shows the Mac's sessions and a blocked-agent notification */
+.home .phone-split{gap:64px}
+.home .open-copy h2{margin:16px 0 24px}
+.home .phone-points{list-style:none;margin:24px 0;padding:0;display:grid;gap:16px}
+.home .phone-points li{display:grid;gap:4px;padding-left:16px;border-left:2px solid var(--accent-soft)}
+.home .phone-points strong{font-size:16px;line-height:24px}
+.home .phone-points span{font-size:14px;line-height:20px;color:var(--muted)}
+.home .open-copy>.phone-note{margin:0;font-size:14px;line-height:20px;color:var(--faint)}
+.home .phone-note em{font-style:normal;color:var(--muted)}
+.home .phone{justify-self:center;width:320px;padding:12px;border-radius:56px;background:#1c1814;border:1px solid var(--line-strong);box-shadow:var(--shadow)}
+.home .phone-screen{position:relative;height:620px;padding:16px;border-radius:44px;background:var(--bg-alt);overflow:hidden;font-family:Geist,-apple-system,sans-serif}
+.home .phone-screen p{margin:0}
+.home .phone-status{display:flex;justify-content:space-between;align-items:center;padding:0 16px;font-size:14px;line-height:20px;font-weight:600}
+.home .phone-status i{width:96px;height:28px;margin-right:auto;margin-left:24px;border-radius:9999px;background:#1c1814}
+.home .phone-title{margin-top:112px!important;padding:0 4px;font-size:30px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.home .phone-group{padding:24px 16px 8px;font-size:12px;line-height:16px;color:var(--faint)}
+.home .phone-list{border-radius:12px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+.home .phone-list p{display:flex;align-items:center;gap:12px;padding:12px 16px;font-size:14px;line-height:20px}
+.home .phone-list p+p{border-top:1px solid var(--line)}
+.home .phone-list s{margin-left:auto}
+.home .phone-list i.brand{margin:0} /* .shell is also the page-width class */
+.home .phone-toast{position:absolute;z-index:2;top:56px;left:12px;right:12px;display:flex;align-items:center;gap:12px;padding:12px;border-radius:20px;border:1px solid var(--line-strong);background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow);font-size:12px;line-height:16px}
+.home .phone-toast i.brand{width:32px;height:32px;border-radius:8px}.home .phone-toast i.brand svg{width:16px;height:16px}
+.home .phone-toast p{display:grid;min-width:0}.home .phone-toast p span{color:var(--muted)}
+.home .phone-toast code{font:12px/16px ui-monospace,SFMono-Regular,monospace}
+.home .phone .flow-toast-actions{margin-left:auto;display:grid;gap:4px}
+.home .phone .flow-toast-actions span{padding:2px 8px;border-radius:6px;background:var(--panel-2);text-align:center}
+.home .phone .flow-toast-actions span:first-child{background:var(--accent);color:#fff}
+.home .phone s{flex:none;display:inline-block;width:10px;height:10px;border-radius:50%;text-decoration:none}
+.home .phone s[data-state=working]{background:var(--accent);animation:pulse 1.6s var(--ease) infinite alternate}
+.home .phone s[data-state=blocked]{background:var(--amber);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 25%,transparent)}
+.home .phone s[data-state=done]{background:var(--green)}
+.js .home .phone-toast{opacity:0;transform:translateY(-24px) scale(.95)}
+.js .home .reveal.in .phone-toast{animation:phone-toast 8s var(--ease) .6s infinite}
+@keyframes phone-toast{0%{opacity:0;transform:translateY(-24px) scale(.95)}8%,80%{opacity:1;transform:none}88%,100%{opacity:0;transform:translateY(-24px) scale(.95)}}
+@media(max-width:690px){.home .phone{width:280px}.home .phone-screen{height:560px}.home .phone-toast .flow-toast-actions{display:none}}
+@media(prefers-reduced-motion:reduce){.js .home .phone-toast{opacity:1;transform:none;animation:none!important}}
