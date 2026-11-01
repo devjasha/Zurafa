@@ -33,6 +33,7 @@ final class AgentCardTests: XCTestCase {
         parent.setStatus("", ProgramStatus(state: "done"))
         parent.setStatus("agent/b2", ProgramStatus(state: "working", app: "claude", title: "general-purpose"))
         parent.setStatus("agent/a1", ProgramStatus(state: "done", app: "claude", title: "Find the parser"))
+        parent.shown = "" // the daemon picks it, never a subagent's record
         XCTAssertEqual(parent.status, "completed")
         parent.setStatus("b2", ProgramStatus(state: "working", app: "claude-code", title: "Run tests"))
         var split = PaneMeta(program: .claude, parent: "t1") // spawned beside its parent

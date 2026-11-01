@@ -187,6 +187,10 @@ pub struct Records {
     /// The program has reported a status; until then it is still starting.
     #[serde(default)]
     pub reported: bool,
+    /// The record that stands for the pane: the one most needing you (blocked, error, working,
+    /// done, idle), never a subagent's (`agent/…`). Clients show this instead of choosing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shown: Option<String>,
     #[serde(skip)]
     order: BTreeMap<String, u64>,
     #[serde(skip)]
@@ -208,16 +212,23 @@ impl Records {
     fn root_working(&self) -> bool {
         self.records.get("").is_some_and(|r| r.state == State::Working)
     }
-    /// Counts a turn that just ended and stamps the events with the turn.
+    fn pick(&self) -> Option<String> {
+        [State::Blocked, State::Error, State::Working, State::Done, State::Idle].iter().find_map(|s| {
+            self.records.iter().find(|(id, r)| r.state == *s && !id.starts_with("agent/")).map(|(id, _)| id.clone())
+        })
+    }
+    /// Counts a turn that just ended, picks the shown record and stamps the events with both.
     fn end_turn(&mut self, was_working: bool, mut events: Vec<TerminalEvent>) -> Vec<TerminalEvent> {
         if was_working && !self.root_working() {
             self.turn += 1;
         }
+        self.shown = self.pick();
         for e in &mut events {
-            if let TerminalEvent::ProgramStatusChanged { turn, .. }
-            | TerminalEvent::ProgramStatusRemoved { turn, .. } = e
+            if let TerminalEvent::ProgramStatusChanged { turn, shown, .. }
+            | TerminalEvent::ProgramStatusRemoved { turn, shown, .. } = e
             {
                 *turn = self.turn;
+                shown.clone_from(&self.shown);
             }
         }
         events
@@ -234,6 +245,7 @@ impl Records {
                 ids,
                 reason: reason.into(),
                 turn: self.turn,
+                shown: None,
             }]
         }
     }
@@ -294,6 +306,7 @@ impl Records {
                     record,
                     reason: "report".into(),
                     turn: self.turn,
+                    shown: None,
                 });
                 events
             }
@@ -322,6 +335,22 @@ mod tests {
         assert_eq!(r.records.len(), 2);
         r.apply(parse("state=clear").unwrap());
         assert!(r.records.is_empty());
+    }
+    #[test]
+    fn the_record_most_needing_you_is_shown_and_subagents_never_are() {
+        let mut r = Records::default();
+        assert_eq!(r.apply(parse("state=working:id=agent/x").unwrap()).len(), 1);
+        assert_eq!(r.shown, None);
+        r.apply(parse("state=done").unwrap());
+        r.apply(parse("state=working:id=b").unwrap());
+        assert_eq!(r.shown.as_deref(), Some("b"));
+        let events = r.apply(parse("state=blocked:id=c:kind=permission").unwrap());
+        assert_eq!(r.shown.as_deref(), Some("c"));
+        assert!(matches!(&events[..], [TerminalEvent::ProgramStatusChanged { shown: Some(s), .. }] if s == "c"));
+        r.lifecycle("process_exit");
+        assert_eq!(r.shown.as_deref(), Some(""));
+        r.apply(parse("state=clear").unwrap());
+        assert_eq!(r.shown, None);
     }
     #[test]
     fn repeating_a_state_keeps_its_message() {

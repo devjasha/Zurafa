@@ -76,9 +76,9 @@ fn agent_left(b: &Block) -> bool {
         })
 }
 
-/// The pane's record in `state`; subagent records (`agent/…`) never stand for the pane.
+/// The pane's shown record, if it is in `state`.
 fn record(b: &Block, state: State) -> Option<&zurafa_events::status::Record> {
-    b.statuses.records.iter().find(|(id, r)| r.state == state && !id.starts_with("agent/")).map(|(_, r)| r)
+    b.statuses.shown.as_ref().and_then(|id| b.statuses.records.get(id)).filter(|r| r.state == state)
 }
 
 /// What a pane can't report itself: "exited", "blocked", "error", or nothing.

@@ -31,6 +31,9 @@ struct PaneMeta {
     /// Native subagents of the pane's agent, reported as "agent/<id>". They run inside it with no
     /// pane of their own, so they show in its agent card and never stand for the pane's own state.
     var subagents: [String: ProgramStatus] = [:]
+    /// The id of the record that stands for the pane, as the daemon picks it.
+    var shown: String?
+    var record: ProgramStatus? { shown.flatMap { statuses[$0] } }
     mutating func setStatus(_ key: String, _ record: ProgramStatus?) {
         if key.hasPrefix("agent/") { subagents[key] = record } else { statuses[key] = record }
     }
@@ -39,21 +42,13 @@ struct PaneMeta {
             .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
     }
     var status: String? {
-        let states = statuses.values.map(\.state)
-        for state in ["blocked", "error", "working", "done", "idle"] where states.contains(state) {
-            return state == "done" ? "completed" : state == "error" ? "blocked" : state
-        }
-        return nil
+        record.map { $0.state == "done" ? "completed" : $0.state == "error" ? "blocked" : $0.state }
     }
     /// Claude Code blocked on a permission prompt: the only prompt whose keys Zurafa knows.
     var waitingForPermission: Bool {
-        program == .claude && status == "blocked" && statuses.values.contains { $0.state == "blocked" && $0.kind == "permission" }
+        program == .claude && record?.state == "blocked" && record?.kind == "permission"
     }
-    var statusMessage: String? {
-        guard let status else { return nil }
-        let original = status == "completed" ? "done" : status == "blocked" && statuses.values.contains(where: { $0.state == "error" }) ? "error" : status
-        return statuses.values.first(where: { $0.state == original })?.msg
-    }
+    var statusMessage: String? { record?.msg }
 }
 
 struct StatusItem: Identifiable {
@@ -251,6 +246,7 @@ enum EditorKind: String, Identifiable {
         m.statuses = [:]
         m.subagents = [:]
         for (key, record) in block.statuses.records { m.setStatus(key, record) }
+        m.shown = block.statuses.shown
         m.parent = block.parent
         m.started = block.started.map { Date(timeIntervalSince1970: $0 / 1000) }
         m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
@@ -295,11 +291,13 @@ enum EditorKind: String, Identifiable {
                let record = try? JSONDecoder().decode(ProgramStatus.self, from: data) {
                 let before = metas[id]?.status
                 metas[id]?.setStatus(key, record)
+                metas[id]?.shown = event.payload.object?["shown"]?.string
                 if let after = metas[id]?.status, after != before, after == "blocked" || after == "completed" { notify(id) }
             }
         case "terminal.program_status_removed":
             if let id = event.blockID, case .array(let keys)? = event.payload.object?["ids"] {
                 for key in keys.compactMap(\.string) { metas[id]?.setStatus(key, nil) }
+                metas[id]?.shown = event.payload.object?["shown"]?.string
             }
         case "terminal.clipboard_written":
             if let text = event.payload.object?["text"]?.string {
@@ -400,7 +398,7 @@ enum EditorKind: String, Identifiable {
     private func notify(_ pane: String) {
         guard let session = snapshot?.sessions.first(where: { $0.value.blocks[pane] != nil })?.value else { return }
         let m = meta(pane)
-        let failed = m.statuses.values.contains { $0.state == "error" }
+        let failed = m.record?.state == "error"
         let verb = m.status == "completed" ? "finished" : failed ? "failed" : "needs you"
         let tabLabel = tabs(in: session).first { $0.layout.panes.contains(pane) }?.label
         let title = "\(m.program.title) \(verb)"

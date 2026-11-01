@@ -1,7 +1,6 @@
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde_json::{json, Value};
 use std::{
-    collections::BTreeMap,
     env,
     io::{ErrorKind, Read, Write},
     os::unix::net::UnixStream,
@@ -799,48 +798,32 @@ fn cmd_read(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
         .transpose()?;
     let snapshot = client.snapshot().map_err(|e| (1, e))?;
     let (session, pane) = target_pane(&snapshot, args, positionals(args).into_iter().next())?;
-    let records = snapshot["sessions"][&session]["blocks"][&pane]["statuses"]["records"]
-        .as_object()
-        .into_iter()
-        .flatten()
-        .map(|(k, r)| (k.clone(), strv(&r["state"])))
-        .collect();
-    let busy = pane_state(&records, true, true) == "working";
+    let busy = pane_status(&snapshot["sessions"][&session]["blocks"][&pane]["statuses"], true).0 == "working";
     println!("{}", screen(client, &pane, lines, busy)?);
     Ok(())
 }
 
 const STATES: [&str; 7] = ["starting", "idle", "working", "blocked", "done", "error", "exited"];
 
-/// A pane's status, as the app shows it: the record that most needs you wins. Subagent
-/// records (`agent/…`) never stand for the pane, and a program that has reported no
-/// status yet is still starting.
-fn pane_state(records: &BTreeMap<String, String>, reported: bool, running: bool) -> &'static str {
-    if !running {
-        return "exited";
-    }
-    if !reported {
-        return "starting";
-    }
-    ["blocked", "error", "working", "done"]
-        .into_iter()
-        .find(|s| records.iter().any(|(id, r)| r == s && !id.starts_with("agent/")))
-        .unwrap_or("idle")
-}
-
-/// Whether a block's program has reported a status (a daemon without `reported` shows records).
-fn reported(block: &Value) -> bool {
-    block["statuses"]["reported"].as_bool().unwrap_or(false)
-        || block["statuses"]["records"].as_object().is_some_and(|m| !m.is_empty())
+/// A pane's status and the record behind it. The daemon picks the record that stands for the
+/// pane (`statuses.shown`); a pane no longer running has exited, and one that never reported is starting.
+fn pane_status(statuses: &Value, running: bool) -> (&'static str, &Value) {
+    let record = statuses["shown"].as_str().map_or(&Value::Null, |id| &statuses["records"][id]);
+    // A daemon without `reported` shows records.
+    let reported = statuses["reported"].as_bool().unwrap_or(false) || statuses["records"].as_object().is_some_and(|m| !m.is_empty());
+    let state = match (running, reported) {
+        (false, _) => "exited",
+        (_, false) => "starting",
+        _ => STATES.into_iter().find(|s| record["state"] == *s).unwrap_or("idle"),
+    };
+    // An exited pane's last record no longer stands for it.
+    (state, if record["state"] == state { record } else { &Value::Null })
 }
 
 /// Watches one pane's status records, turn and whether it still runs.
 struct Watch {
     pane: String,
-    records: BTreeMap<String, String>,
-    msgs: BTreeMap<String, String>,
-    kinds: BTreeMap<String, String>,
-    reported: bool,
+    statuses: Value,
     turn: u64,
     running: bool,
 }
@@ -854,42 +837,27 @@ impl Watch {
         Ok(Self::new(pane, &reply["snapshot"]["sessions"][session]["blocks"][pane]))
     }
     fn new(pane: &str, block: &Value) -> Self {
-        let records = block["statuses"]["records"].as_object();
-        let field = |k: &str| {
-            records
-                .into_iter()
-                .flatten()
-                .map(|(id, r)| (id.clone(), strv(&r[k])))
-                .collect()
-        };
+        let mut statuses = block["statuses"].clone();
+        if !statuses["records"].is_object() {
+            statuses["records"] = json!({});
+        }
         Self {
             pane: pane.to_owned(),
-            records: field("state"),
-            msgs: field("msg"),
-            kinds: field("kind"),
-            reported: reported(block),
-            turn: block["statuses"]["turn"].as_u64().unwrap_or(0),
+            turn: statuses["turn"].as_u64().unwrap_or(0),
+            statuses,
             running: block["running"].as_bool().unwrap_or(false),
         }
     }
     fn state(&self) -> &'static str {
-        pane_state(&self.records, self.reported, self.running)
+        pane_status(&self.statuses, self.running).0
     }
     /// The message of the record that stands for the pane's state.
     fn message(&self) -> &str {
-        self.field(&self.msgs)
+        pane_status(&self.statuses, self.running).1["msg"].as_str().unwrap_or("")
     }
     /// What a blocked pane waits for: permission, question or auth.
     fn kind(&self) -> &str {
-        self.field(&self.kinds)
-    }
-    fn field<'a>(&self, values: &'a BTreeMap<String, String>) -> &'a str {
-        let state = self.state();
-        self.records
-            .iter()
-            .find(|(id, r)| *r == state && !id.starts_with("agent/"))
-            .and_then(|(id, _)| values.get(id))
-            .map_or("", String::as_str)
+        pane_status(&self.statuses, self.running).1["kind"].as_str().unwrap_or("")
     }
     fn apply(&mut self, event: &Value) {
         let payload = &event["payload"];
@@ -899,29 +867,24 @@ impl Watch {
         if strv(&event["block_id"]) != self.pane {
             return;
         }
-        let was_working = self.state() == "working";
         match event["name"].as_str() {
             Some("program_status_changed") => {
-                let id = strv(&payload["id"]);
-                self.msgs.insert(id.clone(), strv(&payload["record"]["msg"]));
-                self.kinds.insert(id.clone(), strv(&payload["record"]["kind"]));
-                self.records.insert(id, strv(&payload["record"]["state"]));
-                self.reported = true;
+                self.statuses["records"][strv(&payload["id"])] = payload["record"].clone();
+                self.statuses["reported"] = true.into();
             }
             Some("program_status_removed") => {
                 for id in payload["ids"].as_array().into_iter().flatten() {
-                    self.records.remove(&strv(id));
+                    self.statuses["records"].as_object_mut().map(|m| m.remove(&strv(id)));
                 }
             }
-            Some("child_exited") => self.running = false,
-            _ => {}
+            Some("child_exited") => {
+                self.running = false;
+                return;
+            }
+            _ => return,
         }
-        match payload["turn"].as_u64() {
-            Some(turn) => self.turn = turn,
-            // A daemon from before turns: count one when the pane stops working.
-            None if was_working && self.state() != "working" => self.turn += 1,
-            None => {}
-        }
+        self.turn = payload["turn"].as_u64().unwrap_or(self.turn);
+        self.statuses["shown"] = payload["shown"].clone();
     }
     /// Waits until `until` accepts the watch; returns its state, or None at the deadline.
     fn until(
@@ -1212,19 +1175,8 @@ fn cmd_panes(client: &mut Client, as_json: bool) -> Result<(), (i32, String)> {
             layout_panes(&tab["layout"], &mut ids);
             for id in ids {
                 let pane = &session["blocks"][&id];
-                let records = pane["statuses"]["records"].as_object();
-                let states = records
-                    .into_iter()
-                    .flatten()
-                    .map(|(k, r)| (k.clone(), strv(&r["state"])))
-                    .collect::<BTreeMap<_, _>>();
-                let status = pane_state(&states, reported(pane), pane["running"].as_bool().unwrap_or(false));
-                let message = records
-                    .into_iter()
-                    .flatten()
-                    .find(|(_, r)| r["state"] == status)
-                    .map(|(_, r)| strv(&r["msg"]))
-                    .unwrap_or_default();
+                let (status, record) = pane_status(&pane["statuses"], pane["running"].as_bool().unwrap_or(false));
+                let message = strv(&record["msg"]);
                 let cwd = strv(&pane["foreground"]["cwd"]);
                 rows.push(json!({
                     "pane": id,
@@ -2367,23 +2319,15 @@ mod tests {
     }
 
     #[test]
-    fn watch_counts_turns_without_a_daemon_turn() {
-        let mut w = Watch::new("t1", &json!({"running":true,"statuses":{"records":{"":{"state":"done"}}}}));
-        let report = |state| json!({"block_id":"t1","name":"program_status_changed","payload":{"id":"","record":{"state":state}}});
-        w.apply(&report("working"));
-        assert_eq!(w.turn, 0);
-        w.apply(&report("done"));
-        assert_eq!(w.turn, 1);
-        w.apply(&json!({"block_id":"t1","name":"program_status_changed","payload":{"id":"","record":{"state":"idle"},"turn":7}}));
-        assert_eq!(w.turn, 7, "the daemon's turn wins");
-    }
-
-    #[test]
-    fn watch_gives_the_kind_and_message_of_the_pane_state() {
-        let mut w = Watch::new("t1", &json!({"running":true,"statuses":{"records":{"":{"state":"done","msg":"All fixed"}}}}));
+    fn watch_follows_the_daemons_turn_and_shown_record() {
+        let mut w = Watch::new("t1", &json!({"running":true,"statuses":{"records":{"":{"state":"done","msg":"All fixed"}},"shown":""}}));
         assert_eq!((w.state(), w.kind(), w.message()), ("done", "", "All fixed"));
-        w.apply(&json!({"block_id":"t1","name":"program_status_changed","payload":{"id":"","record":{"state":"blocked","kind":"question","msg":"Which branch?"}}}));
-        assert_eq!((w.state(), w.kind(), w.message()), ("blocked", "question", "Which branch?"));
+        w.apply(&json!({"block_id":"t1","name":"program_status_changed","payload":{"id":"b","record":{"state":"blocked","kind":"question","msg":"Which branch?"},"turn":7,"shown":"b"}}));
+        assert_eq!((w.state(), w.kind(), w.message(), w.turn), ("blocked", "question", "Which branch?", 7));
+        w.apply(&json!({"block_id":"t1","name":"program_status_removed","payload":{"ids":["b"],"turn":7,"shown":""}}));
+        assert_eq!((w.state(), w.message()), ("done", "All fixed"));
+        w.apply(&json!({"block_id":"t1","name":"child_exited","payload":{}}));
+        assert_eq!((w.state(), w.message()), ("exited", ""));
     }
 
     #[test]
@@ -2402,18 +2346,9 @@ mod tests {
     }
 
     #[test]
-    fn state_most_needing_you_wins() {
-        let records = BTreeMap::from([("a".into(), "done".into()), ("b".into(), "blocked".into())]);
-        assert_eq!(pane_state(&records, true, true), "blocked");
-        assert_eq!(pane_state(&BTreeMap::new(), true, true), "idle");
-        assert_eq!(pane_state(&records, true, false), "exited");
-    }
-
-    #[test]
-    fn unreported_panes_are_starting_and_subagents_never_stand_for_the_pane() {
-        assert_eq!(pane_state(&BTreeMap::new(), false, true), "starting");
-        let records = BTreeMap::from([("".into(), "done".into()), ("agent/a1".into(), "working".into())]);
-        assert_eq!(pane_state(&records, true, true), "done");
+    fn unreported_panes_are_starting_and_unshown_ones_idle() {
+        assert_eq!(pane_status(&json!({"records":{}}), true).0, "starting");
+        assert_eq!(pane_status(&json!({"records":{"agent/a1":{"state":"working"}},"reported":true}), true).0, "idle");
     }
 
     #[test]

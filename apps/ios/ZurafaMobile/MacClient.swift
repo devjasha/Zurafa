@@ -244,7 +244,7 @@ extension MacClient {
         }
         for _ in 0..<40 where state != .connected { try? await Task.sleep(for: .milliseconds(250)) }
         let block = snapshot?.sessions.values.lazy.compactMap { $0.blocks[pane] }.first
-        guard block?.statuses.records.values.contains(where: { $0.state == "blocked" && $0.kind == "permission" }) == true else {
+        guard let record = block?.statuses.shownRecord, record.state == "blocked", record.kind == "permission" else {
             return openPane = pane
         }
         // Claude Code's prompt highlights "Yes" first; Escape declines.

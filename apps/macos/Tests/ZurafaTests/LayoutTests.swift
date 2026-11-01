@@ -50,10 +50,11 @@ final class LayoutTests: XCTestCase {
     }
 
     func testSnapshotDecodesStatusRecords() throws {
-        let data = Data(#"{"protocol":2,"instance":"daemon-a","sequence":7,"sessions":{"default":{"session_id":"default","label":"Workspace","revision":2,"active_window":"w1","windows":[{"window_id":"w1","label":"Shell","layout":{"type":"block","block_id":"t1"},"selected_block":"t1","zoomed_block":null}],"blocks":{"t1":{"block_id":"t1","running":true,"exit_code":null,"statuses":{"records":{"build":{"state":"blocked","kind":"permission","progress":50,"app":"cargo","title":null,"msg":"Approve?"}}},"title":"Shell","pwd":"file://localhost/tmp"}}}},"clients":{}}"#.utf8)
+        let data = Data(#"{"protocol":2,"instance":"daemon-a","sequence":7,"sessions":{"default":{"session_id":"default","label":"Workspace","revision":2,"active_window":"w1","windows":[{"window_id":"w1","label":"Shell","layout":{"type":"block","block_id":"t1"},"selected_block":"t1","zoomed_block":null}],"blocks":{"t1":{"block_id":"t1","running":true,"exit_code":null,"statuses":{"records":{"build":{"state":"blocked","kind":"permission","progress":50,"app":"cargo","title":null,"msg":"Approve?"}},"shown":"build"},"title":"Shell","pwd":"file://localhost/tmp"}}}},"clients":{}}"#.utf8)
         let snapshot = try JSONDecoder().decode(EventSnapshot.self, from: data)
         XCTAssertEqual(snapshot.sessions["default"]?.revision, 2)
         XCTAssertEqual(snapshot.sessions["default"]?.blocks["t1"]?.statuses.records["build"]?.state, "blocked")
+        XCTAssertEqual(snapshot.sessions["default"]?.blocks["t1"]?.statuses.shownRecord?.kind, "permission")
     }
 
     func testMultipleStatusRecordsRemainDistinctForDisplay() throws {

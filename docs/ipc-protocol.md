@@ -335,10 +335,13 @@ The snapshot stores session IDs, labels, optional `remote` host records,
 revisions, active windows, ordered
 windows with their binary layouts, selected/zoomed block IDs, and a block map.
 Each block contains `running`, nullable `exit_code`, latest nullable `title` and
-`pwd`, and `statuses:{records:{<record id>:<record>},turn,reported}`. Root status
+`pwd`, and `statuses:{records:{<record id>:<record>},turn,reported,shown}`. Root status
 ID is `""`. `turn` goes up each time the root record leaves `working` (a report,
 removal, reset or exit); `reported` is false until the program reports a status,
-so clients can tell a starting program from an idle one.
+so clients can tell a starting program from an idle one. `shown` is the id of
+the record that stands for the pane: the first of blocked, error, working, done,
+idle, never a subagent record (`agent/…`); absent when none does. Clients show
+it instead of choosing a record themselves.
 The `clients` map contains negotiated live IPC connections. Since this protocol
 has no client identity negotiation, these use `kind:"ipc"`, `name:"IPC client"`,
 `platform:"unknown"`, `version:"unknown"`, and `principal:null`; `connected_at`
@@ -408,8 +411,8 @@ enums; clients should ignore unfamiliar events before typed decoding.
 | `progress_report` | `state`, `progress` | OSC 9;4 (state 0–4, progress 0–100 or null) |
 | `clipboard_written` | `text` | Valid UTF-8 base64 OSC 52 write; queries ignored |
 | `preview_requested` | `path` | `layout.preview` request |
-| `program_status_changed` | `id`, `record`, `reason`, `turn` | Valid OSC 7501 report |
-| `program_status_removed` | `ids`, `reason`, `turn` | Clear, capacity eviction, prompt, reset, child exit |
+| `program_status_changed` | `id`, `record`, `reason`, `turn`, `shown` | Valid OSC 7501 report |
+| `program_status_removed` | `ids`, `reason`, `turn`, `shown` | Clear, capacity eviction, prompt, reset, child exit |
 
 `child_exited` appears once for a retained block. Successful exit omits `error`;
 nonzero exit includes it, and wait failure uses null `exit_code` plus an error.

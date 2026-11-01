@@ -123,12 +123,17 @@ pub enum TerminalEvent {
         /// The pane's turn after this change (see `status::Records::turn`).
         #[serde(default)]
         turn: u64,
+        /// The record the pane shows after this change (see `status::Records::shown`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        shown: Option<String>,
     },
     ProgramStatusRemoved {
         ids: Vec<String>,
         reason: String,
         #[serde(default)]
         turn: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        shown: Option<String>,
     },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

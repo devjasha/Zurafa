@@ -125,7 +125,7 @@ struct PaneRow: View {
         if block?.running == false {
             Text("Exited").font(.caption).foregroundStyle(.secondary)
         } else {
-            switch block?.statuses.records[""]?.state {
+            switch block?.statuses.shownRecord?.state {
             case "working": ProgressView()
             case "blocked": Image(systemName: "hand.raised.fill").foregroundStyle(.orange)
             case "error": Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)

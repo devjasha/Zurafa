@@ -41,7 +41,12 @@ struct ProgramStatus: Codable, Equatable {
     var msg: String?
 }
 
-struct StatusRecords: Codable { var records: [String: ProgramStatus] }
+struct StatusRecords: Codable {
+    var records: [String: ProgramStatus]
+    /// The id of the record that stands for the pane, as the daemon picks it.
+    var shown: String?
+    var shownRecord: ProgramStatus? { shown.flatMap { records[$0] } }
+}
 struct RemoteHost: Codable, Identifiable, Equatable {
     var id: String
     var label: String
