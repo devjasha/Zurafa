@@ -2,6 +2,17 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.31
+
+**November 1, 2026**
+
+- **Zurafa now has its own Tailscale device**, as Rex does. Turn on **Settings → Server → Serve over Tailscale** and sign in once; Zurafa joins your tailnet as "<your Mac>-zurafa" and serves it over HTTPS with a Tailscale certificate. Your Mac's own Tailscale stays as it is, and **Sign Out** only signs out Zurafa's device. If you had "Allow connections from your devices" on, sign in once more after updating: the iPhone app now connects to the new address.
+- **Settings → Server** is rebuilt: a **Remote Address** with Copy and a **Pair** QR code your iPhone's camera opens in the Zurafa app, **Limit access to your Tailscale account**, the device's **Tags**, and a **Preferred Hostname**.
+- The menu bar shows the Zurafa giraffe while the server is running.
+- Pasting a file copied in Finder into a terminal now pastes the file's path, not a picture of its Finder icon.
+- Agent cards, the iPhone app and `zurafa` commands now agree on which status a pane shows.
+- This update needs a server restart (**Restart Server to Finish Update…** in the menu bar); it closes open terminals, and their layout comes back afterwards.
+
 ## 0.1.30
 
 **October 30, 2026**
