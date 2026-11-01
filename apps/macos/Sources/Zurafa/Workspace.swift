@@ -186,7 +186,7 @@ enum EditorKind: String, Identifiable {
             self?.publishAppearance() // a restarted daemon has forgotten it
             // A restarted daemon starts with its tailnet listener off; turn it back on if Settings has it on.
             if UserDefaults.standard.bool(forKey: ServerPane.listenKey) {
-                Task { _ = try? await DaemonClient.shared.request(["type": .string("server.listen"), "enable": .bool(true)]) }
+                Task { _ = try? await DaemonClient.shared.request(ServerPane.listenRequest(true)) }
             }
         }
         daemon.onEvent = { [weak self] event in self?.apply(event) }

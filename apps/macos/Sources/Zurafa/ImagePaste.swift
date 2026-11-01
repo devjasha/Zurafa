@@ -2,6 +2,9 @@ import AppKit
 
 enum ImagePaste {
     static func promptText(from pasteboard: NSPasteboard = .general) -> String? {
+        // A file copied in Finder comes with its Finder icon as TIFF; the file itself is what was meant.
+        let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
+        if let url = urls?.first, NSImage(contentsOf: url) != nil { return "\(Workspace.shellQuotedPath(url.path)) " }
         guard let image = image(from: pasteboard), let url = try? save(image) else { return nil }
         return "\(url.path) "
     }
@@ -9,8 +12,6 @@ enum ImagePaste {
     private static func image(from pasteboard: NSPasteboard) -> NSImage? {
         if let data = pasteboard.data(forType: .png), let image = NSImage(data: data) { return image }
         if let data = pasteboard.data(forType: .tiff), let image = NSImage(data: data) { return image }
-        let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
-        if let url = urls?.first, let image = NSImage(contentsOf: url) { return image }
         return nil
     }
 

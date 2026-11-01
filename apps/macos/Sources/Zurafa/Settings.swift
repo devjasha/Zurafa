@@ -1,3 +1,4 @@
+import CoreImage.CIFilterBuiltins
 import ServiceManagement
 import SwiftUI
 
@@ -346,13 +347,22 @@ private struct NotificationsPane: View {
 /// The local zurafa-daemon, and whether your other Tailscale devices may reach it.
 struct ServerPane: View {
     static let listenKey = "serverListenOnTailnet"
+    static let limitKey = "serverLimitToTailscaleAccount"
+    /// What the app sends to (re)start the tailnet listener with the settings stored here.
+    static func listenRequest(_ on: Bool) -> [String: JSONValue] {
+        ["type": .string("server.listen"), "enable": .bool(on),
+         "limit": .bool(UserDefaults.standard.object(forKey: limitKey) as? Bool ?? true)]
+    }
+
     @ObservedObject private var daemon = DaemonClient.shared
     @AppStorage(listenKey) private var listen = false
+    @AppStorage(limitKey) private var limit = true
     @AppStorage(LidAwake.key) private var lidAwake = false
     @State private var status: Msg?
     @State private var error: String?
     @State private var statusError: String?
     @State private var confirmingRestart = false
+    @State private var pairing = false
 
     var body: some View {
         Form {
@@ -361,55 +371,30 @@ struct ServerPane: View {
                     Button("Restart Server…", role: .destructive) { confirmingRestart = true }
                         .disabled(daemon.down)
                 } label: {
-                    Text("Zurafa Server")
-                    if daemon.down {
-                        Text("Not running")
-                    } else if daemon.stale {
-                        Text("Running an older version. Restart it to finish the update; agents and \"zurafa\" commands need the new one.")
-                    } else if let statusError {
-                        Text(statusError)
-                    } else if status == nil {
-                        Text("Checking…")
-                    } else if let started = status?.started_at {
-                        Text("Running for \(Text(Date(timeIntervalSince1970: started), style: .relative))")
+                    HStack {
+                        Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 32, height: 32)
+                        VStack(alignment: .leading) {
+                            Text("Zurafa Server")
+                            Group {
+                                if daemon.down {
+                                    Text("Not running")
+                                } else if daemon.stale {
+                                    Text("Running an older version. Restart it to finish the update; agents and \"zurafa\" commands need the new one.")
+                                } else if let statusError {
+                                    Text(statusError)
+                                } else if status == nil {
+                                    Text("Checking…")
+                                } else if let started = status?.started_at {
+                                    Text("Running for \(Text(Date(timeIntervalSince1970: started), style: .relative))")
+                                }
+                            }
+                            .font(.callout).foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
-            if let status { Section {
-                switch status.tailscale_state {
-                case nil:
-                    LabeledContent {
-                        Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download/mac")!)
-                    } label: {
-                        Text("Tailscale is not installed")
-                        Text("Access Zurafa securely from your other devices.")
-                    }
-                case "Running":
-                    LabeledContent("Account", value: status.tailscale_login ?? "—")
-                    LabeledContent("This Mac", value: status.tailscale_name ?? "—")
-                    Toggle(isOn: Binding(get: { listen }, set: setListen)) {
-                        Text("Allow connections from your devices")
-                        Text(status.listening?.isEmpty == false
-                             ? "Listening on \(status.listening!.joined(separator: ", "))"
-                             : "Only devices signed in to \(status.tailscale_login ?? "your account") can connect, on port 7297.")
-                    }
-                    Toggle(isOn: Binding(get: { lidAwake }, set: setLidAwake)) {
-                        Text("Stay reachable with the lid closed")
-                        Text("While on power, this Mac keeps running when you close it. On battery it sleeps as usual. Asks for your password once.")
-                    }
-                    if let error { Text(error).font(.caption).foregroundStyle(.red) }
-                case let state?:
-                    LabeledContent {
-                        Button("Open Tailscale") { openTailscale() }
-                    } label: {
-                        Text("Sign in to Tailscale")
-                        Text(state == "NeedsLogin" ? "Access Zurafa securely from your other devices."
-                                                   : "Tailscale is \(state == "Stopped" ? "turned off" : state).")
-                    }
-                }
-            } header: {
-                Text("Tailscale")
-            } }
+            if let status, status.tailscale_state == "Running" { Section { remoteAddress(status) } }
+            if let status { Section("Tailscale") { tailscale(status) } }
         }
         // Again after a restart, and when coming back from Tailscale.app.
         .task(id: daemon.down) { await refresh() }
@@ -420,6 +405,83 @@ struct ServerPane: View {
             Button("Restart Server", role: .destructive) { restart() }
         } message: {
             Text("Every terminal closes, including those running agents. Zurafa starts a new server right away.")
+        }
+        .sheet(isPresented: $pairing) {
+            if let name = status?.tailscale_name { PairSheet(address: name) }
+        }
+    }
+
+    /// What the iPhone app (or another Mac's Saved Connections) types in to reach this Mac.
+    @ViewBuilder private func remoteAddress(_ status: Msg) -> some View {
+        let open = status.listening?.isEmpty == false
+        LabeledContent {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(status.tailscale_name ?? "", forType: .string)
+            } label: { Image(systemName: "doc.on.doc") }
+                .help("Copy Address")
+                .disabled(!open || status.tailscale_name == nil)
+            Button { pairing = true } label: { Label("Pair", systemImage: "qrcode") }
+                .disabled(!open || status.tailscale_name == nil)
+        } label: {
+            Text("Remote Address")
+            if open, let name = status.tailscale_name {
+                Text(name).textSelection(.enabled)
+            } else {
+                Text("Turn on Serve over Tailscale to get an address.")
+            }
+        }
+    }
+
+    @ViewBuilder private func tailscale(_ status: Msg) -> some View {
+        let account = status.tailscale_login ?? "your Tailscale account"
+        switch status.tailscale_state {
+        case nil:
+            LabeledContent {
+                Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download/mac")!)
+            } label: {
+                Text("Tailscale is not installed")
+                Text("Access Zurafa securely from your other devices.")
+            }
+        case "Running":
+            LabeledContent {
+                Button("Open Tailscale…") { openTailscale() }
+            } label: {
+                Text("Signed in to Tailscale")
+                Text("Signed in as \(account)")
+            }
+            Toggle(isOn: Binding(get: { listen }, set: { setListen($0, limit: limit) })) {
+                Text("Serve over Tailscale")
+                Text(status.listening?.isEmpty == false
+                     ? "Listening on \(status.listening!.joined(separator: ", "))"
+                     : "Connect to this Mac's Zurafa server over your tailnet, on port 7297.")
+            }
+            Toggle(isOn: Binding(get: { limit }, set: { setListen(listen, limit: $0) })) {
+                Text("Limit access to your Tailscale account")
+                Text(limit ? "Zurafa verifies the caller is signed in as \(account)."
+                           : "Every device Tailscale identifies on your tailnet can open terminals here, including shared users and tagged devices.")
+            }
+            Toggle(isOn: Binding(get: { lidAwake }, set: setLidAwake)) {
+                Text("Stay reachable with the lid closed")
+                Text("While on power, this Mac keeps running when you close it. On battery it sleeps as usual. Asks for your password once.")
+            }
+            LabeledContent("Tags") {
+                Text(status.tailscale_tags?.joined(separator: ", ") ?? "None")
+                Image(systemName: "questionmark.circle")
+                    .help("Tagged devices have no owner, so with access limited to your account they cannot connect. Tags are set in the Tailscale admin console.")
+            }
+            LabeledContent("Tailscale Name") {
+                Text(status.tailscale_name ?? "—").textSelection(.enabled)
+            }
+            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+        case let state?:
+            LabeledContent {
+                Button("Open Tailscale…") { openTailscale() }
+            } label: {
+                Text("Sign in to Tailscale")
+                Text(state == "NeedsLogin" ? "Access Zurafa securely from your other devices."
+                                           : "Tailscale is \(state == "Stopped" ? "turned off" : state).")
+            }
         }
     }
 
@@ -442,15 +504,16 @@ struct ServerPane: View {
         try? pkill.run()
     }
 
-    private func setListen(_ on: Bool) {
-        listen = on
+    private func setListen(_ on: Bool, limit: Bool) {
+        let (wasOn, wasLimited) = (listen, self.limit)
+        (listen, self.limit) = (on, limit)
         Task {
             do {
-                _ = try await daemon.request(["type": .string("server.listen"), "enable": .bool(on)])
+                _ = try await daemon.request(Self.listenRequest(on))
                 error = nil
             } catch {
                 self.error = error.localizedDescription
-                if on { listen = false }
+                (listen, self.limit) = (wasOn, wasLimited)
             }
             await refresh()
         }
@@ -471,6 +534,37 @@ struct ServerPane: View {
             ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: "io.tailscale.ipn.macsys") {
             NSWorkspace.shared.openApplication(at: app, configuration: .init())
         }
+    }
+}
+
+/// A QR code the iPhone's Camera opens in the Zurafa app, which then connects to this Mac.
+private struct PairSheet: View {
+    let address: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Pair Your iPhone").font(.title2.bold())
+            if let qr = Self.qrCode("zurafa://connect?address=\(address)") {
+                Image(nsImage: qr).interpolation(.none).resizable().frame(width: 220, height: 220)
+                    .padding(12).background(.white, in: .rect(cornerRadius: 12))
+            }
+            Text("Scan with your iPhone's camera. The iPhone must be signed in to the same Tailscale account and have the Zurafa app installed.")
+                .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(width: 300)
+            Text(address).font(.callout.monospaced()).textSelection(.enabled)
+            Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+        }
+        .padding(24)
+    }
+
+    static func qrCode(_ text: String) -> NSImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(text.utf8)
+        guard let image = filter.outputImage else { return nil }
+        let rep = NSCIImageRep(ciImage: image)
+        let out = NSImage(size: rep.size)
+        out.addRepresentation(rep)
+        return out
     }
 }
 

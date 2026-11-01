@@ -17,6 +17,20 @@ final class ImagePasteTests: XCTestCase {
         XCTAssertNotNil(NSImage(contentsOfFile: path))
     }
 
+    func testCopiedImageFileIsPastedAsItsOwnPathNotItsFinderIcon() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("logo \(UUID().uuidString).png")
+        try pngData().write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name(UUID().uuidString))
+        pasteboard.clearContents()
+        // What Finder's Copy writes: the file URL plus the file's icon as TIFF.
+        pasteboard.writeObjects([file as NSURL])
+        pasteboard.addTypes([.tiff], owner: nil)
+        pasteboard.setData(NSWorkspace.shared.icon(forFile: file.path).tiffRepresentation, forType: .tiff)
+
+        XCTAssertEqual(ImagePaste.promptText(from: pasteboard), "'\(file.path)' ")
+    }
+
     private func pngData() -> Data {
         let image = NSImage(size: NSSize(width: 2, height: 2))
         image.lockFocus()

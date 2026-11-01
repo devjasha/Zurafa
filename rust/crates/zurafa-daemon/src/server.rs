@@ -17,6 +17,10 @@ async fn recv<R: AsyncRead + Unpin>(r: &mut R) -> Option<Value> {
     let v: Value = serde_json::from_slice(&read_frame(r).await.ok()?).ok()?;
     v.is_object().then_some(v)
 }
+fn yes() -> bool {
+    true
+}
+
 fn error(id: impl Serialize, message: impl ToString) -> Value {
     json!({"id":id,"type":"error","message":message.to_string()})
 }
@@ -103,7 +107,13 @@ enum Request {
     #[serde(rename = "server.status")]
     ServerStatus { id: u64 },
     #[serde(rename = "server.listen")]
-    ServerListen { id: u64, enable: bool },
+    ServerListen {
+        id: u64,
+        enable: bool,
+        /// Only this device and its Tailscale owner; off admits every caller Tailscale identifies.
+        #[serde(default = "yes")]
+        limit: bool,
+    },
     #[serde(rename = "events.subscribe")]
     Subscribe {
         id: u64,
@@ -324,8 +334,10 @@ async fn request(
                 .unwrap_or(Value::Null);
             let me = &status["Self"];
             let login = me["UserID"].as_u64().and_then(|uid| status["User"][uid.to_string()]["LoginName"].as_str());
+            let (listening, limited) = crate::listen::switched().await;
             json!({"id":id,"type":"server.status","stale":crate::stale(),"pid":std::process::id(),
-                "started_at":crate::STARTED.get(),"listening":crate::listen::switched_addresses().await,
+                "started_at":crate::STARTED.get(),"listening":listening,"limited":limited,
+                "tailscale_tags":me["Tags"],
                 // null when no Tailscale CLI answers; otherwise Running, NeedsLogin, Stopped, …
                 "tailscale_state":status["BackendState"],"tailscale_login":login,
                 "tailscale_name":me["DNSName"].as_str().map(|n| n.trim_end_matches('.'))})
@@ -355,7 +367,7 @@ async fn request(
                 Err(e) => error(id, e),
             }
         }
-        Request::ServerListen { id, enable } => match crate::listen::switch_tailnet(terms.clone(), enable).await {
+        Request::ServerListen { id, enable, limit } => match crate::listen::switch_tailnet(terms.clone(), enable, limit).await {
             Ok(()) => json!({"id":id,"type":"ok"}),
             Err(e) => error(id, e),
         },

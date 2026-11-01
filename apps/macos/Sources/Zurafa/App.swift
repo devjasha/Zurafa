@@ -68,11 +68,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, SPUU
     }
 }
 
-/// Menu bar status of the local zurafa-daemon: a server while it answers, a warning when it does not.
+/// 54×32 px drawn at @2x; template so the menu bar tints it for light, dark and highlighted states.
+private let menuBarGiraffe: NSImage? = {
+    guard let image = ZurafaResources.image(named: "zurafa-menubar") else { return nil }
+    image.size = NSSize(width: 27, height: 16)
+    image.isTemplate = true
+    return image
+}()
+
+/// Menu bar status of the local zurafa-daemon: the giraffe while it answers, a warning when it does not.
 private struct ServerMenuIcon: View {
     @ObservedObject private var daemon = DaemonClient.shared
     var body: some View {
-        Image(systemName: daemon.down ? "exclamationmark.triangle" : daemon.stale ? "arrow.triangle.2.circlepath" : "server.rack")
+        Group {
+            if !daemon.down && !daemon.stale, let giraffe = menuBarGiraffe { Image(nsImage: giraffe) }
+            else { Image(systemName: daemon.down ? "exclamationmark.triangle" : daemon.stale ? "arrow.triangle.2.circlepath" : "server.rack") }
+        }
             .help(daemon.down ? "Zurafa Server is not running" : daemon.stale ? "Restart Zurafa Server to finish the update" : "Zurafa Server is running")
     }
 }

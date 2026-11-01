@@ -25,7 +25,7 @@ pub fn run(terms: Arc<Terminals>) {
         // shortcut: polls every 10 s and runs `caffeinate -i` instead of holding an IOKit assertion; switch if 10 s ever matters.
         let mut caffeinate: Option<Child> = None;
         loop {
-            let listening = !crate::listen::switched_addresses().await.is_empty();
+            let listening = !crate::listen::switched().await.0.is_empty();
             let want = listening && serde_json::to_value(terms.dispatcher.snapshot()).is_ok_and(|s| needed(&s));
             match (caffeinate.as_mut(), want) {
                 // -w: caffeinate also ends if this daemon dies.

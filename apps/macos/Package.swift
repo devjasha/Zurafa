@@ -21,7 +21,7 @@ let package = Package(
                 .product(name: "Highlightr", package: "Highlightr"),
                 .product(name: "SwiftMath", package: "SwiftMath"),
             ],
-            resources: [.copy("Resources/Zurafa-iOS-Default-1024@1x.png"), .copy("Resources/zurafa-star.png"),
+            resources: [.copy("Resources/Zurafa-iOS-Default-1024@1x.png"), .copy("Resources/zurafa-star.png"), .copy("Resources/zurafa-menubar.png"),
                         .copy("Resources/brands"),
                         .copy("Resources/SymbolsNerdFontMono-Regular.ttf"), .copy("Resources/SymbolsNerdFont-LICENSE.txt"),
                         .copy("Resources/themes"), .copy("Resources/Themes-LICENSE.txt")]),

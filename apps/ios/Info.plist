@@ -5,5 +5,17 @@
 	<!-- Lets the terminal redraw at 120 Hz on ProMotion iPhones, in step with scrolling. Merged into the generated Info.plist. -->
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- zurafa://connect?address=NAME.ts.net, from the QR code in the Mac's Settings → Server → Pair. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Zurafa</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>zurafa</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

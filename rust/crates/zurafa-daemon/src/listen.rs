@@ -147,29 +147,34 @@ where
     }
 }
 
-/// The listener the app's Server settings switch on and off: its accept loops and their addresses.
-static SWITCHED: tokio::sync::Mutex<Vec<(SocketAddr, AbortHandle)>> = tokio::sync::Mutex::const_new(Vec::new());
+/// The listener the app's Server settings switch on and off: its accept loops and their addresses,
+/// and whether it admits callers beyond this Mac's Tailscale account.
+static SWITCHED: tokio::sync::Mutex<(Vec<(SocketAddr, AbortHandle)>, bool)> = tokio::sync::Mutex::const_new((Vec::new(), false));
 
-/// Starts or stops `tailnet://:7297` for this daemon's owner, without touching open terminals.
-/// Callers already connected stay connected after it stops.
+/// Starts or stops `tailnet://:7297` without touching open terminals; `limit` keeps it to this
+/// device and its owner, otherwise every caller Tailscale identifies gets in.
+/// Callers already connected stay connected after it stops or changes.
 /// Boxed with an explicit `Send`: the connections it accepts can call it again, and the compiler
 /// cannot infer `Send` through that cycle.
-pub fn switch_tailnet(terms: Arc<Terminals>, on: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+pub fn switch_tailnet(terms: Arc<Terminals>, on: bool, limit: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
     Box::pin(async move {
         let mut running = SWITCHED.lock().await;
-        if !on {
-            running.drain(..).for_each(|(_, task)| task.abort());
-        } else if running.is_empty() {
+        if !on || running.1 == limit {
+            running.0.drain(..).for_each(|(_, task)| task.abort());
+        }
+        if on && running.0.is_empty() {
             let (me, _) = whoami().await?;
-            *running = start_tailnet(DEFAULT_PORT, me, Target::Daemon(terms), false).await?;
+            *running = (start_tailnet(DEFAULT_PORT, me, Target::Daemon(terms), !limit).await?, !limit);
         }
         Ok(())
     })
 }
 
-/// Addresses the switched listener is bound to; empty while it is off.
-pub async fn switched_addresses() -> Vec<String> {
-    SWITCHED.lock().await.iter().map(|(addr, _)| addr.to_string()).collect()
+/// Addresses the switched listener is bound to (empty while it is off), and whether it is limited
+/// to this Mac's Tailscale account.
+pub async fn switched() -> (Vec<String>, bool) {
+    let running = SWITCHED.lock().await;
+    (running.0.iter().map(|(addr, _)| addr.to_string()).collect(), !running.1)
 }
 
 /// Binds every Tailscale address of this machine, never a wildcard address.

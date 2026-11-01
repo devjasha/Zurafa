@@ -29,6 +29,7 @@ struct Msg: Codable {
     var pid: Int32?
     var started_at: Double?
     var listening: [String]?
+    var tailscale_tags: [String]?
     var tailscale_state: String?
     var tailscale_login: String?
     var tailscale_name: String?
