@@ -205,6 +205,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_FILE = Info.plist;
 				CODE_SIGN_ENTITLEMENTS = ZurafaMobile.entitlements;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Zurafa scans the Pair code on your Mac to connect to it.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Zurafa connects to your Mac when you enter its local network address.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -234,6 +235,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_FILE = Info.plist;
 				CODE_SIGN_ENTITLEMENTS = ZurafaMobile.entitlements;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Zurafa scans the Pair code on your Mac to connect to it.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Zurafa connects to your Mac when you enter its local network address.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

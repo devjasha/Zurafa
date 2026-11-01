@@ -1,4 +1,5 @@
 import SwiftUI
+import VisionKit
 
 @main
 struct ZurafaMobileApp: App {
@@ -60,15 +61,23 @@ extension RootView {
     }
 }
 
-/// First run: name the Mac. Tailscale decides who gets in, so there is nothing to pair.
+/// First run: scan the Mac's Pair code or name the Mac. Tailscale decides who gets in.
 struct ConnectView: View {
     @ObservedObject private var mac = MacClient.shared
     @AppStorage("macAddress") private var saved = ""
     @State private var address = ""
+    @State private var scanning = false
 
     var body: some View {
         NavigationStack {
             Form {
+                if DataScannerViewController.isSupported {
+                    Section {
+                        Button("Scan QR Code", systemImage: "qrcode.viewfinder") { scanning = true }
+                    } footer: {
+                        Text("On the Mac, open Zurafa → Settings → Server, turn on \"Serve over Tailscale\" and click Pair.")
+                    }
+                }
                 Section {
                     TextField("my-mac-zurafa.tail1234.ts.net", text: $address)
                         .textInputAutocapitalization(.never)
@@ -78,7 +87,7 @@ struct ConnectView: View {
                 } header: {
                     Text("Your Mac's Tailscale name")
                 } footer: {
-                    Text("On the Mac, open Zurafa → Settings → Server, turn on \"Serve over Tailscale\" and scan the Pair code with this iPhone's camera, or type the Remote Address here. Sign this iPhone in to the same Tailscale account.")
+                    Text("Or type the Remote Address from Zurafa → Settings → Server on the Mac. Sign this iPhone in to the same Tailscale account.")
                 }
                 Section {
                     Button("Connect", action: connect).disabled(address.isEmpty || mac.state == .connecting)
@@ -87,9 +96,56 @@ struct ConnectView: View {
                 }
             }
             .navigationTitle("Zurafa")
+            .sheet(isPresented: $scanning) {
+                NavigationStack {
+                    PairScanner { scanned in
+                        scanning = false
+                        address = scanned
+                        connect()
+                    }
+                    .ignoresSafeArea()
+                    .navigationTitle("Scan Pair Code")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { Button("Cancel", role: .cancel) { scanning = false } }
+                }
+            }
         }
         .onChange(of: mac.state) { _, state in if state == .connected { saved = address } }
     }
 
     private func connect() { mac.connect(to: address) }
+}
+
+/// The camera, looking for a Pair code (`zurafa://connect?address=…`); other QR codes are ignored.
+struct PairScanner: UIViewControllerRepresentable {
+    let found: (String) -> Void
+
+    func makeUIViewController(context: Context) -> DataScannerViewController {
+        let scanner = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.qr])],
+                                                isHighlightingEnabled: true)
+        scanner.delegate = context.coordinator
+        // Asks for the camera the first time; if refused, the view stays dark and Cancel still works.
+        try? scanner.startScanning()
+        return scanner
+    }
+
+    func updateUIViewController(_: DataScannerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(found: found) }
+
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        let found: (String) -> Void
+        private var done = false
+        init(found: @escaping (String) -> Void) { self.found = found }
+
+        func dataScanner(_ scanner: DataScannerViewController, didAdd items: [RecognizedItem], allItems: [RecognizedItem]) {
+            for case .barcode(let code) in items {
+                guard !done, let url = code.payloadStringValue.flatMap(URL.init(string:)),
+                      let address = RootView.pairAddress(url) else { continue }
+                done = true
+                scanner.stopScanning()
+                found(address)
+            }
+        }
+    }
 }
