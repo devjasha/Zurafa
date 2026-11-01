@@ -29,6 +29,8 @@ app="$root/build/$app_name.app"
 remote_targets=(x86_64-unknown-linux-musl aarch64-unknown-linux-musl)
 (cd "$root/rust" && rustup target add "${remote_targets[@]}" >/dev/null &&
   cargo build --release -p zurafa-daemon $(printf -- '--target %s ' "${remote_targets[@]}"))
+# The app's own Tailscale device (Settings → Server), a Go program because tsnet is Go.
+(cd "$root/tailscale" && go build -trimpath -ldflags="-s -w" -o "$root/build/zurafa-tailscale" .)
 (cd "$root/apps/macos" && swift build -c release)
 bin="$(cd "$root/apps/macos" && swift build -c release --show-bin-path)"
 
@@ -37,7 +39,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Framewor
 cp "$bin/Zurafa" "$app/Contents/MacOS/$executable_name"
 # SwiftPM records the deployment target as the SDK version, and macOS keeps apps "built" against
 # an SDK older than 26 on the pre-Liquid Glass look. Record the SDK this was really built with.
-vtool -set-build-version macos 14.0 "$(xcrun --show-sdk-version)" -replace \
+vtool -set-build-version macos 14.0 "$(xcrun --sdk macosx --show-sdk-version)" -replace \
   -output "$app/Contents/MacOS/$executable_name" "$app/Contents/MacOS/$executable_name"
 cp -R "$bin/Sparkle.framework" "$app/Contents/Frameworks/Sparkle.framework"
 if ! otool -l "$app/Contents/MacOS/$executable_name" | grep -q '@executable_path/../Frameworks'; then
@@ -45,6 +47,7 @@ if ! otool -l "$app/Contents/MacOS/$executable_name" | grep -q '@executable_path
 fi
 cp -R "$root/apps/macos/Sources/Zurafa/Resources/brands" "$app/Contents/Resources/brands"
 cp "$root/apps/macos/Sources/Zurafa/Resources/zurafa-star.png" "$app/Contents/Resources/zurafa-star.png"
+cp "$root/apps/macos/Sources/Zurafa/Resources/zurafa-menubar.png" "$app/Contents/Resources/zurafa-menubar.png"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFontMono-Regular.ttf" "$app/Contents/Resources/SymbolsNerdFontMono-Regular.ttf"
 cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app/Contents/Resources/SymbolsNerdFont-LICENSE.txt"
 cp -R "$root/apps/macos/Sources/Zurafa/Resources/themes" "$app/Contents/Resources/themes"
@@ -57,6 +60,7 @@ cp -R "$bin/SwiftMath_SwiftMath.bundle" "$app/Contents/Resources/SwiftMath_Swift
 # Its fonts ship executable; signing them adds xattrs that Sparkle cannot diff, so no deltas get built.
 find "$app/Contents/Resources/SwiftMath_SwiftMath.bundle" -type f -exec chmod a-x {} +
 cp "$root/rust/target/release/zurafa-daemon" "$app/Contents/MacOS/zurafa-daemon"
+cp "$root/build/zurafa-tailscale" "$app/Contents/MacOS/zurafa-tailscale"
 # Resources, not MacOS: a "zurafa" file there would collide with the "Zurafa" app
 # executable on the case-insensitive APFS volumes macOS ships by default.
 cp "$root/rust/target/release/zurafa" "$app/Contents/Resources/zurafa"

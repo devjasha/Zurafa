@@ -344,25 +344,41 @@ private struct NotificationsPane: View {
     }
 }
 
-/// The local zurafa-daemon, and whether your other Tailscale devices may reach it.
+/// The local zurafa-daemon, and Zurafa's own Tailscale device that lets your other devices reach it.
 struct ServerPane: View {
     static let listenKey = "serverListenOnTailnet"
     static let limitKey = "serverLimitToTailscaleAccount"
-    /// What the app sends to (re)start the tailnet listener with the settings stored here.
+    static let hostnameKey = "serverTailscaleHostname"
+    /// "Yareliu's MacBook Pro" → "yarelius-macbook-pro-zurafa", as Rex names its device.
+    static var defaultHostname: String {
+        let name = (Host.current().localizedName ?? "mac").lowercased().replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "’", with: "")
+        let slug = name.map { $0.isLetter && $0.isASCII || $0.isNumber ? String($0) : "-" }.joined()
+            .split(separator: "-").joined(separator: "-")
+        return (slug.isEmpty ? "mac" : slug) + "-zurafa"
+    }
+    /// What the app sends to (re)start the Tailscale device with the settings stored here.
     static func listenRequest(_ on: Bool) -> [String: JSONValue] {
-        ["type": .string("server.listen"), "enable": .bool(on),
-         "limit": .bool(UserDefaults.standard.object(forKey: limitKey) as? Bool ?? true)]
+        let defaults = UserDefaults.standard
+        let hostname = defaults.string(forKey: hostnameKey).flatMap { $0.isEmpty ? nil : $0 } ?? defaultHostname
+        return ["type": .string("server.listen"), "enable": .bool(on), "hostname": .string(hostname),
+                "limit": .bool(defaults.object(forKey: limitKey) as? Bool ?? true)]
     }
 
     @ObservedObject private var daemon = DaemonClient.shared
     @AppStorage(listenKey) private var listen = false
     @AppStorage(limitKey) private var limit = true
+    @AppStorage(hostnameKey) private var hostname = ""
     @AppStorage(LidAwake.key) private var lidAwake = false
     @State private var status: Msg?
     @State private var error: String?
     @State private var statusError: String?
     @State private var confirmingRestart = false
+    @State private var confirmingSignOut = false
     @State private var pairing = false
+    @State private var hostnameDraft = ""
+
+    private var device: TailscaleDevice? { status?.tailscale }
+    private var address: String? { device?.cert == true ? device?.name : nil }
 
     var body: some View {
         Form {
@@ -393,96 +409,113 @@ struct ServerPane: View {
                     }
                 }
             }
-            if let status, status.tailscale_state == "Running" { Section { remoteAddress(status) } }
-            if let status { Section("Tailscale") { tailscale(status) } }
+            Section { remoteAddress }
+            Section("Tailscale") { tailscale }
         }
-        // Again after a restart, and when coming back from Tailscale.app.
-        .task(id: daemon.down) { await refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            Task { await refresh() }
+        // Every 2 s while open, so sign-in and the certificate show up as they happen; again after a restart.
+        .task(id: daemon.down) {
+            while !Task.isCancelled {
+                await refresh()
+                try? await Task.sleep(for: .seconds(2))
+            }
         }
+        .onAppear { hostnameDraft = hostname.isEmpty ? Self.defaultHostname : hostname }
         .confirmationDialog("Restart Zurafa Server?", isPresented: $confirmingRestart) {
             Button("Restart Server", role: .destructive) { restart() }
         } message: {
             Text("Every terminal closes, including those running agents. Zurafa starts a new server right away.")
         }
+        .confirmationDialog("Sign Zurafa out of Tailscale?", isPresented: $confirmingSignOut) {
+            Button("Sign Out", role: .destructive) { signOut() }
+        } message: {
+            Text("Your other devices can no longer reach this Mac until Zurafa is signed in again. This Mac's own Tailscale stays signed in.")
+        }
         .sheet(isPresented: $pairing) {
-            if let name = status?.tailscale_name { PairSheet(address: name) }
+            if let address { PairSheet(address: address) }
         }
     }
 
-    /// What the iPhone app (or another Mac's Saved Connections) types in to reach this Mac.
-    @ViewBuilder private func remoteAddress(_ status: Msg) -> some View {
-        let open = status.listening?.isEmpty == false
+    /// What the iPhone app types in (or scans) to reach this Mac.
+    @ViewBuilder private var remoteAddress: some View {
         LabeledContent {
             Button {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(status.tailscale_name ?? "", forType: .string)
+                NSPasteboard.general.setString("https://\(address ?? "")", forType: .string)
             } label: { Image(systemName: "doc.on.doc") }
                 .help("Copy Address")
-                .disabled(!open || status.tailscale_name == nil)
+                .disabled(address == nil)
             Button { pairing = true } label: { Label("Pair", systemImage: "qrcode") }
-                .disabled(!open || status.tailscale_name == nil)
+                .disabled(address == nil)
         } label: {
             Text("Remote Address")
-            if open, let name = status.tailscale_name {
-                Text(name).textSelection(.enabled)
-            } else {
+            if let address {
+                Text("https://\(address)").textSelection(.enabled)
+            } else if !listen {
                 Text("Turn on Serve over Tailscale to get an address.")
+            } else if let device, device.state == "Running", let why = device.cert_error {
+                Text("No HTTPS certificate: \(why)")
+            } else if let device, device.state == "Running" {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Waiting for an HTTPS certificate…") }
+            } else if device?.state == "NeedsLogin" {
+                Text("Sign Zurafa in to Tailscale to get an address.")
+            } else {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Connecting to Tailscale…") }
             }
         }
     }
 
-    @ViewBuilder private func tailscale(_ status: Msg) -> some View {
-        let account = status.tailscale_login ?? "your Tailscale account"
-        switch status.tailscale_state {
-        case nil:
-            LabeledContent {
-                Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download/mac")!)
-            } label: {
-                Text("Tailscale is not installed")
-                Text("Access Zurafa securely from your other devices.")
-            }
-        case "Running":
-            LabeledContent {
-                Button("Open Tailscale…") { openTailscale() }
-            } label: {
-                Text("Signed in to Tailscale")
-                Text("Signed in as \(account)")
-            }
-            Toggle(isOn: Binding(get: { listen }, set: { setListen($0, limit: limit) })) {
-                Text("Serve over Tailscale")
-                Text(status.listening?.isEmpty == false
-                     ? "Listening on \(status.listening!.joined(separator: ", "))"
-                     : "Connect to this Mac's Zurafa server over your tailnet, on port 7297.")
-            }
-            Toggle(isOn: Binding(get: { limit }, set: { setListen(listen, limit: $0) })) {
-                Text("Limit access to your Tailscale account")
-                Text(limit ? "Zurafa verifies the caller is signed in as \(account)."
-                           : "Every device Tailscale identifies on your tailnet can open terminals here, including shared users and tagged devices.")
-            }
-            Toggle(isOn: Binding(get: { lidAwake }, set: setLidAwake)) {
-                Text("Stay reachable with the lid closed")
-                Text("While on power, this Mac keeps running when you close it. On battery it sleeps as usual. Asks for your password once.")
-            }
-            LabeledContent("Tags") {
-                Text(status.tailscale_tags?.joined(separator: ", ") ?? "None")
-                Image(systemName: "questionmark.circle")
-                    .help("Tagged devices have no owner, so with access limited to your account they cannot connect. Tags are set in the Tailscale admin console.")
-            }
-            LabeledContent("Tailscale Name") {
-                Text(status.tailscale_name ?? "—").textSelection(.enabled)
-            }
-            if let error { Text(error).font(.caption).foregroundStyle(.red) }
-        case let state?:
-            LabeledContent {
-                Button("Open Tailscale…") { openTailscale() }
-            } label: {
-                Text("Sign in to Tailscale")
-                Text(state == "NeedsLogin" ? "Access Zurafa securely from your other devices."
-                                           : "Tailscale is \(state == "Stopped" ? "turned off" : state).")
+    @ViewBuilder private var tailscale: some View {
+        let account = device?.login ?? "your Tailscale account"
+        if let device, listen {
+            switch device.state {
+            case "Running":
+                LabeledContent {
+                    Button("Sign Out…") { confirmingSignOut = true }
+                } label: {
+                    Text("Signed in to Tailscale")
+                    Text(device.login.map { "Signed in as \($0)" } ?? "Tagged device")
+                }
+            case "NeedsLogin":
+                LabeledContent {
+                    Button("Sign In…") { if let url = device.auth_url.flatMap(URL.init(string:)) { NSWorkspace.shared.open(url) } }
+                        .disabled(device.auth_url == nil)
+                } label: {
+                    Text("Sign in to Tailscale")
+                    Text("Zurafa joins your tailnet as its own device, \(hostnameDraft).")
+                }
+            default:
+                LabeledContent("Tailscale") {
+                    Text(device.error ?? (device.state == "Starting" ? "Starting…" : device.state)).foregroundStyle(.secondary)
+                }
             }
         }
+        Toggle(isOn: Binding(get: { listen }, set: { listen = $0; apply() })) {
+            Text("Serve over Tailscale")
+            Text("Connect to this Mac's Zurafa server over your tailnet.")
+        }
+        Toggle(isOn: Binding(get: { limit }, set: { limit = $0; apply() })) {
+            Text("Limit access to your Tailscale account")
+            Text(limit ? "Zurafa will verify the caller is signed in as \(account)."
+                       : "Every device Tailscale identifies on your tailnet can open terminals here, including shared users.")
+        }
+        Toggle(isOn: Binding(get: { lidAwake }, set: setLidAwake)) {
+            Text("Stay reachable with the lid closed")
+            Text("While on power, this Mac keeps running when you close it. On battery it sleeps as usual. Asks for your password once.")
+        }
+        LabeledContent("Tags") {
+            Text(device?.tags?.joined(separator: ", ") ?? "None")
+            Image(systemName: "questionmark.circle")
+                .help("Tags are set in the Tailscale admin console. A tagged device has no owner, so with access limited to your account nobody can connect.")
+        }
+        LabeledContent {
+            TextField("Preferred Hostname", text: $hostnameDraft)
+                .labelsHidden()
+                .onSubmit(saveHostname)
+        } label: {
+            Text("Preferred Hostname")
+            Text("Used to generate the Tailscale address.")
+        }
+        if let error { Text(error).font(.caption).foregroundStyle(.red) }
     }
 
     private func refresh() async {
@@ -504,16 +537,34 @@ struct ServerPane: View {
         try? pkill.run()
     }
 
-    private func setListen(_ on: Bool, limit: Bool) {
-        let (wasOn, wasLimited) = (listen, self.limit)
-        (listen, self.limit) = (on, limit)
+    /// Starts, restarts or stops the device with the stored settings.
+    private func apply() {
         Task {
             do {
-                _ = try await daemon.request(Self.listenRequest(on))
+                _ = try await daemon.request(Self.listenRequest(listen))
                 error = nil
             } catch {
                 self.error = error.localizedDescription
-                (listen, self.limit) = (wasOn, wasLimited)
+                if listen { listen = false }
+            }
+            await refresh()
+        }
+    }
+
+    private func saveHostname() {
+        let draft = hostnameDraft.trimmingCharacters(in: .whitespaces)
+        hostname = draft == Self.defaultHostname ? "" : draft
+        hostnameDraft = draft.isEmpty ? Self.defaultHostname : draft
+        if listen { apply() }
+    }
+
+    private func signOut() {
+        Task {
+            do {
+                _ = try await daemon.request(["type": .string("server.logout")])
+                error = nil
+            } catch {
+                self.error = error.localizedDescription
             }
             await refresh()
         }
@@ -527,13 +578,6 @@ struct ServerPane: View {
             self.error = error.localizedDescription
         }
         lidAwake = LidAwake.shared.enabled
-    }
-
-    private func openTailscale() {
-        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "io.tailscale.ipn.macos")
-            ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: "io.tailscale.ipn.macsys") {
-            NSWorkspace.shared.openApplication(at: app, configuration: .init())
-        }
     }
 }
 

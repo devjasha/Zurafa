@@ -18,7 +18,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
@@ -95,7 +95,7 @@ pub async fn start(listen: Listen, target: Target, allow_identified: bool, allow
     let (me, owner) = whoami().await?;
     match listen {
         Listen::Tailnet(port) => start_tailnet(port, me, target, allow_identified).await.map(drop),
-        Listen::Serve(path) => start_serve(path, owner, target, allow_identified),
+        Listen::Serve(path) => start_serve(path, Arc::new(Mutex::new(owner)), target, allow_identified).map(drop),
         Listen::Anonymous(_) => unreachable!(),
     }
 }
@@ -147,36 +147,6 @@ where
     }
 }
 
-/// The listener the app's Server settings switch on and off: its accept loops and their addresses,
-/// and whether it admits callers beyond this Mac's Tailscale account.
-static SWITCHED: tokio::sync::Mutex<(Vec<(SocketAddr, AbortHandle)>, bool)> = tokio::sync::Mutex::const_new((Vec::new(), false));
-
-/// Starts or stops `tailnet://:7297` without touching open terminals; `limit` keeps it to this
-/// device and its owner, otherwise every caller Tailscale identifies gets in.
-/// Callers already connected stay connected after it stops or changes.
-/// Boxed with an explicit `Send`: the connections it accepts can call it again, and the compiler
-/// cannot infer `Send` through that cycle.
-pub fn switch_tailnet(terms: Arc<Terminals>, on: bool, limit: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-    Box::pin(async move {
-        let mut running = SWITCHED.lock().await;
-        if !on || running.1 == limit {
-            running.0.drain(..).for_each(|(_, task)| task.abort());
-        }
-        if on && running.0.is_empty() {
-            let (me, _) = whoami().await?;
-            *running = (start_tailnet(DEFAULT_PORT, me, Target::Daemon(terms), !limit).await?, !limit);
-        }
-        Ok(())
-    })
-}
-
-/// Addresses the switched listener is bound to (empty while it is off), and whether it is limited
-/// to this Mac's Tailscale account.
-pub async fn switched() -> (Vec<String>, bool) {
-    let running = SWITCHED.lock().await;
-    (running.0.iter().map(|(addr, _)| addr.to_string()).collect(), !running.1)
-}
-
 /// Binds every Tailscale address of this machine, never a wildcard address.
 async fn start_tailnet(port: u16, me: Value, target: Target, allow_identified: bool) -> io::Result<Vec<(SocketAddr, AbortHandle)>> {
     let ips: Vec<IpAddr> = me["TailscaleIPs"]
@@ -222,8 +192,12 @@ async fn start_tailnet(port: u16, me: Value, target: Target, allow_identified: b
     Ok(tasks)
 }
 
+/// The login of the Tailscale device's owner: fixed for `tailnet-serve://`, and following the
+/// app's own device (`tsnet`) as it signs in and out.
+pub type Owner = Arc<Mutex<Option<String>>>;
+
 /// The caller's identity comes from headers, so only this user (and root's tailscaled) may connect.
-fn start_serve(path: PathBuf, owner: Option<String>, target: Target, allow_identified: bool) -> io::Result<()> {
+pub fn start_serve(path: PathBuf, owner: Owner, target: Target, allow_identified: bool) -> io::Result<AbortHandle> {
     if let Some(dir) = path.parent() {
         fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
     }
@@ -235,8 +209,7 @@ fn start_serve(path: PathBuf, owner: Option<String>, target: Target, allow_ident
     // shortcut: chmod after bind leaves a brief umask-mode window, as for the daemon socket; upgrade to umask(0o177) around bind if the parent may be shared
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
     eprintln!("zurafa-daemon listening for Tailscale Serve on {}", path.display());
-    let owner = Arc::new(owner);
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
@@ -246,7 +219,7 @@ fn start_serve(path: PathBuf, owner: Option<String>, target: Target, allow_ident
             }
         }
     });
-    Ok(())
+    Ok(task.abort_handle())
 }
 
 async fn serve_tailnet<S>(stream: S, peer: IpAddr, target: Target, me: Arc<Value>, allow_identified: bool)
@@ -275,7 +248,7 @@ where
     }
 }
 
-async fn serve_serve<S>(stream: S, target: Target, owner: Arc<Option<String>>, allow_identified: bool)
+async fn serve_serve<S>(stream: S, target: Target, owner: Owner, allow_identified: bool)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -285,6 +258,7 @@ where
         return;
     };
     let login = headers.iter().find(|(name, _)| name == "tailscale-user-login").map(|(_, v)| v.as_str());
+    let owner = owner.lock().unwrap().clone();
     match admit_serve(login, owner.as_deref(), allow_identified) {
         Ok(principal) => hand_off(stream, &target, principal, headers).await,
         Err(why) => {

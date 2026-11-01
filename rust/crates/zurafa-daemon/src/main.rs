@@ -11,6 +11,7 @@ mod remote;
 mod restore;
 mod server;
 mod service;
+mod tsnet;
 
 use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
 use std::os::unix::process::CommandExt;

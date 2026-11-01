@@ -62,6 +62,18 @@ Zurafa now includes an early `zurafa` CLI that uses this protocol for daemon adm
   exactly as on the Unix socket. The client's `principal` in snapshots is
   `{kind:"tailnet",login,node,tags}`; Unix socket clients have `null`.
   Anyone admitted can run programs as the daemon's user.
+- The app's own Tailscale device (as Rex's built-in Tailscale, macOS only):
+  `{id,type:"server.listen",enable,limit,hostname}` starts `zurafa-tailscale`
+  (Go, `tsnet`) from next to the daemon. It joins the tailnet as `hostname`,
+  keeps its state in `~/Library/Application Support/Zurafa/tailscale/`, serves
+  HTTPS on :443 with the device's `*.ts.net` certificate, and forwards callers
+  to a `tailnet-serve://` socket there, naming them in `Tailscale-User-Login`.
+  `limit` (default true) admits only the device's owner; false admits anyone
+  Tailscale names. Calling it again with other settings restarts the device;
+  open connections stay. `server.status` reports it as `tailscale:{state,
+  auth_url,login,name,tags,cert,cert_error}` (null while off), and
+  `{id,type:"server.logout"}` signs the device out. The helper exits when the
+  daemon closes its stdin.
 - Plain TCP listener (as Rex's `--extra-listen :7297 --allow-anonymous`):
   `--extra-listen :PORT` or `IP:PORT`. It cannot tell callers apart, so the
   daemon refuses to start it without `--allow-anonymous`. On a personal daemon,

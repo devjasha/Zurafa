@@ -28,14 +28,22 @@ struct Msg: Codable {
     var stale: Bool?
     var pid: Int32?
     var started_at: Double?
-    var listening: [String]?
-    var tailscale_tags: [String]?
-    var tailscale_state: String?
-    var tailscale_login: String?
-    var tailscale_name: String?
+    var tailscale: TailscaleDevice? // server.status: the app's own Tailscale device, nil while off
     var appearance: MacAppearance? // ui.appearance and its broadcast
     var devices: [PushDevice]? // push.list
     var path: String? // ui.paste_image: where the Mac saved the phone's image
+}
+
+/// Zurafa's own Tailscale device (`zurafa-tailscale`), as `server.status` reports it.
+struct TailscaleDevice: Codable, Equatable {
+    var state: String // Starting, NeedsLogin, Running, Stopped, …
+    var auth_url: String?
+    var login: String? // the device's owner; nil when tagged
+    var name: String? // e.g. my-mac-zurafa.tail1234.ts.net
+    var tags: [String]?
+    var cert: Bool?
+    var cert_error: String?
+    var error: String?
 }
 
 /// A phone that wants agent notifications, registered with `push.register`.

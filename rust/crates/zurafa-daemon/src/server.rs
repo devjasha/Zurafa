@@ -110,10 +110,15 @@ enum Request {
     ServerListen {
         id: u64,
         enable: bool,
-        /// Only this device and its Tailscale owner; off admits every caller Tailscale identifies.
+        /// Only the device's Tailscale owner; off admits every caller Tailscale identifies.
         #[serde(default = "yes")]
         limit: bool,
+        /// The app's Tailscale device name, e.g. "my-mac-zurafa".
+        #[serde(default)]
+        hostname: Option<String>,
     },
+    #[serde(rename = "server.logout")]
+    ServerLogout { id: u64 },
     #[serde(rename = "events.subscribe")]
     Subscribe {
         id: u64,
@@ -326,22 +331,13 @@ async fn request(
             Err(e) => error(id, e),
         },
         Request::ServerStatus { id } => {
-            let status: Value = tokio::task::spawn_blocking(|| crate::hosts::tailscale(&["status", "--json"]))
-                .await
-                .ok()
-                .flatten()
-                .and_then(|out| serde_json::from_slice(&out).ok())
-                .unwrap_or(Value::Null);
-            let me = &status["Self"];
-            let login = me["UserID"].as_u64().and_then(|uid| status["User"][uid.to_string()]["LoginName"].as_str());
-            let (listening, limited) = crate::listen::switched().await;
             json!({"id":id,"type":"server.status","stale":crate::stale(),"pid":std::process::id(),
-                "started_at":crate::STARTED.get(),"listening":listening,"limited":limited,
-                "tailscale_tags":me["Tags"],
-                // null when no Tailscale CLI answers; otherwise Running, NeedsLogin, Stopped, …
-                "tailscale_state":status["BackendState"],"tailscale_login":login,
-                "tailscale_name":me["DNSName"].as_str().map(|n| n.trim_end_matches('.'))})
+                "started_at":crate::STARTED.get(),"tailscale":crate::tsnet::status()})
         }
+        Request::ServerLogout { id } => match crate::tsnet::logout().await {
+            Ok(()) => json!({"id":id,"type":"ok"}),
+            Err(e) => error(id, e),
+        },
         Request::PushRegister { id, device } => match terms.push.lock().unwrap().register(device) {
             Ok(()) => json!({"id":id,"type":"ok"}),
             Err(e) => error(id, e),
@@ -367,7 +363,7 @@ async fn request(
                 Err(e) => error(id, e),
             }
         }
-        Request::ServerListen { id, enable, limit } => match crate::listen::switch_tailnet(terms.clone(), enable, limit).await {
+        Request::ServerListen { id, enable, limit, hostname } => match crate::tsnet::switch(terms.clone(), enable, limit, hostname.filter(|h| !h.trim().is_empty()).unwrap_or_else(|| "zurafa".into())).await {
             Ok(()) => json!({"id":id,"type":"ok"}),
             Err(e) => error(id, e),
         },

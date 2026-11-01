@@ -2,11 +2,11 @@ import Foundation
 import UIKit
 import Network
 
-/// The phone's one connection to the Mac's zurafa-daemon, over its tailnet listener (port 7297).
-/// The Mac admits only devices signed in to its own Tailscale account, so there is no pairing step.
+/// The phone's one connection to the Mac's zurafa-daemon, over HTTPS to Zurafa's own Tailscale
+/// device (port 443). The Mac admits only devices signed in to its own Tailscale account.
 @MainActor final class MacClient: ObservableObject {
     static let shared = MacClient()
-    static let defaultPort: UInt16 = 7297
+    static let defaultPort: UInt16 = 443
 
     enum State: Equatable { case idle, connecting, connected, failed(String) }
 
@@ -39,9 +39,12 @@ import Network
     /// When the Mac last sent anything; tells a live socket from one iOS killed while the app was suspended.
     private var heard = ContinuousClock.now
 
-    /// `my-mac`, `my-mac.tail1234.ts.net`, `100.x.y.z`, optionally with `:port`.
+    /// `my-mac-zurafa.tail1234.ts.net`, optionally as `https://…` or with `:port`.
+    /// Port 443 is TLS; any other port (a Linux host's 7297) is plain TCP inside the tailnet.
     static func endpoint(_ address: String) -> (host: String, port: UInt16) {
-        let trimmed = address.trimmingCharacters(in: .whitespaces)
+        var trimmed = address.trimmingCharacters(in: .whitespaces)
+        if trimmed.lowercased().hasPrefix("https://") { trimmed.removeFirst(8) }
+        if trimmed.hasSuffix("/") { trimmed.removeLast() }
         if let colon = trimmed.lastIndex(of: ":"), let port = UInt16(trimmed[trimmed.index(after: colon)...]) {
             return (String(trimmed[..<colon]), port)
         }
@@ -53,7 +56,7 @@ import Network
         drop(conn, reason: nil)
         let (host, port) = Self.endpoint(address)
         guard !host.isEmpty, let nwPort = NWEndpoint.Port(rawValue: port) else { return state = .failed("Enter your Mac's Tailscale name.") }
-        let c = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
+        let c = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: port == 443 ? .tls : .tcp)
         (conn, upgraded, head, decoder, state) = (c, false, Data(), FrameDecoder(), .connecting)
         c.stateUpdateHandler = { [weak self] s in
             MainActor.assumeIsolated {

@@ -70,7 +70,7 @@ struct ConnectView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("my-mac.tail1234.ts.net", text: $address)
+                    TextField("my-mac-zurafa.tail1234.ts.net", text: $address)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
