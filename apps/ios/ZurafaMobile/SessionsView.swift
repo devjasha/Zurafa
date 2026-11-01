@@ -25,13 +25,19 @@ struct SessionsView: View {
                 if mac.state != .connected { Section { status } }
                 ForEach(sessions, id: \.sessionID) { session in
                     Section {
+                        // One row per Mac tab; its panes are switched inside the terminal screen.
                         ForEach(session.windows, id: \.windowID) { window in
-                            ForEach(window.layout.panes, id: \.self) { id in
-                                NavigationLink(value: id) { PaneRow(label: window.label, block: session.blocks[id], remote: session.remote) }
-                                    .listRowBackground(rowBackground)
-                                    .swipeActions {
-                                        Button("Close", role: .destructive) { run { try await mac.close(id, in: session.sessionID) } }
-                                    }
+                            let id = window.selectedBlock
+                            NavigationLink(value: id) {
+                                PaneRow(label: window.label, block: session.blocks[id], remote: session.remote,
+                                        behind: window.layout.panes.filter { $0 != id }.prefix(2)
+                                            .map { session.blocks[$0]?.program(remote: session.remote) ?? .shell })
+                            }
+                            .listRowBackground(rowBackground)
+                            .swipeActions {
+                                Button("Close", role: .destructive) {
+                                    run { for pane in window.layout.panes { try await mac.close(pane, in: session.sessionID) } }
+                                }
                             }
                         }
                         Button("New Tab", systemImage: "plus") { newTab(in: session) }
@@ -108,20 +114,23 @@ struct PaneRow: View {
     let label: String
     let block: BlockSnapshot?
     let remote: RemoteHost?
+    /// The tab's other panes, peeking out behind its tile.
+    var behind: [Program] = []
 
     var body: some View {
         HStack {
-            Tile(program: block?.program(remote: remote) ?? (remote == nil ? .shell : remote!.shellProgram), size: 30)
+            PaneStack(front: block?.program(remote: remote) ?? (remote == nil ? .shell : remote!.shellProgram), behind: behind, size: 30)
             VStack(alignment: .leading) {
                 Text(block?.title ?? label).lineLimit(1)
                 if let pwd = block?.pwd { Text(URL(string: pwd)?.path ?? pwd).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head) }
             }
             Spacer()
-            badge
+            Self.badge(block)
         }
     }
 
-    @ViewBuilder private var badge: some View {
+    /// Exited, or the state of the record that stands for the pane; nothing while idle.
+    @ViewBuilder static func badge(_ block: BlockSnapshot?) -> some View {
         if block?.running == false {
             Text("Exited").font(.caption).foregroundStyle(.secondary)
         } else {

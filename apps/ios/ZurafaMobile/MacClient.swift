@@ -268,6 +268,12 @@ extension MacClient {
         try await request(["type": .string("layout.tab"), "session": .string(session), "label": .string(label), "cols": .number(80), "rows": .number(24)]).terminal
     }
 
+    /// Splits `pane` side by side, as the Mac's Split Right does; returns the new pane.
+    func split(_ pane: String, in session: String) async throws -> String? {
+        try await request(["type": .string("layout.split"), "session": .string(session), "block": .string(pane),
+                           "axis": .string("horizontal"), "cols": .number(80), "rows": .number(24)]).terminal
+    }
+
     func close(_ pane: String, in session: String) async throws {
         _ = try await request(["type": .string("layout.command"), "command": .object(["op": .string("close"), "session": .string(session), "block": .string(pane)])])
     }
