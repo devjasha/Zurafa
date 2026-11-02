@@ -118,6 +118,18 @@ impl Layout {
             },
         }
     }
+    /// Trades the places of two panes; ratios stay with the slots.
+    fn swap(&mut self, a: &str, b: &str) {
+        match self {
+            Self::Block { block_id } if block_id == a => *block_id = b.into(),
+            Self::Block { block_id } if block_id == b => *block_id = a.into(),
+            Self::Block { .. } => (),
+            Self::Split { first, second, .. } => {
+                first.swap(a, b);
+                second.swap(a, b);
+            }
+        }
+    }
     fn first(&self) -> String {
         match self {
             Self::Block { block_id } => block_id.clone(),
@@ -250,6 +262,11 @@ pub enum Command {
     Close {
         session: String,
         block: String,
+    },
+    Swap {
+        session: String,
+        block: String,
+        with: String,
     },
     Label {
         session: String,
@@ -552,6 +569,7 @@ impl Dispatcher {
             | Command::Zoom { session, .. }
             | Command::Resize { session, .. }
             | Command::Close { session, .. }
+            | Command::Swap { session, .. }
             | Command::Label { session, .. } => session.clone(),
             _ => unreachable!(),
         };
@@ -650,6 +668,14 @@ impl Dispatcher {
                         }
                     }
                 }
+            }
+            Command::Swap { block, with, .. } => {
+                s.windows
+                    .iter_mut()
+                    .find(|w| w.layout.contains(&block) && w.layout.contains(&with))
+                    .ok_or("panes are not in the same tab")?
+                    .layout
+                    .swap(&block, &with);
             }
             Command::Label { window, label, .. } => {
                 if let Some(window) = window {
@@ -906,6 +932,35 @@ mod tests {
             serde_json::to_value(d.snapshot()).unwrap()
         );
         assert!(rx.try_recv().is_err());
+    }
+    #[test]
+    fn swap_trades_pane_places_in_one_tab() {
+        let d = Dispatcher::new(64);
+        add(&d, "a", None);
+        add(&d, "b", Some("a"));
+        add(&d, "c", Some("b"));
+        let swap = |block: &str, with: &str| {
+            d.command(Command::Swap {
+                session: "default".into(),
+                block: block.into(),
+                with: with.into(),
+            })
+        };
+        swap("a", "c").unwrap();
+        let w = &d.snapshot().sessions["default"].windows[0];
+        let mut order = vec![];
+        fn walk(l: &Layout, out: &mut Vec<String>) {
+            match l {
+                Layout::Block { block_id } => out.push(block_id.clone()),
+                Layout::Split { first, second, .. } => {
+                    walk(first, out);
+                    walk(second, out)
+                }
+            }
+        }
+        walk(&w.layout, &mut order);
+        assert_eq!(order, ["c", "b", "a"]);
+        assert!(swap("a", "absent").is_err());
     }
     #[test]
     fn layout_selection_zoom_resize_close() {

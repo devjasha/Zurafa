@@ -826,6 +826,8 @@ struct CommandPicker: View {
             .init(id: "Split Pane Right", detail: nil, shortcut: "⌘D") { ws.split(.horizontal) },
             .init(id: "Split Pane Down", detail: nil, shortcut: "⇧⌘D") { ws.split(.vertical) },
             .init(id: "Toggle Pane Zoom", detail: nil, shortcut: "⇧⌘↩") { ws.toggleZoom() },
+            .init(id: "Move Pane Forward", detail: "Swap with the next pane", shortcut: "⌥⌘]") { ws.swapStep(1) },
+            .init(id: "Move Pane Back", detail: "Swap with the previous pane", shortcut: "⌥⌘[") { ws.swapStep(-1) },
         ]
     }
     private var filtered: [PaletteEntry] {

@@ -99,6 +99,11 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>UTExportedTypeDeclarations</key><array><dict>
+    <key>UTTypeIdentifier</key><string>dev.zurafa.pane</string>
+    <key>UTTypeDescription</key><string>Zurafa pane</string>
+    <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+  </dict></array>
   <key>SUFeedURL</key><string>https://zurafa-website.vercel.app/appcast.xml</string>
   <key>SUPublicEDKey</key><string>Ck60GZlfckjuZg1qeMfyvfWzsEVAHlkGHdDyX0hG630=</string>
   <key>ZURAFAApplicationSupportName</key><string>$app_support_name</string>

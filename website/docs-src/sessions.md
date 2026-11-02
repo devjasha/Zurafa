@@ -14,7 +14,7 @@ A tab is a top-level terminal layout. Add one with `⌘T`, the plus button, or t
 
 ## Panes
 
-Split the focused pane right with `⌘D` or down with `⇧⌘D`. The new pane receives its own shell or SSH process. Resize a split by dragging the divider. Click a pane to focus it; `⌘[` and `⌘]` cycle focus. `⇧⌘↩` zooms the focused pane without closing the others. `⌘W` closes only the focused pane. Closing one side of a split collapses the layout while the surviving pane keeps its process.
+Split the focused pane right with `⌘D` or down with `⇧⌘D`. The new pane receives its own shell or SSH process. Resize a split by dragging the divider. Click a pane to focus it; `⌘[` and `⌘]` cycle focus. To rearrange, drag a pane's header onto another pane in the tab to swap the two, or press `⌥⌘[` / `⌥⌘]` to swap the focused pane with its neighbour. `⇧⌘↩` zooms the focused pane without closing the others. `⌘W` closes only the focused pane. Closing one side of a split collapses the layout while the surviving pane keeps its process.
 
 ## How layout updates reach the app
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum Theme {
     static func adaptive(light: NSColor, dark: NSColor) -> Color {
@@ -834,6 +835,18 @@ struct LayoutView: View {
     }
 }
 
+/// A pane's header being dragged; its own type so terminal text drops never read as one.
+struct PaneDrag: Codable, Transferable {
+    let id: String
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .zurafaPane)
+    }
+}
+
+extension UTType {
+    static let zurafaPane = UTType(exportedAs: "dev.zurafa.pane")
+}
+
 struct PaneView: View {
     let id: String
     var entrance: Edge?
@@ -841,6 +854,7 @@ struct PaneView: View {
     var peek = false
     @EnvironmentObject var ws: Workspace
     @State private var shown: Bool
+    @State private var dropTarget = false
     /// Pane ids already on screen, so tab switches and re-splits don't replay the entrance animation.
     private static var seen = Set<String>()
 
@@ -883,6 +897,10 @@ struct PaneView: View {
             .padding(.leading, style.panePadding ?? 14).padding(.trailing, 8).frame(height: 38)
             .contentShape(Rectangle())
             .onTapGesture { if peek { ws.peekFocused = true } else { ws.focus(id) } }
+            // Dragging a header onto another pane of the tab swaps the two.
+            .draggable(PaneDrag(id: id)) {
+                Label(m.title, systemImage: "rectangle.on.rectangle").padding(6)
+            }
             TerminalHost(id: id, program: m.program,
                          focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
                 .padding(.leading, style.panePadding ?? 14).padding(.trailing, style.panePadding ?? 8)
@@ -893,6 +911,12 @@ struct PaneView: View {
         // The fill follows window-opacity so a translucent window stays see-through.
         .background(Theme.paneTint.opacity((focused ? 1 : 0.35) * style.windowOpacity), in: shape)
         .overlay(shape.strokeBorder(Theme.paneStroke.opacity(focused ? 1 : 0.5), lineWidth: 1))
+        .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 2).opacity(dropTarget ? 1 : 0))
+        .dropDestination(for: PaneDrag.self) { items, _ in
+            guard !peek, let from = items.first?.id, from != id, ws.tab.layout.panes.contains(from) else { return false }
+            ws.swap(from, with: id)
+            return true
+        } isTargeted: { dropTarget = $0 && !peek }
         .shadow(color: .black.opacity(focused ? 0.10 : 0), radius: 12, y: 3)
         .animation(.easeInOut(duration: 0.2), value: focused)
         .padding(style.paneGap / 2)

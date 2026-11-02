@@ -23,6 +23,8 @@ The command picker is the quickest way to discover an action. Press `⌘K`, type
 | Zoom or unzoom pane | `⇧⌘↩` |
 | Next pane | `⌘]` |
 | Previous pane | `⌘[` |
+| Swap pane with the next one | `⌥⌘]` |
+| Swap pane with the previous one | `⌥⌘[` |
 | Next workspace | `⇧⌘]` |
 | Previous workspace | `⇧⌘[` |
 | Select tab 1–9 (workspace 1–9 while the workspace picker is open) | `⌘1`–`⌘9` |

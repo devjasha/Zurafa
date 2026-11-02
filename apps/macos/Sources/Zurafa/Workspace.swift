@@ -351,6 +351,16 @@ enum EditorKind: String, Identifiable {
         perform(["type": .string("layout.command"), "command": .object(body)])
     }
     func close(_ id: String) { command(["op": .string("close"), "session": .string(sessionID), "block": .string(id)]) }
+    func swap(_ id: String, with other: String) {
+        guard id != other else { return }
+        command(["op": .string("swap"), "session": .string(sessionID), "block": .string(id), "with": .string(other)])
+    }
+    /// Moves the focused pane one place along the tab's pane order, wrapping around.
+    func swapStep(_ step: Int) {
+        let panes = tab.layout.panes
+        guard let i = panes.firstIndex(of: tab.focus), panes.count > 1 else { return }
+        swap(tab.focus, with: panes[(i + step + panes.count) % panes.count])
+    }
     func closeFocused() {
         if peekFocused && peek != nil { return closePeek() }
         if !tab.focus.isEmpty { close(tab.focus) }
@@ -844,6 +854,8 @@ struct Command: Identifiable {
         Command(title: "Toggle Zoom", key: .return, mods: [.command, .shift]) { $0.toggleZoom() },
         Command(title: "Next Pane", key: "]") { $0.focusStep(1) },
         Command(title: "Previous Pane", key: "[") { $0.focusStep(-1) },
+        Command(title: "Move Pane Forward", key: "]", mods: [.command, .option]) { $0.swapStep(1) },
+        Command(title: "Move Pane Back", key: "[", mods: [.command, .option]) { $0.swapStep(-1) },
         // Shift turns ] into } before menus match, so a "]" + Shift item never fires.
         Command(title: "Next Workspace", key: "}", mods: [.command, .shift]) { $0.workspaceStep(1) },
         Command(title: "Previous Workspace", key: "{", mods: [.command, .shift]) { $0.workspaceStep(-1) },
