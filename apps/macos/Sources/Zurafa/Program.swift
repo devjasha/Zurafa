@@ -60,7 +60,7 @@ enum Program: Equatable {
         case .claude: ("claude", 0xD97757)
         case .codex: ("openai", nil)
         case .gemini: ("googlegemini", 0x8E75B2)
-        case .pi: (nil, 0x7394EB)
+        case .pi: ("pi", 0x7394EB)
         case .emacs: ("gnuemacs", 0x7F5AB6)
         case .git: ("git", 0xF05032)
         case .dev: (nil, 0x54575F)
