@@ -26,6 +26,8 @@ struct ZurafaStyle: Equatable {
     var unfocusedPaneOpacity = 0.7
     var sidebarWidth: CGFloat = 194
     var sidebarOnRight = false
+    /// Where the other panes' icons peek out from behind a tab's icon: right, left, down or up.
+    var tabIconStack = "right"
     var accent: UInt32?
 }
 
@@ -103,6 +105,9 @@ struct ZurafaConfigLoader {
             case "right": config.style.sidebarOnRight = true
             default: break
             }
+        case "tab-icon-stack":
+            let direction = value.lowercased()
+            if ["right", "left", "down", "up"].contains(direction) { config.style.tabIconStack = direction }
         case "palette":
             if let pair = value.split(separator: "=", maxSplits: 1).first,
                let index = Int(pair.trimmingCharacters(in: .whitespaces)), (0..<16).contains(index),
@@ -186,6 +191,8 @@ struct ZurafaConfigLoader {
     # sidebar-width = 194
     # Side of the window the vertical tab sidebar sits on: left or right.
     # sidebar-position = left
+    # Where a tab's other pane icons peek out from behind its icon: right, left, down or up.
+    # tab-icon-stack = right
 
     # Background image
     # background-image = ~/Pictures/wallpaper.png

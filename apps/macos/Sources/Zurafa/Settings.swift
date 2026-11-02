@@ -155,6 +155,13 @@ private struct AppearancePane: View {
                     Text("Left").tag(false)
                     Text("Right").tag(true)
                 }
+                Picker("Pane icons stack", selection: Binding(get: { ws.style.tabIconStack },
+                                                              set: { ws.writeConfig("tab-icon-stack", $0) })) {
+                    Text("Right").tag("right")
+                    Text("Left").tag("left")
+                    Text("Down").tag("down")
+                    Text("Up").tag("up")
+                }
                 ConfigSlider(title: "Sidebar width", key: "sidebar-width", value: ws.style.sidebarWidth, range: 140...480, step: 2)
             }
             Section("Background Image") {

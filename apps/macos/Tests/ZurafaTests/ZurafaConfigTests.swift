@@ -34,6 +34,11 @@ final class ZurafaConfigTests: XCTestCase {
         XCTAssertEqual(ZurafaConfigLoader.parse("background-image-filter = braille").backgroundImageFilter, BackgroundFilter.none)
     }
 
+    func testParsesTabIconStack() {
+        XCTAssertEqual(ZurafaConfigLoader.parse("tab-icon-stack = Down").style.tabIconStack, "down")
+        XCTAssertEqual(ZurafaConfigLoader.parse("tab-icon-stack = sideways").style.tabIconStack, "right")
+    }
+
     func testParsesCursorShapeAndBlink() {
         let config = ZurafaConfigLoader.parse("cursor-style = bar\ncursor-style-blink = false")
         XCTAssertEqual(config.terminal.cursorStyle, "bar")

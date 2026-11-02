@@ -16,9 +16,10 @@ pane-corner-radius = 14
 unfocused-pane-opacity = 0.7
 sidebar-width = 194
 sidebar-position = left
+tab-icon-stack = right
 ```
 
-`theme` accepts any Ghostty theme name from `~/.config/ghostty/themes` or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (`foreground`, `background`, `cursor-color`, `palette`, `font-family`, `font-size`) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. `sidebar-position` is `left` or `right`; **Move Sidebar to Right** in `⌘K` sets it for you.
+`theme` accepts any Ghostty theme name from `~/.config/ghostty/themes` or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (`foreground`, `background`, `cursor-color`, `palette`, `font-family`, `font-size`) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. `sidebar-position` is `left` or `right`; **Move Sidebar to Right** in `⌘K` sets it for you. `tab-icon-stack` is `right`, `left`, `down` or `up`: where a tab's other pane icons peek out from behind its icon.
 
 ## Import Ghostty settings
 

@@ -544,7 +544,7 @@ struct SidebarTabRow: View {
     }
 }
 
-/// The focused pane's tile, with up to two other panes' tiles peeking out to the right.
+/// The focused pane's tile, with up to two other panes' tiles peeking out in the `tab-icon-stack` direction.
 struct TileStack: View {
     let tab: Tab
     var size: CGFloat = Tile.size
@@ -552,13 +552,22 @@ struct TileStack: View {
 
     var body: some View {
         let behind = tab.layout.panes.filter { $0 != tab.focus }.prefix(2).map { ws.meta($0).program }
-        ZStack(alignment: .leading) {
+        // (x, y) step per tile behind, the side the tiles shrink toward, and where the front tile sits.
+        let (dx, dy, anchor, front): (CGFloat, CGFloat, UnitPoint, Alignment) = switch ws.style.tabIconStack {
+        case "left": (-1, 0, .leading, .trailing)
+        case "down": (0, 1, .bottom, .top)
+        case "up": (0, -1, .top, .bottom)
+        default: (1, 0, .trailing, .leading)
+        }
+        let extra = 4 * CGFloat(behind.count)
+        ZStack(alignment: front) {
             ForEach(Array(behind.enumerated()).reversed(), id: \.offset) { k, p in
-                Tile(program: p, size: size).scaleEffect(1 - 0.12 * CGFloat(k + 1), anchor: .trailing).offset(x: 4 * CGFloat(k + 1))
+                Tile(program: p, size: size).scaleEffect(1 - 0.12 * CGFloat(k + 1), anchor: anchor)
+                    .offset(x: 4 * dx * CGFloat(k + 1), y: 4 * dy * CGFloat(k + 1))
             }
             Tile(program: ws.meta(tab.focus).program, size: size)
         }
-        .frame(width: size + 4 * CGFloat(behind.count), alignment: .leading)
+        .frame(width: size + (dx == 0 ? 0 : extra), height: size + (dy == 0 ? 0 : extra), alignment: front)
     }
 }
 
