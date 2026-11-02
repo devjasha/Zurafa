@@ -7,6 +7,7 @@ struct SessionsView: View {
     @State private var path: [String] = []
     @State private var error: String?
     @State private var settings = false
+    @State private var deleting: SessionSnapshot?
     @Environment(\.colorScheme) private var scheme
 
     private var sessions: [SessionSnapshot] { mac.sessions }
@@ -45,6 +46,9 @@ struct SessionsView: View {
                     } header: {
                         Label(session.remote.map { "\(session.label) · \($0.addressLabel)" } ?? session.label,
                               systemImage: session.remote == nil ? "laptopcomputer" : "network")
+                        .contextMenu {
+                            Button("Delete Workspace", systemImage: "trash", role: .destructive) { deleting = session }
+                        }
                     }
                 }
             }
@@ -64,6 +68,10 @@ struct SessionsView: View {
             }
             .sheet(isPresented: $settings) { SettingsView() }
             .refreshable { mac.refreshHosts(); mac.resume() }
+            .confirmationDialog("Delete \(deleting?.label ?? "")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                                titleVisibility: .visible, presenting: deleting) { session in
+                Button("Delete Workspace", role: .destructive) { run { try await mac.deleteSession(session.sessionID) } }
+            } message: { _ in Text("This closes every terminal in the workspace.") }
             .alert("Zurafa", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {} message: { Text(error ?? "") }
         }
         .onChange(of: blocks) { _, blocks in Terminals.shared.sync(blocks: blocks) }
