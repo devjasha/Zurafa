@@ -1,0 +1,7 @@
+- **Teach your coding agents Zurafa.** Turn on **Settings → Integrations → Integrate with available agents** (or run `zurafa skill setup`) to install a Zurafa skill for Claude Code, Codex, OpenCode and Pi, plus session hooks for Claude Code and Codex. Agents then know how to open tabs and splits, read and type into panes, and wait for other agents.
+- **Cursor settings.** Settings → Terminal has a new Cursor section: shape (block, bar or underline), blink, and color. In config.zurafa they are `cursor-style`, `cursor-style-blink` and `cursor-color`.
+- **Choose which way a tab's pane icons stack:** right, left, down or up, under Settings → Interface → Tabs, or `tab-icon-stack` in config.zurafa.
+- The Settings window follows your theme's colors and its light or dark look.
+- The selected tab's highlight slides from tab to tab, and tabs fade in and out as they open and close.
+- Closing the selected tab now selects the tab before it, not the first tab.
+- This update needs a server restart (**Restart Server to Finish Update…** in the menu bar); it closes open terminals, and their layout comes back afterwards.
