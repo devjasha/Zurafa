@@ -1,4 +1,5 @@
 import AppKit
+import SwiftTerm
 
 struct ZurafaConfig: Equatable {
     var terminal = GhosttyTerminalSettings()
@@ -71,6 +72,8 @@ struct ZurafaConfigLoader {
             if let size = Double(value), (6...72).contains(size) { config.terminal.fontSize = size }
         case "foreground": setColor(value, \GhosttyColors.foreground, light: &config.terminal.light, dark: &config.terminal.dark)
         case "background": setColor(value, \GhosttyColors.background, light: &config.terminal.light, dark: &config.terminal.dark)
+        case "cursor-style": config.terminal.cursorStyle = GhosttyTerminalSettings.cursorShape(value)
+        case "cursor-style-blink": config.terminal.cursorBlink = bool(value)
         case "cursor-color": setColor(value, \GhosttyColors.cursor, light: &config.terminal.light, dark: &config.terminal.dark)
         case "selection-foreground": setColor(value, \GhosttyColors.selectionForeground, light: &config.terminal.light, dark: &config.terminal.dark)
         case "selection-background": setColor(value, \GhosttyColors.selectionBackground, light: &config.terminal.light, dark: &config.terminal.dark)
@@ -207,6 +210,8 @@ extension GhosttyTerminalSettings {
         var next = self
         next.fontFamily = override.fontFamily ?? next.fontFamily
         next.fontSize = override.fontSize ?? next.fontSize
+        next.cursorStyle = override.cursorStyle ?? next.cursorStyle
+        next.cursorBlink = override.cursorBlink ?? next.cursorBlink
         next.light = next.light.applying(override.light)
         next.dark = next.dark.applying(override.dark)
         return next
@@ -223,5 +228,27 @@ private extension GhosttyColors {
         next.selectionBackground = override.selectionBackground ?? next.selectionBackground
         next.palette.merge(override.palette) { _, new in new }
         return next
+    }
+}
+
+extension GhosttyTerminalSettings {
+    /// block, bar or underline (Ghostty's block_hollow draws as a block), else nil.
+    static func cursorShape(_ value: String) -> String? {
+        switch value.lowercased() {
+        case "block", "block_hollow": "block"
+        case "bar": "bar"
+        case "underline": "underline"
+        default: nil
+        }
+    }
+
+    /// The terminal's cursor for these settings; a blinking block by default.
+    var swiftTermCursor: CursorStyle {
+        let blink = cursorBlink ?? true
+        switch cursorStyle {
+        case "bar": return blink ? .blinkBar : .steadyBar
+        case "underline": return blink ? .blinkUnderline : .steadyUnderline
+        default: return blink ? .blinkBlock : .steadyBlock
+        }
     }
 }

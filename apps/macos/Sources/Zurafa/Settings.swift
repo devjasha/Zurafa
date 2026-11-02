@@ -7,13 +7,18 @@ struct SettingsView: View {
     static let paneKey = "settingsPane"
     /// Stored, so the menu bar's Zurafa Server item can open Settings on the Server pane.
     @AppStorage(paneKey) private var pane: SettingsPane = .general
+    @EnvironmentObject var ws: Workspace
 
     var body: some View {
+        // workspaceBackground is published, so reading it repaints Settings in a new theme's colors.
+        let _ = ws.workspaceBackground
         NavigationSplitView {
             List(SettingsPane.allCases, selection: Binding(get: { pane }, set: { pane = $0 ?? pane })) { pane in
                 Label(pane.title, systemImage: pane.symbol).tag(pane)
             }
             .navigationSplitViewColumnWidth(200)
+            .scrollContentBackground(.hidden)
+            .background(Theme.background.opacity(0.85))
         } detail: {
             Group {
                 switch pane {
@@ -30,9 +35,14 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
-            .background(.background)
+            .background(Theme.background)
             .navigationTitle(pane.title)
         }
+        // Theme.accent is the theme's own accent (its cursor or blue), as in the workspace.
+        .tint(Theme.accent)
+        .foregroundStyle(Theme.ink)
+        // Light or dark controls to match the theme, else the app's appearance setting.
+        .preferredColorScheme(Theme.scheme ?? ws.appearance.colorScheme)
         .frame(width: 800, height: 580)
     }
 }
@@ -251,6 +261,22 @@ private struct TerminalPane: View {
                 Stepper("Size: \(size.formatted())", value: Binding(get: { size }, set: { ws.writeConfig("font-size", $0.formatted()) }),
                         in: 6...72, step: 1)
             }
+            Section {
+                Picker("Shape", selection: Binding(get: { ws.config.terminal.cursorStyle ?? "block" },
+                                                   set: { ws.writeConfig("cursor-style", $0) })) {
+                    Text("Block").tag("block")
+                    Text("Bar").tag("bar")
+                    Text("Underline").tag("underline")
+                }
+                .pickerStyle(.segmented)
+                Toggle("Blink", isOn: Binding(get: { ws.config.terminal.cursorBlink ?? true },
+                                              set: { ws.writeConfig("cursor-style-blink", $0 ? "true" : "false") }))
+                ConfigColorPicker(title: "Color", hex: TerminalStore.shared.currentColors.cursor, key: "cursor-color")
+            } header: {
+                Text("Cursor")
+            } footer: {
+                Text("Programs such as editors can still change the cursor while they run.").font(.caption).foregroundStyle(.secondary)
+            }
             Section("Panes") {
                 ConfigSlider(title: "Gap", key: "pane-gap", value: ws.style.paneGap, range: 0...64, step: 1)
                 ConfigSlider(title: "Padding", key: "pane-padding", value: ws.style.panePadding ?? 12, range: 0...64, step: 1)
@@ -278,11 +304,47 @@ private struct ShortcutsPane: View {
 
 private struct IntegrationsPane: View {
     @State private var cliInstalled = CLIInstaller.bundledCLIPath().map { !CLIInstaller.needsInstall(sourcePath: $0) } ?? false
-    @State private var agentStatus: String?
+    /// `zurafa skill status --json`: one row per agent Zurafa can teach.
+    @State private var agents: [SkillAgent] = []
+    @State private var busy = false
+    @State private var message: String?
+
+    struct SkillAgent: Decodable {
+        let agent: String, name: String, found: Bool, skill: String, hooks: String
+        var program: Program {
+            switch agent { case "claude": .claude; case "codex": .codex; case "pi": .pi; default: .tool(agent) }
+        }
+    }
+
+    /// On once every agent found has the current skill and, where it has hooks, current hooks.
+    private var integrated: Bool {
+        let found = agents.filter(\.found)
+        return !found.isEmpty && found.allSatisfy { $0.skill == "current" && ($0.hooks == "current" || $0.hooks == "unsupported") }
+    }
 
     var body: some View {
         Form {
             if let source = CLIInstaller.bundledCLIPath() {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(agents.filter(\.found), id: \.agent) { agent in
+                                ProgramGlyph(program: agent.program).frame(width: 16, height: 16).foregroundStyle(.secondary).help(agent.name)
+                            }
+                        }
+                        Toggle(isOn: Binding(get: { integrated }, set: { run($0 ? "setup" : "remove", source) })) {
+                            Text("Integrate with available agents")
+                            Text("Installs a Zurafa skill and session hooks for supported agents")
+                        }
+                        .disabled(busy || agents.allSatisfy { !$0.found })
+                    }
+                    if let message { Text(message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
+                } header: {
+                    Text("Coding Agents")
+                } footer: {
+                    Text("Teach Claude Code, Codex, OpenCode and Pi how to use Zurafa. Their panes report working, blocked and done. Codex runs new hooks once you trust them in /hooks.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Command-Line Tool") {
                     LabeledContent(CLIInstaller.installPath, value: cliInstalled ? "Installed" : "Not installed")
                     Button(cliInstalled ? "Reinstall" : "Install") {
@@ -290,40 +352,45 @@ private struct IntegrationsPane: View {
                         cliInstalled = !CLIInstaller.needsInstall(sourcePath: source)
                     }
                 }
-                Section {
-                    LabeledContent("Claude Code status hooks") { Button("Set Up") { setUp("claude", source) } }
-                    LabeledContent("Codex status hooks") { Button("Set Up") { setUp("codex", source) } }
-                    if let agentStatus { Text(agentStatus).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                } header: {
-                    Text("Agents")
-                } footer: {
-                    Text("Adds hooks to the agent's settings so its panes report working, blocked and done. A backup is kept. Codex runs them once you trust them in /hooks. Pi reports on its own.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
             } else {
                 Text("This build has no bundled command-line tool.").foregroundStyle(.secondary)
             }
         }
+        .task { if let source = CLIInstaller.bundledCLIPath() { await refresh(source) } }
     }
 
-    private func setUp(_ agent: String, _ cli: String) {
-        agentStatus = "Setting up…"
-        Task.detached {
+    private func refresh(_ cli: String) async {
+        let out = await Self.zurafa(cli, ["--json", "skill", "status"])
+        agents = (try? JSONDecoder().decode([SkillAgent].self, from: Data(out.utf8))) ?? []
+    }
+
+    private func run(_ command: String, _ cli: String) {
+        busy = true
+        Task {
+            let out = await Self.zurafa(cli, ["skill", command])
+            await refresh(cli)
+            // Setup's own lines say where each skill went; a failure says why.
+            message = out.isEmpty ? nil : out
+            busy = false
+        }
+    }
+
+    /// Runs the bundled CLI and returns what it printed.
+    nonisolated private static func zurafa(_ cli: String, _ args: [String]) async -> String {
+        await Task.detached {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: cli)
-            process.arguments = ["setup", agent]
+            process.arguments = args
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = pipe
-            let result: String
             do {
                 try process.run()
                 let output = pipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
-                result = String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            } catch { result = error.localizedDescription }
-            await MainActor.run { agentStatus = result.isEmpty ? "Done" : result }
-        }
+                return String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            } catch { return error.localizedDescription }
+        }.value
     }
 }
 
@@ -349,7 +416,7 @@ struct ServerPane: View {
     static let listenKey = "serverListenOnTailnet"
     static let limitKey = "serverLimitToTailscaleAccount"
     static let hostnameKey = "serverTailscaleHostname"
-    /// "Yareliu's MacBook Pro" → "yarelius-macbook-pro-zurafa", as Rex names its device.
+    /// "Yareliu's MacBook Pro" → "yarelius-macbook-pro-zurafa".
     static var defaultHostname: String {
         let name = (Host.current().localizedName ?? "mac").lowercased().replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "’", with: "")
         let slug = name.map { $0.isLetter && $0.isASCII || $0.isNumber ? String($0) : "-" }.joined()

@@ -34,6 +34,14 @@ final class ZurafaConfigTests: XCTestCase {
         XCTAssertEqual(ZurafaConfigLoader.parse("background-image-filter = braille").backgroundImageFilter, BackgroundFilter.none)
     }
 
+    func testParsesCursorShapeAndBlink() {
+        let config = ZurafaConfigLoader.parse("cursor-style = bar\ncursor-style-blink = false")
+        XCTAssertEqual(config.terminal.cursorStyle, "bar")
+        XCTAssertEqual(config.terminal.cursorBlink, false)
+        XCTAssertEqual(config.terminal.swiftTermCursor, .steadyBar)
+        XCTAssertEqual(ZurafaConfigLoader.parse("cursor-style = block_hollow").terminal.swiftTermCursor, .blinkBlock)
+    }
+
     func testTerminalSettingsOverrideOnlyConfiguredFields() {
         var base = GhosttyTerminalSettings()
         base.fontFamily = "Base"

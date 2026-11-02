@@ -147,7 +147,10 @@ final class PaneTerminal: TerminalView {
         let after = effectiveSettings
         // Theme previews change colors only; resetting the font would reflow every terminal.
         let fontChanged = before.fontFamily != after.fontFamily || before.fontSize != after.fontSize
-        for view in views.values { fontChanged ? configure(view) : configureColors(view) }
+        for view in views.values {
+            fontChanged ? configure(view) : configureColors(view)
+            view.setCursorStyle(after.swiftTermCursor)
+        }
     }
 
     private var effectiveSettings: GhosttyTerminalSettings {
@@ -178,6 +181,8 @@ final class PaneTerminal: TerminalView {
         let size = CGFloat(settings.fontSize ?? 13)
         view.font = family.flatMap { NSFontManager.shared.font(withFamily: $0, traits: [], weight: 5, size: size) }
             ?? .monospacedSystemFont(ofSize: size, weight: .regular)
+        // shortcut: a program that resets its cursor (DECSCUSR 0) gets SwiftTerm's blinking block back; SwiftTerm fixes that default at creation.
+        view.setCursorStyle(settings.swiftTermCursor)
         configureColors(view)
     }
 

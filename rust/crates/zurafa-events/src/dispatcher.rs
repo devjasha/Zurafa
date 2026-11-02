@@ -641,7 +641,8 @@ impl Dispatcher {
                         window_id: w.window_id.clone(),
                     });
                     if s.active_window.as_ref() == Some(&w.window_id) {
-                        s.active_window = s.windows.first().map(|w| w.window_id.clone());
+                        // The tab before the closed one, as in a browser; the new first tab if it was first.
+                        s.active_window = s.windows.get(pos.saturating_sub(1)).map(|w| w.window_id.clone());
                         if let Some(id) = &s.active_window {
                             events.push(SessionEvent::ActiveWindowChanged {
                                 window_id: id.clone(),
@@ -808,6 +809,28 @@ mod tests {
         d.add_block("default", id, target, Axis::Horizontal, "Shell".into(), None)
             .unwrap();
     }
+    #[test]
+    fn closing_the_active_tab_activates_the_one_before_it() {
+        let d = Dispatcher::new(64);
+        for id in ["a", "b", "c"] {
+            add(&d, id, None);
+        }
+        let active = || {
+            let s = &d.snapshot().sessions["default"];
+            s.windows.iter().find(|w| Some(&w.window_id) == s.active_window.as_ref()).map(|w| w.selected_block.clone())
+        };
+        let close = |b: &str| d.command(Command::Close { session: "default".into(), block: b.into() }).unwrap();
+        assert_eq!(active().as_deref(), Some("c"));
+        close("c");
+        assert_eq!(active().as_deref(), Some("b"), "the tab before, not the first");
+        close("a");
+        assert_eq!(active().as_deref(), Some("b"), "closing another tab keeps this one");
+        add(&d, "d", None);
+        d.command(Command::Focus { session: "default".into(), block: "b".into() }).unwrap();
+        close("b");
+        assert_eq!(active().as_deref(), Some("d"), "the first tab hands over to the next");
+    }
+
     #[test]
     fn spawned_panes_remember_a_parent_that_exists() {
         let d = Dispatcher::new(32);

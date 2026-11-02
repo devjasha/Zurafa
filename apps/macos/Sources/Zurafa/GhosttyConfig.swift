@@ -16,6 +16,9 @@ struct GhosttyColors: Codable, Equatable {
 struct GhosttyTerminalSettings: Codable, Equatable {
     var fontFamily: String?
     var fontSize: Double?
+    /// Ghostty's `cursor-style`: block, bar or underline; nil keeps the blinking block.
+    var cursorStyle: String?
+    var cursorBlink: Bool?
     var light = GhosttyColors()
     var dark = GhosttyColors()
 
@@ -86,6 +89,8 @@ struct GhosttyConfigLoader {
         if let raw = values["font-size"], let size = Double(raw), (6...72).contains(size) {
             settings.fontSize = size
         }
+        settings.cursorStyle = values["cursor-style"].flatMap(GhosttyTerminalSettings.cursorShape)
+        settings.cursorBlink = values["cursor-style-blink"].flatMap { ["true": true, "false": false][$0.lowercased()] }
         var unresolved: [String] = []
         for dark in [false, true] {
             var themed: [String: String] = [:]

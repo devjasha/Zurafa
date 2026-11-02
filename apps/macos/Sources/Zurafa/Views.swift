@@ -13,6 +13,13 @@ enum Theme {
     private static var importedBackground: Color? { hex(imported?.background) }
 
     static var background: Color { importedBackground ?? defaultBackground }
+    /// Dark or light to match the imported theme's background; nil without a theme.
+    static var scheme: ColorScheme? {
+        imported?.background.map { v in
+            let (r, g, b) = (Double(v >> 16 & 0xFF), Double(v >> 8 & 0xFF), Double(v & 0xFF))
+            return 0.299 * r + 0.587 * g + 0.114 * b < 128 ? .dark : .light
+        }
+    }
     /// Cursor, then ANSI blue, so the accent matches the theme.
     /// `accent-color` from config.zurafa, set by `Workspace`.
     static var customAccent: UInt32?
@@ -310,8 +317,14 @@ struct RootView: View {
     }
 }
 
+/// Tabs fade in and out; the others move into their new places, and the selection slides between them.
+let tabTransition = AnyTransition.opacity
+
 struct TopBar: View {
     @EnvironmentObject var ws: Workspace
+    /// The workspace whose tabs are on screen, so switching workspaces swaps them without the slide.
+    @State private var shownSession = ""
+    @Namespace private var selection
 
     var body: some View {
         HStack(spacing: 0) {
@@ -322,14 +335,22 @@ struct TopBar: View {
                 // Spawned agents show beside their parent's tab, not as tabs of their own, unless you are in one.
                 let family = AgentFamily(tabs: ws.tabs, meta: ws.meta)
                 let shown = ws.tabs.indices.filter { $0 == ws.selected || !family.isNested(ws.tabs[$0]) }
-                ForEach(Array(shown.enumerated()), id: \.element) { k, i in
-                    if k > 0 { // hairline between two inactive tabs only
-                        Rectangle().fill(Color.black.opacity(i == ws.selected || shown[k - 1] == ws.selected ? 0 : 0.12)).frame(width: 1, height: 16)
+                // Keyed by tab, not position, so an added or closed tab animates as itself.
+                ForEach(Array(shown.map { ws.tabs[$0].id }.enumerated()), id: \.element) { k, _ in
+                    let i = shown[k]
+                    HStack(spacing: 0) {
+                        if k > 0 { // hairline between two inactive tabs only
+                            Rectangle().fill(Color.black.opacity(i == ws.selected || shown[k - 1] == ws.selected ? 0 : 0.12)).frame(width: 1, height: 16)
+                        }
+                        TabItem(tab: ws.tabs[i], on: i == ws.selected, selection: selection, agents: family.agents(of: ws.tabs[i]), natives: family.natives(of: ws.tabs[i]))
+                            .onTapGesture { ws.selectTab(i) }
                     }
-                    TabItem(tab: ws.tabs[i], on: i == ws.selected, agents: family.agents(of: ws.tabs[i]), natives: family.natives(of: ws.tabs[i]))
-                        .onTapGesture { ws.selectTab(i) }
+                    .transition(tabTransition)
                 }
             }
+            .animation(shownSession == ws.sessionID ? .snappy(duration: 0.28) : nil, value: ws.tabs.map(\.id))
+            .animation(shownSession == ws.sessionID ? .snappy(duration: 0.28) : nil, value: ws.selected)
+            .onChange(of: ws.sessionID, initial: true) { _, id in shownSession = id }
             .padding(1)
             .zurafaGlass(in: Capsule())
             .background(Color.black.opacity(0.035), in: Capsule())
@@ -409,6 +430,7 @@ struct WorkspacePickerButton: View {
 
 struct VerticalTabSidebar: View {
     @EnvironmentObject var ws: Workspace
+    @Namespace private var selection
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -440,17 +462,23 @@ struct VerticalTabSidebar: View {
                                 if !current { ws.selectSession(session.sessionID) }
                                 ws.focus(tab.focus)
                             }
-                            if family.agents(of: tab).isEmpty && family.natives(of: tab).isEmpty {
-                                SidebarTabRow(tab: tab, on: current && tab.id == ws.tab.id, select: select)
-                            } else {
-                                AgentCard(tab: tab, family: family, local: session.remote == nil,
-                                          on: current && tab.id == ws.tab.id,
-                                          focusedPane: current ? ws.tab.focus : nil, select: select)
+                            Group {
+                                if family.agents(of: tab).isEmpty && family.natives(of: tab).isEmpty {
+                                    SidebarTabRow(tab: tab, on: current && tab.id == ws.tab.id, selection: selection, select: select)
+                                } else {
+                                    AgentCard(tab: tab, family: family, local: session.remote == nil,
+                                              on: current && tab.id == ws.tab.id,
+                                              focusedPane: current ? ws.tab.focus : nil, select: select)
+                                }
                             }
+                            .transition(tabTransition)
                         }
                     }
                 }
                 .padding(.horizontal, 8)
+                // Every workspace's tabs are listed, so switching workspaces changes none of these ids.
+                .animation(.snappy(duration: 0.28), value: ws.orderedSessions.flatMap { ws.tabs(in: $0).map(\.id) })
+                .animation(.snappy(duration: 0.28), value: ws.tab.id)
             }
             HStack(spacing: 6) {
                 BarStatus()
@@ -468,7 +496,7 @@ struct VerticalTabSidebar: View {
 }
 
 struct SidebarTabRow: View {
-    let tab: Tab, on: Bool, select: () -> Void
+    let tab: Tab, on: Bool, selection: Namespace.ID, select: () -> Void
     @EnvironmentObject var ws: Workspace
 
     var body: some View {
@@ -503,7 +531,10 @@ struct SidebarTabRow: View {
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                if on { RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.activeTab.opacity(0.55)) }
+                if on {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.activeTab.opacity(0.55))
+                        .matchedGeometryEffect(id: "selected", in: selection)
+                }
             }
             .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
@@ -607,6 +638,8 @@ struct Spinner: View {
 
 struct TabItem: View {
     let tab: Tab, on: Bool
+    /// Shared by the bar's tabs, so the selected tab's capsule slides from one to the next.
+    let selection: Namespace.ID
     /// The agents spawned from this tab, which open beside it from the hover popover.
     let agents: [String], natives: [NativeAgent]
     @EnvironmentObject var ws: Workspace
@@ -661,6 +694,7 @@ struct TabItem: View {
                     .zurafaGlass(in: Capsule(), clear: true)
                     .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.75))
                     .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
+                    .matchedGeometryEffect(id: "selected", in: selection)
             }
         }
         .contentShape(Capsule())

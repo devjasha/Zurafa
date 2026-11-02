@@ -168,6 +168,9 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
     if args[0] == "setup" {
         return cmd_setup(&args[1..]);
     }
+    if args[0] == "skill" {
+        return cmd_skill(&args[1..], global.json);
+    }
     if args[0] == "mcp" {
         return cmd_mcp(global.socket);
     }
@@ -1390,9 +1393,11 @@ fn cmd_hook(args: &[String]) -> Result<(), (i32, String)> {
     let event: Value = serde_json::from_str(&input).map_err(|e| (1, format!("hook input is not JSON: {e}")))?;
     let (output, fields) = agent_hook(agent, &event);
     if event["hook_event_name"] == "SessionStart" {
-        if let Err(e) = report_session(agent.name, &event) {
+        let here = report_session(agent.name, &event).unwrap_or_else(|e| {
             eprintln!("zurafa: {e}");
-        }
+            (env::var("ZURAFA_SESSION").ok(), env::var("ZURAFA_PANE").ok().filter(|_| agent.name == "claude"))
+        });
+        println!("{}", session_context(here.0.as_deref(), here.1.as_deref()));
     }
     if let Some(output) = output {
         println!("{output}");
@@ -1408,19 +1413,36 @@ fn cmd_hook(args: &[String]) -> Result<(), (i32, String)> {
     Ok(())
 }
 
-/// Tells the daemon which agent session runs in this pane, so a restarted daemon resumes it there.
-fn report_session(agent: &str, event: &Value) -> Result<(), String> {
-    let Some(session) = event["session_id"].as_str() else { return Ok(()) };
+/// Finds the agent's workspace and pane, and tells the daemon which agent session runs there,
+/// so a restarted daemon resumes it in that pane.
+fn report_session(agent: &str, event: &Value) -> Result<(Option<String>, Option<String>), String> {
     let mut client = Client::connect(None)?;
     // Claude's hooks run in its pane; Codex's run in a shared server, so find its pane by folder.
-    let block = match (agent, env::var("ZURAFA_PANE")) {
-        ("claude", Ok(pane)) => pane,
-        _ => agent_pane(&client.snapshot()?, agent, event["cwd"].as_str().unwrap_or(""), None)
-            .ok_or("no single pane runs this agent here")?
-            .1,
+    let (workspace, block) = match (agent, env::var("ZURAFA_PANE")) {
+        ("claude", Ok(pane)) => (env::var("ZURAFA_SESSION").unwrap_or_default(), pane),
+        _ => agent_pane(&client.snapshot()?, agent, event["cwd"].as_str().unwrap_or(""), None).ok_or("no single pane runs this agent here")?,
     };
-    client.request(json!({"type": "layout.resume", "block": block, "agent": agent, "session": session}))?;
-    Ok(())
+    if let Some(session) = event["session_id"].as_str() {
+        client.request(json!({"type": "layout.resume", "block": block, "agent": agent, "session": session}))?;
+    }
+    Ok((Some(workspace).filter(|w| !w.is_empty()), Some(block)))
+}
+
+/// What an agent learns at session start in a Zurafa pane: where it runs and where the guide is.
+fn session_context(workspace: Option<&str>, pane: Option<&str>) -> String {
+    let ids = match (workspace, pane) {
+        (Some(w), Some(p)) => format!("\n\n```text\nZURAFA_SESSION={w}\nZURAFA_PANE={p}\n```"),
+        _ => String::new(),
+    };
+    format!(
+        "You're running in a Zurafa terminal pane.{ids}\n\n\
+`ZURAFA_SESSION` is your workspace and `ZURAFA_PANE` your pane. Both are set in your shell, and `zurafa` \
+commands use them as defaults. The user may be looking at a different pane.\n\n\
+Use the `zurafa` command to see every pane and its status, open tabs and splits, type into panes, read \
+their screens and wait for other agents. In Zurafa a workspace holds tabs, and a tab holds panes.\n\n\
+The zurafa skill has instructions and examples for these tasks. If the skill isn't installed, run \
+`zurafa skill show` to read the same guide."
+    )
 }
 
 /// Sends a report through the daemon, for hooks without the pane's terminal: Codex runs them in a
@@ -1611,7 +1633,18 @@ fn cmd_setup(args: &[String]) -> Result<(), (i32, String)> {
 }
 
 /// Merges `hooks` into the agent's JSON hook settings at `path`, keeping everything else.
-fn setup_hooks(mut path: PathBuf, hooks: &Hooks, agent: &str, next: &str) -> Result<(), (i32, String)> {
+fn setup_hooks(path: PathBuf, hooks: &Hooks, agent: &str, next: &str) -> Result<(), (i32, String)> {
+    let shown = path.display().to_string();
+    match write_hooks(path, hooks)? {
+        0 => println!("{agent} already reports to Zurafa ({shown})."),
+        n => println!("Updated {n} Zurafa hooks in {shown}. {next}"),
+    }
+    Ok(())
+}
+
+/// Puts exactly Zurafa's `hooks` into the JSON hook settings at `path` (none removes them),
+/// keeping everything else and a backup, and returns how many hooks it added or dropped.
+fn write_hooks(mut path: PathBuf, hooks: &Hooks) -> Result<usize, (i32, String)> {
     // Write through a symlinked settings.json (dotfiles) instead of replacing the link.
     if let Ok(real) = std::fs::canonicalize(&path) {
         path = real;
@@ -1628,8 +1661,7 @@ fn setup_hooks(mut path: PathBuf, hooks: &Hooks, agent: &str, next: &str) -> Res
     };
     let changed = add_hooks(&mut settings, hooks).map_err(|e| (1, format!("{}: {e}, left unchanged", path.display())))?;
     if changed == 0 {
-        println!("{agent} already reports to Zurafa ({}).", path.display());
-        return Ok(());
+        return Ok(0);
     }
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| (1, e.to_string()))?;
     // Settings can hold API keys in `env`, so copies keep the original's permissions.
@@ -1651,8 +1683,7 @@ fn setup_hooks(mut path: PathBuf, hooks: &Hooks, agent: &str, next: &str) -> Res
         .and_then(|_| keep_perms(&tmp))
         .and_then(|_| std::fs::rename(&tmp, &path))
         .map_err(|e| (1, format!("cannot write {}: {e}", path.display())))?;
-    println!("Updated {changed} Zurafa hooks in {}. {next}", path.display());
-    Ok(())
+    Ok(changed)
 }
 
 /// Adds the Zurafa hooks that are missing, drops ones an older Zurafa set up that `wanted`
@@ -1683,6 +1714,8 @@ fn add_hooks(settings: &mut Value, wanted: &Hooks) -> Result<usize, String> {
         }
         list.retain(|entry| entry["hooks"].as_array().is_none_or(|hs| !hs.is_empty()));
     }
+    // Events left with no hooks at all go too, so removing ours leaves no trace.
+    hooks.retain(|_, list| list.as_array().is_none_or(|l| !l.is_empty()));
     for &(event, matcher, command) in wanted {
         let list = hooks.entry(event).or_insert_with(|| json!([])).as_array_mut().unwrap();
         let present = list.iter().any(|entry| {
@@ -1700,6 +1733,144 @@ fn add_hooks(settings: &mut Value, wanted: &Hooks) -> Result<usize, String> {
         changed += 1;
     }
     Ok(changed)
+}
+
+/// The guide the zurafa skill gives agents. Built into the CLI, so it always matches its commands.
+const GUIDE: &str = include_str!("guide.md");
+
+/// The installed skill: a stub that sends the agent to `zurafa skill show`, so updating Zurafa updates the guide.
+const SKILL_STUB: &str = r#"---
+name: zurafa
+description: Use the zurafa CLI to see Zurafa's panes and their status, open tabs and splits, type into panes, read their screens, wait for other agents and report status.
+metadata:
+  zurafa-stub: "1"
+---
+<!-- Installed by "zurafa skill setup". Remove it with "zurafa skill remove". -->
+
+Run `zurafa skill show` and follow the guide it prints. The guide comes from the
+installed zurafa command, so it describes the commands available in that version.
+
+If the command fails, the installed Zurafa predates the guide. Start with
+`zurafa panes`, then `zurafa help`.
+"#;
+
+/// An agent Zurafa can teach: where its config lives (it counts as installed when that exists),
+/// where its skills go, and its hooks file and hooks, if it has hooks.
+struct SkillAgent {
+    id: &'static str,
+    name: &'static str,
+    config: PathBuf,
+    skills: PathBuf,
+    hooks: Option<(PathBuf, &'static Hooks)>,
+}
+
+fn skill_agents() -> Result<Vec<SkillAgent>, (i32, String)> {
+    let home = env::var_os("HOME").map(PathBuf::from).ok_or((1, "HOME is not set".to_owned()))?;
+    let dir = |var: &str, default: &str| env::var_os(var).map(PathBuf::from).unwrap_or_else(|| home.join(default));
+    Ok(agents_at(&home, dir("CLAUDE_CONFIG_DIR", ".claude"), dir("CODEX_HOME", ".codex")))
+}
+
+fn agents_at(home: &std::path::Path, claude: PathBuf, codex: PathBuf) -> Vec<SkillAgent> {
+    let shared = home.join(".agents/skills");
+    vec![
+        SkillAgent { id: "claude", name: "Claude Code", skills: claude.join("skills"), hooks: Some((claude.join("settings.json"), CLAUDE_HOOKS)), config: claude },
+        SkillAgent { id: "codex", name: "Codex", skills: shared.clone(), hooks: Some((codex.join("hooks.json"), CODEX_HOOKS)), config: codex },
+        SkillAgent { id: "opencode", name: "OpenCode", skills: shared.clone(), hooks: None, config: home.join(".config/opencode") },
+        // Pi reports its status on its own.
+        SkillAgent { id: "pi", name: "Pi", skills: shared, hooks: None, config: home.join(".pi") },
+    ]
+}
+
+/// current, outdated (an older stub of ours), missing, or other (a skill named zurafa that isn't ours).
+fn skill_state(dir: &std::path::Path) -> &'static str {
+    match std::fs::read_to_string(dir.join("zurafa/SKILL.md")) {
+        Ok(text) if text == SKILL_STUB => "current",
+        Ok(text) if text.contains("zurafa-stub:") => "outdated",
+        Ok(_) => "other",
+        Err(_) => "missing",
+    }
+}
+
+/// current, missing (some of Zurafa's hooks are), or unreadable.
+fn hooks_state(path: &std::path::Path, hooks: &Hooks) -> &'static str {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let mut settings: Value = if text.trim().is_empty() { json!({}) } else { match serde_json::from_str(&text) { Ok(v) => v, Err(_) => return "unreadable" } };
+    match add_hooks(&mut settings, hooks) {
+        Ok(0) => "current",
+        Ok(_) => "missing",
+        Err(_) => "unreadable",
+    }
+}
+
+/// `zurafa skill show|setup|remove|status`: teaches agents to use Zurafa with a skill, and
+/// with hooks in agents that have them (status reports and the session-start context).
+fn cmd_skill(args: &[String], as_json: bool) -> Result<(), (i32, String)> {
+    skill(&skill_agents()?, args, as_json)
+}
+
+fn skill(agents: &[SkillAgent], args: &[String], as_json: bool) -> Result<(), (i32, String)> {
+    match positionals(args).first().map(String::as_str) {
+        Some("show") => print!("{GUIDE}"),
+        Some("setup") => {
+            let found: Vec<&SkillAgent> = agents.iter().filter(|a| a.config.exists()).collect();
+            if found.is_empty() {
+                println!("No supported agent found (Claude Code, Codex, OpenCode or Pi).");
+            }
+            for a in found {
+                let dir = a.skills.join("zurafa");
+                if skill_state(&a.skills) != "other" {
+                    std::fs::create_dir_all(&dir)
+                        .and_then(|_| std::fs::write(dir.join("SKILL.md"), SKILL_STUB))
+                        .map_err(|e| (1, format!("cannot write {}: {e}", dir.display())))?;
+                }
+                let hooks = match &a.hooks {
+                    Some((path, hooks)) => match write_hooks(path.clone(), hooks)? {
+                        0 => ", hooks already set up".to_owned(),
+                        n => format!(", {n} hooks updated"),
+                    },
+                    None => String::new(),
+                };
+                println!("{}: skill in {}{hooks}", a.name, dir.display());
+            }
+            println!("Restart running agents to pick this up. Codex runs new hooks once you trust them in /hooks.");
+        }
+        Some("remove") => {
+            for a in agents {
+                let dir = a.skills.join("zurafa");
+                if matches!(skill_state(&a.skills), "current" | "outdated") {
+                    std::fs::remove_file(dir.join("SKILL.md")).map_err(|e| (1, e.to_string()))?;
+                    let _ = std::fs::remove_dir(&dir); // only if nothing else is in it
+                }
+                if let Some((path, _)) = &a.hooks {
+                    if path.exists() {
+                        write_hooks(path.clone(), &[])?;
+                    }
+                }
+            }
+            println!("Removed Zurafa's skill and hooks from Claude Code, Codex, OpenCode and Pi.");
+        }
+        Some("status") => {
+            let rows: Vec<Value> = agents
+                .iter()
+                .map(|a| {
+                    json!({
+                        "agent": a.id, "name": a.name, "found": a.config.exists(),
+                        "skill": skill_state(&a.skills), "skill_path": a.skills.join("zurafa").display().to_string(),
+                        "hooks": a.hooks.as_ref().map_or("unsupported", |(p, h)| hooks_state(p, h)),
+                    })
+                })
+                .collect();
+            if as_json {
+                println!("{}", serde_json::to_string_pretty(&rows).unwrap());
+            } else {
+                for r in rows {
+                    println!("{} ({})\n  skill  {:<12} {}\n  hooks  {}\n", strv(&r["name"]), if r["found"] == true { "found" } else { "not found" }, strv(&r["skill"]), strv(&r["skill_path"]), strv(&r["hooks"]));
+                }
+            }
+        }
+        _ => return Err((2, "usage: zurafa skill show|setup|remove|status [--json]".into())),
+    }
+    Ok(())
 }
 
 fn has_flag(args: &[String], names: &[&str]) -> bool {
@@ -1838,7 +2009,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  hook claude|codex                    Run by the agent's hooks: status and subagents\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n\nSpawning agents into panes and collecting their results is zurafa-orch's job.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  skill setup|remove|status|show      Teach Claude Code, Codex, OpenCode and Pi to use Zurafa:\n                                       a skill, status hooks and session-start context\n  hook claude|codex                    Run by the agent's hooks: status and subagents\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n\nSpawning agents into panes and collecting their results is zurafa-orch's job.");
 }
 
 #[cfg(test)]
@@ -2016,6 +2187,34 @@ mod tests {
         assert!(tool_args("spawn", &json!({"agent":"claude"})).is_err(), "spawn is zurafa-orch's");
         assert!(tool_args("read", &json!({})).is_err());
         assert!(tool_args("rm", &json!({})).is_err());
+    }
+
+    #[test]
+    fn skill_setup_teaches_found_agents_and_remove_undoes_it() {
+        let home = env::temp_dir().join(format!("zurafa-skill-{}", process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let (claude, codex) = (home.join(".claude"), home.join(".codex"));
+        std::fs::create_dir_all(&claude).unwrap();
+        std::fs::create_dir_all(home.join(".pi")).unwrap();
+        std::fs::write(claude.join("settings.json"), r#"{"model":"opus"}"#).unwrap();
+        let agents = agents_at(&home, claude.clone(), codex.clone());
+        let run = |cmd: &str| skill(&agents, &[cmd.to_owned()], false).unwrap();
+        run("setup");
+        assert_eq!(skill_state(&claude.join("skills")), "current");
+        assert_eq!(skill_state(&home.join(".agents/skills")), "current", "Pi's");
+        assert_eq!(hooks_state(&claude.join("settings.json"), CLAUDE_HOOKS), "current");
+        assert!(!codex.exists(), "Codex isn't installed, so it is left alone");
+        // Someone else's skill of the same name stays.
+        std::fs::write(claude.join("skills/zurafa/SKILL.md"), "mine").unwrap();
+        run("remove");
+        assert_eq!(std::fs::read_to_string(claude.join("skills/zurafa/SKILL.md")).unwrap(), "mine");
+        assert_eq!(skill_state(&home.join(".agents/skills")), "missing");
+        let settings: Value = serde_json::from_str(&std::fs::read_to_string(claude.join("settings.json")).unwrap()).unwrap();
+        assert_eq!(settings["model"], "opus");
+        assert!(settings["hooks"].as_object().unwrap().is_empty());
+        assert!(GUIDE.contains("zurafa panes") && !GUIDE.to_lowercase().contains("rex"));
+        assert!(session_context(Some("default"), Some("t7")).contains("ZURAFA_PANE=t7"));
+        std::fs::remove_dir_all(&home).unwrap();
     }
 
     #[test]
