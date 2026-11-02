@@ -165,12 +165,9 @@ pub struct Block {
     pub pwd: Option<String>,
     #[serde(default)]
     pub foreground: Option<crate::Process>,
-    /// The pane that started this one with `zurafa spawn`, while it exists.
+    /// The pane that started this one (an orchestrator's spawn), while it exists.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
-    /// Keep running when the parent pane closes or its agent exits.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub outlive_parent: bool,
     /// When the pane started, in milliseconds since the Unix epoch.
     #[serde(default)]
     pub started: u64,
@@ -417,7 +414,6 @@ impl Dispatcher {
         axis: Axis,
         label: String,
         parent: Option<String>,
-        outlive_parent: bool,
     ) -> Result<(), String> {
         let mut i = self.inner.lock().unwrap();
         let s = i.snapshot.sessions.get(session).ok_or("unknown session")?;
@@ -449,7 +445,6 @@ impl Dispatcher {
                 pwd: None,
                 foreground: None,
                 parent,
-                outlive_parent,
                 started: now(),
                 resume: None,
             },
@@ -810,17 +805,17 @@ impl Dispatcher {
 mod tests {
     use super::*;
     fn add(d: &Dispatcher, id: &str, target: Option<&str>) {
-        d.add_block("default", id, target, Axis::Horizontal, "Shell".into(), None, false)
+        d.add_block("default", id, target, Axis::Horizontal, "Shell".into(), None)
             .unwrap();
     }
     #[test]
     fn spawned_panes_remember_a_parent_that_exists() {
         let d = Dispatcher::new(32);
         add(&d, "a", None);
-        d.add_block("default", "b", None, Axis::Horizontal, "Agent".into(), Some("a".into()), false).unwrap();
+        d.add_block("default", "b", None, Axis::Horizontal, "Agent".into(), Some("a".into())).unwrap();
         let s = &d.snapshot().sessions["default"];
         assert_eq!(s.active_window, Some(s.windows[0].window_id.clone()), "a spawned tab opens in the background");
-        d.add_block("default", "c", None, Axis::Horizontal, "Agent".into(), Some("gone".into()), false).unwrap();
+        d.add_block("default", "c", None, Axis::Horizontal, "Agent".into(), Some("gone".into())).unwrap();
         let s = &d.snapshot().sessions["default"];
         assert_eq!(s.active_window, Some(s.windows[2].window_id.clone()));
         let blocks = &d.snapshot().sessions["default"].blocks;
@@ -833,9 +828,9 @@ mod tests {
         let d = Dispatcher::new(32);
         add(&d, "a", None);
         add(&d, "b", Some("a"));
-        d.add_block("default", "c", Some("b"), Axis::Vertical, "Shell".into(), None, false)
+        d.add_block("default", "c", Some("b"), Axis::Vertical, "Shell".into(), None)
             .unwrap();
-        d.add_block("default", "d", Some("c"), Axis::Vertical, "Shell".into(), None, false)
+        d.add_block("default", "d", Some("c"), Axis::Vertical, "Shell".into(), None)
             .unwrap();
         let layout = d.snapshot().sessions["default"].windows[0].layout.clone();
         let Layout::Split { ratio, second, .. } = layout else {

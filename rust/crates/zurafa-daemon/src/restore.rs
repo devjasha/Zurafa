@@ -149,7 +149,6 @@ fn open(terms: &Arc<Terminals>, s: &Session, old: &str, split: Option<String>, a
         label: label.into(),
         raw: false,
         parent,
-        outlive_parent: saved.is_some_and(|b| b.outlive_parent),
     })?;
     // Kept for the next restart, even when the agent's own hooks don't report it again.
     if let Some(r) = resume {
@@ -158,7 +157,7 @@ fn open(terms: &Arc<Terminals>, s: &Session, old: &str, split: Option<String>, a
     Ok(new)
 }
 
-/// Like `zurafa spawn`: through the login shell, which stays open when the agent exits.
+/// Like an orchestrator's spawn: through the login shell, which stays open when the agent exits.
 fn resume_command(r: &zurafa_events::Resume, parent: Option<&str>, shell: &str) -> Vec<String> {
     let interactive = if shell.ends_with("fish") { "-l" } else { "-li" };
     let mut command = vec![shell.into(), interactive.into(), "-c".into(), format!("{}; exec {} -l", r.command(), quote(shell))];

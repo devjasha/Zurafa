@@ -148,8 +148,6 @@ enum Request {
         label: String,
         #[serde(default)]
         parent: Option<String>,
-        #[serde(default)]
-        outlive_parent: bool,
     },
     #[serde(rename = "layout.split")]
     Split {
@@ -163,8 +161,6 @@ enum Request {
         command: Option<Vec<String>>,
         #[serde(default)]
         parent: Option<String>,
-        #[serde(default)]
-        outlive_parent: bool,
     },
     #[serde(rename = "layout.preview")]
     Preview {
@@ -437,7 +433,6 @@ async fn request(
             command,
             label,
             parent,
-            outlive_parent,
         } => {
             let t = terms.clone();
             spawn_reply(
@@ -454,7 +449,6 @@ async fn request(
                         label,
                         raw: false,
                         parent,
-                        outlive_parent,
                     })
                 })
                 .await,
@@ -470,7 +464,6 @@ async fn request(
             cwd,
             command,
             parent,
-            outlive_parent,
         } => {
             let t = terms.clone();
             spawn_reply(
@@ -487,7 +480,6 @@ async fn request(
                         label: label(),
                         raw: false,
                         parent,
-                        outlive_parent,
                     })
                 })
                 .await,

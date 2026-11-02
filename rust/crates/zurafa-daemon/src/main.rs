@@ -2,7 +2,6 @@ mod awake;
 mod hosts;
 mod listen;
 mod login;
-mod notes;
 mod osc7501;
 mod protocol;
 mod pty;
@@ -143,7 +142,6 @@ async fn main() -> io::Result<()> {
     EXE.get_or_init(exe_identity);
     STARTED.get_or_init(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()));
     let terms = pty::Terminals::new();
-    tokio::spawn(notes::run(terms.clone()));
     awake::run(terms.clone());
     // Daemons a bridge starts on a remote host stop once nothing uses them, so old builds don't pile up.
     let exit_when_idle = env::args().any(|a| a == "--exit-when-idle");

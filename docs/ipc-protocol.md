@@ -178,15 +178,10 @@ Create a tab or split by spawning its PTY:
 ```
 
 Both accept optional `cwd` and `command`, and reply with `spawned`. An optional
-`parent` names the block that asked for the new one (kept only if it exists).
-The daemon closes such a child when its parent block closes or exits, or the
-parent's agent exits and leaves its shell, unless `outlive_parent` is `true`.
-While the parent's agent has reported a status and is not blocked, the daemon
-types a note into it when the child becomes blocked or error, or ends:
-`<zurafa from="t7 review">is blocked (permission); see zurafa read t7</zurafa>`,
-pasted and then Enter as its own write, once per piece of news. A note waits
-until the parent can take it and is dropped if the child gets going again first.
-`agent-notes = false` in `config.zurafa` turns notes off. Tab label
+`parent` names the block that asked for the new one (kept only if it exists);
+the app shows such a child under its parent. The daemon does nothing else with
+it: orchestrators such as zurafa-orch close children and pass on their news
+themselves. A child's tab opens behind the active one. Tab label
 defaults to `Terminal`. Axes are `horizontal` or `vertical`; the old block is
 first and the new block second, initially at ratio 0.5. The new block becomes
 selected, its window becomes active, and splitting clears that window's zoom.
