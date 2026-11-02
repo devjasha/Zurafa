@@ -104,7 +104,7 @@ Run this once:
 zurafa setup codex
 ```
 
-It adds eight hooks to `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`), all running `zurafa hook codex`, and keeps a backup like the Claude setup. They report the same states, using Codex's `PermissionRequest` event for **blocked** and Codex's final answer as **done**'s message, and give Codex the same [subagent](#subagents) handling as Claude: `explorer` subagents show in the card, and other subagents go to `zurafa spawn`. Codex runs hooks in a background server that all its sessions share, so they reach Zurafa through its daemon and find the pane running Codex in the hook's folder. Two Codex panes in the same folder can't be told apart, so neither gets those reports. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open `/hooks`, and trust the Zurafa hooks. If you set up Codex before this release, remove its old `zurafa report` hooks from `hooks.json`.
+It adds seven hooks to `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`), all running `zurafa hook codex`, and keeps a backup like the Claude setup. They report the same states, using Codex's `PermissionRequest` event for **blocked** and Codex's final answer as **done**'s message, and show Codex's own [subagents](#subagents) in its card, as for Claude. Codex runs hooks in a background server that all its sessions share, so they reach Zurafa through its daemon and find the pane running Codex in the hook's folder. Two Codex panes in the same folder can't be told apart, so neither gets those reports. Codex runs a hook only after you review it, so restart Codex in a Zurafa pane, open `/hooks`, and trust the Zurafa hooks. If you set up Codex before this release, remove its old `zurafa report` hooks from `hooks.json`.
 
 ## Pi
 
@@ -123,37 +123,17 @@ Messages are optional, so `zurafa report blocked "Approve the deploy?"` shows th
 
 ## Let agents drive Zurafa
 
-`zurafa mcp` serves Zurafa's agent commands as MCP tools, so an agent can find them on its own: start other agents on tasks, list every pane and its status, type into a pane, read its screen, and wait for it to finish. Add it to Claude Code once:
+`zurafa mcp` serves Zurafa's agent commands as MCP tools, so an agent can find them on its own: list every pane and its status, type into a pane, read its screen, and wait for it to finish. Add it to Claude Code once:
 
 ```
 claude mcp add --scope user zurafa -- zurafa mcp
 ```
 
-Other agents that support MCP servers over stdio take the same command, `zurafa mcp`. Then ask, for example, "spawn a Codex agent to write tests for this module and tell me when it's done". The tools are `list_panes`, `spawn`, `send`, `key`, `read`, `wait`, and `prompt`; each does what the [CLI command](/docs/cli/) of the same name does. `wait` and `prompt` give up after 10 minutes unless the agent asks for longer. `spawn` takes a `worktree` branch to put the new agent in [its own worktree](/docs/cli/#worktrees).
+Other agents that support MCP servers over stdio take the same command, `zurafa mcp`. The tools are `list_panes`, `send`, `key`, `read`, `wait`, and `prompt`; each does what the [CLI command](/docs/cli/) of the same name does. `wait` and `prompt` give up after 10 minutes unless the agent asks for longer.
 
 ### Subagents
 
-In a Zurafa pane, agents that do work get a terminal of their own: when Claude reaches for its built-in Agent tool with a general-purpose or custom agent, Zurafa turns the call down and Claude starts it with `zurafa spawn` instead, so it shows in the parent's card where you can watch it, type into it and stop it. Read-only lookups (Explore, Plan and claude-code-guide) stay inside Claude. They have no terminal, so they show in the same card by their task, as **Working** and then **Done**. Hover one for its last answer, or click it to go to the Claude that runs it. Codex gets the same through `zurafa setup codex`, with `explorer` as its lookup type. Outside Zurafa, both agents' subagent tools work as usual. If you set up Claude before this release, run `zurafa setup claude` again to add the four new hooks.
-
-## Try a delegated workflow
-
-After setting up Claude Code or Codex above, open your project in a Zurafa pane and start the agent. Try a focused request such as:
-
-```
-Add CSV export to the orders page. Delegate the implementation and tests,
-then review the changes with me. Use separate git worktrees for agents
-that edit files in parallel. Tell the test agent which behavior to cover.
-Bring their changes together and run the tests before showing me the diff.
-```
-
-Use a feature that makes sense for your project. The coordinator decides how to divide the work; this prompt is an example, not a built-in workflow preset.
-
-1. **Give the coordinator the goal.** Explain the expected behavior and ask it to delegate explicitly.
-2. **Follow the team.** Working agents started with `zurafa spawn` get live terminals grouped under the coordinator. Open one to watch its output, type into it, or stop it. Separate worktrees let agents edit without touching each other's working files; the coordinator still needs to bring their changes together.
-3. **Answer when needed.** If an agent reports blocked, open its pane or press `⌘J` and respond to its prompt. The other agents can keep working.
-4. **Review the result.** The coordinator can wait for agents and read their terminal output, then integrate their changes and run checks. Review the diff and test results before deciding to merge.
-
-For direct control, the [CLI guide](/docs/cli/#worktrees) covers spawning agents in worktrees. To let your coordinator discover these actions as tools, use the [MCP setup](#let-agents-drive-zurafa) above.
+An agent's own subagents show in its card by their task, as **Working** and then **Done**. Hover one for its last answer, or click it to go to the agent that runs it. `zurafa setup claude` and `zurafa setup codex` add the hooks for this.
 
 ## When an agent needs you
 

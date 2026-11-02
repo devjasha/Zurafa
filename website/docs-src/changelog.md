@@ -2,6 +2,14 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.32
+
+**November 2, 2026**
+
+- **Agent orchestration has moved out of Zurafa** into a separate project, zurafa-orch. `zurafa spawn`, `zurafa worktree`, `zurafa wait --children`, the notes typed into the agent that spawned a child, and closing spawned agents with their parent are gone from Zurafa, and so is the MCP `spawn` tool. Zurafa still shows agents started by an orchestrator under their parent's tab, and `send`, `read`, `wait`, `prompt` and status reporting work as before.
+- Claude Code and Codex are no longer told about `zurafa spawn` at session start, and their built-in subagents are no longer turned away in a Zurafa pane. Run `zurafa setup claude` (and `zurafa setup codex`) once to drop the old hooks.
+- This update needs a server restart (**Restart Server to Finish Update…** in the menu bar); it closes open terminals, and their layout comes back afterwards.
+
 ## 0.1.31
 
 **November 1, 2026**

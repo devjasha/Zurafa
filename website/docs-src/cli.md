@@ -32,38 +32,9 @@ Run `zurafa help` for the full command list.
 
 ## Driving panes from agents
 
-Agents running in a Zurafa pane can use the CLI the way you would: start a test run beside themselves, type into another agent, wait for it and read its screen.
+Agents running in a Zurafa pane can use the CLI the way you would: type into another agent, wait for it and read its screen.
 
-`zurafa spawn` starts an agent with a task in a new tab, named after the task, and prints the new pane:
-
-```sh
-p=$(zurafa spawn claude "fix the flaky login test")
-zurafa wait $p          # prints its status and final answer
-zurafa read $p -n 40
-zurafa spawn codex "review the diff" --split   # beside the current pane instead
-```
-
-`spawn` prints the new pane's id, and with `--worktree` also tells you (on stderr) where the worktree is. The new pane gets `ZURAFA_PARENT`, the pane that ran `spawn`, so the agent can ask it something with `zurafa send $ZURAFA_PARENT --enter -- "question"`; its final answer needs no send, since `zurafa wait` prints it (up to 1200 characters, ending in `…` when cut). If the spawn fails, a worktree it created is removed again. The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass `--cwd`. `-s` picks the workspace, `-l` names the tab, and `--split` takes `-b` and `--axis`. Spawning into a remote workspace isn't supported yet.
-
-When a spawned agent gets blocked, hits an error or exits, Zurafa types a short note into the agent that spawned it, like `<zurafa from="t7 review">is blocked (permission); see zurafa read t7</zurafa>`, once it can take one (it has reported a status and isn't waiting on a dialog itself). Set `agent-notes = false` in `config.zurafa` to turn notes off. Spawned panes close when the pane that spawned them closes or its agent exits; `--outlive-parent` keeps one running.
-
-### Worktrees
-
-Give each agent its own git worktree, so agents working in the same repository don't edit each other's files:
-
-```sh
-zurafa spawn claude "fix the login bug" --worktree fix-login
-zurafa spawn codex "review fix-login" --worktree fix-login --split   # a second agent, same worktree
-```
-
-`--worktree BRANCH` makes a new branch from the current commit, checks it out in `~/.zurafa/worktrees/<repo>/<branch>`, and starts the agent there. An existing branch is checked out as it is, and an existing worktree is reused. Run it inside the repository, or point at it with `--cwd`.
-
-```sh
-zurafa worktree add fix-login      # create the worktree without an agent; prints its path
-zurafa worktree remove fix-login   # remove it once you've merged the work
-```
-
-`worktree remove` stops if a pane is still open in the worktree or it has uncommitted changes, and deletes the branch only when it's merged. `--force` removes it anyway and discards those changes; an unmerged branch is still kept.
+Starting agents into panes of their own (spawn, worktrees, notes to the agent that started them) has moved out of Zurafa into a separate project, zurafa-orch, which isn't released yet. Zurafa still groups such agents under their parent's tab.
 
 ```sh
 zurafa send review "npm run migrate" --enter   # type text, then press Enter
@@ -94,7 +65,7 @@ zurafa report done "Deployed to staging"
 zurafa report clear
 ```
 
-`zurafa setup claude` and `zurafa setup codex` add these reports to the agent's hooks for you; Pi sends them on its own. The hooks also run `zurafa hook claude` or `zurafa hook codex`, which read the hook event from stdin. They show the agent's own subagents in its card and point agents that do work to `zurafa spawn`. See [Connect your agents](/docs/agents/#subagents).
+`zurafa setup claude` and `zurafa setup codex` add these reports to the agent's hooks for you; Pi sends them on its own. The hooks also run `zurafa hook claude` or `zurafa hook codex`, which read the hook event from stdin. They show the agent's own subagents in its card. See [Connect your agents](/docs/agents/#subagents).
 
 `--id` and `--title` report one of several tasks in a pane, and `--app` names the program.
 
@@ -119,7 +90,6 @@ Inside terminals created by Zurafa, the daemon sets context variables so command
 | `ZURAFA_SESSION` | The current session ID |
 | `ZURAFA_PANE` | The current pane ID |
 | `ZURAFA_BLOCK` | Compatibility alias for the current pane ID |
-| `ZURAFA_PARENT` | The pane that ran `zurafa spawn`, in the agent it started |
 
 Outside a Zurafa terminal, commands default to the standard daemon socket and the `default` session. Use flags when you want another target:
 

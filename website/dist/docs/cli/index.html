@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav id="site-nav" aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.31-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.32-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
     <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
   </div></header>
   <div class="docs-layout shell">
@@ -91,22 +91,8 @@ zurafa split --axis vertical      # split the current pane
 zurafa preview README.md          # open a file in the preview beside the current pane</code></pre>
 <p>Run <code>zurafa help</code> for the full command list.</p>
 <h2 id="driving-panes-from-agents">Driving panes from agents</h2>
-<p>Agents running in a Zurafa pane can use the CLI the way you would: start a test run beside themselves, type into another agent, wait for it and read its screen.</p>
-<p><code>zurafa spawn</code> starts an agent with a task in a new tab, named after the task, and prints the new pane:</p>
-<pre><code>p=$(zurafa spawn claude &quot;fix the flaky login test&quot;)
-zurafa wait $p          # prints its status and final answer
-zurafa read $p -n 40
-zurafa spawn codex &quot;review the diff&quot; --split   # beside the current pane instead</code></pre>
-<p><code>spawn</code> prints the new pane&#x27;s id, and with <code>--worktree</code> also tells you (on stderr) where the worktree is. The new pane gets <code>ZURAFA_PARENT</code>, the pane that ran <code>spawn</code>, so the agent can ask it something with <code>zurafa send $ZURAFA_PARENT --enter -- &quot;question&quot;</code>; its final answer needs no send, since <code>zurafa wait</code> prints it (up to 1200 characters, ending in <code>…</code> when cut). If the spawn fails, a worktree it created is removed again. The agent runs through your login shell, so it finds the same programs as your terminal, and leaves that shell open when it exits. It starts in the current directory unless you pass <code>--cwd</code>. <code>-s</code> picks the workspace, <code>-l</code> names the tab, and <code>--split</code> takes <code>-b</code> and <code>--axis</code>. Spawning into a remote workspace isn&#x27;t supported yet.</p>
-<p>When a spawned agent gets blocked, hits an error or exits, Zurafa types a short note into the agent that spawned it, like <code>&lt;zurafa from=&quot;t7 review&quot;&gt;is blocked (permission); see zurafa read t7&lt;/zurafa&gt;</code>, once it can take one (it has reported a status and isn&#x27;t waiting on a dialog itself). Set <code>agent-notes = false</code> in <code>config.zurafa</code> to turn notes off. Spawned panes close when the pane that spawned them closes or its agent exits; <code>--outlive-parent</code> keeps one running.</p>
-<h3 id="worktrees">Worktrees</h3>
-<p>Give each agent its own git worktree, so agents working in the same repository don&#x27;t edit each other&#x27;s files:</p>
-<pre><code>zurafa spawn claude &quot;fix the login bug&quot; --worktree fix-login
-zurafa spawn codex &quot;review fix-login&quot; --worktree fix-login --split   # a second agent, same worktree</code></pre>
-<p><code>--worktree BRANCH</code> makes a new branch from the current commit, checks it out in <code>~/.zurafa/worktrees/&lt;repo&gt;/&lt;branch&gt;</code>, and starts the agent there. An existing branch is checked out as it is, and an existing worktree is reused. Run it inside the repository, or point at it with <code>--cwd</code>.</p>
-<pre><code>zurafa worktree add fix-login      # create the worktree without an agent; prints its path
-zurafa worktree remove fix-login   # remove it once you&#x27;ve merged the work</code></pre>
-<p><code>worktree remove</code> stops if a pane is still open in the worktree or it has uncommitted changes, and deletes the branch only when it&#x27;s merged. <code>--force</code> removes it anyway and discards those changes; an unmerged branch is still kept.</p>
+<p>Agents running in a Zurafa pane can use the CLI the way you would: type into another agent, wait for it and read its screen.</p>
+<p>Starting agents into panes of their own (spawn, worktrees, notes to the agent that started them) has moved out of Zurafa into a separate project, zurafa-orch, which isn&#x27;t released yet. Zurafa still groups such agents under their parent&#x27;s tab.</p>
 <pre><code>zurafa send review &quot;npm run migrate&quot; --enter   # type text, then press Enter
 zurafa send review -e &#x27;y\n&#x27;                     # interpret \n \r \t \e \xHH escapes
 zurafa key review ctrl+c                       # press keys: enter, tab, escape, up, ctrl+c…
@@ -125,7 +111,7 @@ zurafa panes                                   # every pane: tab, program, statu
 zurafa report blocked &quot;Approve the production deploy?&quot; --kind permission
 zurafa report done &quot;Deployed to staging&quot;
 zurafa report clear</code></pre>
-<p><code>zurafa setup claude</code> and <code>zurafa setup codex</code> add these reports to the agent&#x27;s hooks for you; Pi sends them on its own. The hooks also run <code>zurafa hook claude</code> or <code>zurafa hook codex</code>, which read the hook event from stdin. They show the agent&#x27;s own subagents in its card and point agents that do work to <code>zurafa spawn</code>. See <a href="/docs/agents/#subagents">Connect your agents</a>.</p>
+<p><code>zurafa setup claude</code> and <code>zurafa setup codex</code> add these reports to the agent&#x27;s hooks for you; Pi sends them on its own. The hooks also run <code>zurafa hook claude</code> or <code>zurafa hook codex</code>, which read the hook event from stdin. They show the agent&#x27;s own subagents in its card. See <a href="/docs/agents/#subagents">Connect your agents</a>.</p>
 <p><code>--id</code> and <code>--title</code> report one of several tasks in a pane, and <code>--app</code> names the program.</p>
 <h2 id="taxonomy">Taxonomy</h2>
 <p>Zurafa&#x27;s public UI uses these names:</p>
@@ -144,7 +130,6 @@ zurafa report clear</code></pre>
 <tr><td><code>ZURAFA_SESSION</code></td><td>The current session ID</td></tr>
 <tr><td><code>ZURAFA_PANE</code></td><td>The current pane ID</td></tr>
 <tr><td><code>ZURAFA_BLOCK</code></td><td>Compatibility alias for the current pane ID</td></tr>
-<tr><td><code>ZURAFA_PARENT</code></td><td>The pane that ran <code>zurafa spawn</code>, in the agent it started</td></tr>
 </table></div>
 <p>Outside a Zurafa terminal, commands default to the standard daemon socket and the <code>default</code> session. Use flags when you want another target:</p>
 <div class="table-scroll"><table>
@@ -173,7 +158,7 @@ zurafa --json pane inspect t1</code></pre>
 <tr><td>4</td><td>The daemon could not be reached</td></tr>
 <tr><td>5</td><td><code>--timeout</code> passed</td></tr>
 </table></div></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/ipc-reference/"><small>← Previous</small><strong>IPC protocol</strong></a><a href="/docs/build/"><small>Next →</small><strong>Build from source</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#try-it">Try it</a><a href="#commands">Commands</a><a href="#driving-panes-from-agents">Driving panes from agents</a><a href="#worktrees">Worktrees</a><a href="#taxonomy">Taxonomy</a><a href="#command-targets">Command targets</a><a href="#machine-readable-output">Machine-readable output</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#try-it">Try it</a><a href="#commands">Commands</a><a href="#driving-panes-from-agents">Driving panes from agents</a><a href="#taxonomy">Taxonomy</a><a href="#command-targets">Command targets</a><a href="#machine-readable-output">Machine-readable output</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
