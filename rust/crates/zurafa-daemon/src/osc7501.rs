@@ -76,7 +76,16 @@ impl Filter {
                 let end = self.pending.len() - if b == 7 { 1 } else { 2 };
                 if let Ok(body) = std::str::from_utf8(&self.pending[2..end]) {
                     if let Some(body) = body.strip_prefix("7501;") {
-                        if let Some(report) = status::parse(body) {
+                        // A remote tab's bridge reports the remote pane's foreground process; empty = none.
+                        if let Some(json) = body.strip_prefix("fg;") {
+                            if let Ok(foreground) = serde_json::from_str(if json.is_empty() { "null" } else { json }) {
+                                actions.push(Action::Event(TerminalEvent::ProcessChanged {
+                                    generation: 0,
+                                    foreground,
+                                    ancestors: Vec::new(),
+                                }));
+                            }
+                        } else if let Some(report) = status::parse(body) {
                             actions.push(Action::Report(report));
                         }
                     } else {
@@ -191,6 +200,13 @@ mod tests {
         }
         assert_eq!(expected.0, b"hi\x1b]2;title\x07\x07\x1b]133;A\x07\x1bc");
         assert_eq!(expected.1.len(), 5);
+    }
+    #[test]
+    fn remote_foreground_is_hidden_and_reported() {
+        let (out, a) = run(b"a\x1b]7501;fg;{\"name\":\"nvim\",\"cwd\":\"/r\",\"pid\":7,\"argv\":[\"nvim\"]}\x1b\\b\x1b]7501;fg;\x07", 3);
+        assert_eq!(out, b"ab");
+        assert_eq!(a.len(), 2);
+        assert!(a[0].contains("name: \"nvim\"") && a[1].contains("foreground: None"), "{a:?}");
     }
     #[test]
     fn overflow_discarded_and_recovers() {

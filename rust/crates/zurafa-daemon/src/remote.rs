@@ -430,6 +430,20 @@ fn notice(text: &str) {
     let _ = out.flush();
 }
 
+/// Tells the local daemon what runs in the remote pane, so the tab shows its icon instead of a globe.
+/// Trimmed to what icon detection reads, so it fits the local filter's 4 KiB OSC limit.
+fn report_foreground(out: &mut impl Write, process: &Value) {
+    let mut p = process.clone();
+    if let Some(argv) = p.get_mut("argv").and_then(Value::as_array_mut) {
+        argv.truncate(3);
+        for arg in argv.iter_mut() {
+            *arg = Value::String(arg.as_str().unwrap_or_default().chars().take(256).collect());
+        }
+    }
+    let body = if p.is_null() { String::new() } else { p.to_string() };
+    let _ = write!(out, "\x1b]7501;fg;{body}\x1b\\").and_then(|_| out.flush());
+}
+
 /// Closes the remote terminal (and its block in the remote layout), then exits with `code`.
 fn finish(writer: &Writer, terminal: &str, code: i32) -> ! {
     writer.send(json!({"id":1,"type":"layout.command","command":{"op":"close","session":"default","block":terminal}}));
@@ -540,7 +554,7 @@ pub fn run(dest: Vec<String>) -> ! {
         if !id.is_empty() {
             *terminal.lock().unwrap() = Some(id.clone());
             writer.send(json!({"id":3,"type":"events.subscribe","subscription":"exit",
-                "filter":{"block":id,"types":["terminal.child_exited"]}}));
+                "filter":{"block":id,"types":["terminal.child_exited","terminal.process_changed"]}}));
             if !first {
                 notice("Reconnected.");
                 // Nudge full-screen programs into redrawing.
@@ -566,6 +580,10 @@ pub fn run(dest: Vec<String>) -> ! {
                         if block["running"] == false {
                             finish(&writer, &id, block["exit_code"].as_i64().unwrap_or(1) as i32);
                         }
+                        report_foreground(&mut out, &block["foreground"]);
+                    }
+                    Some("events.event") if v["event"]["name"] == "process_changed" => {
+                        report_foreground(&mut out, &v["event"]["payload"]["foreground"]);
                     }
                     Some("events.event") if v["event"]["name"] == "child_exited" => {
                         finish(&writer, &id, v["event"]["payload"]["exit_code"].as_i64().unwrap_or(1) as i32);
