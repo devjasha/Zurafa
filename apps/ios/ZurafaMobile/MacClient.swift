@@ -21,6 +21,8 @@ import Network
         didSet { UserDefaults.standard.set(appearance.flatMap { try? JSONEncoder().encode($0) }, forKey: "macAppearance") }
     }
     var onOutput: (String, Data, UInt64?) -> Void = { _, _, _ in }
+    /// A terminal's real grid, and whether this phone is the one sizing it.
+    var onSize: (String, Int, Int, Bool) -> Void = { _, _, _, _ in }
     /// A pane a tapped notification asked to show.
     @Published var openPane: String?
     /// This phone's APNs token, handed to the Mac so its notifications reach the phone.
@@ -202,6 +204,8 @@ import Network
             m.type == "error" ? k.resume(throwing: DaemonError(m.message ?? "daemon error")) : k.resume(returning: m)
         } else if m.type == "output", let t = m.terminal, let data = m.data {
             onOutput(t, data, m.end)
+        } else if m.type == "size", let t = m.terminal, let cols = m.cols, let rows = m.rows {
+            onSize(t, cols, rows, m.mine ?? true)
         } else if m.type == "appearance" {
             if let look = m.appearance { appearance = look }
         } else if m.type == "events.event" {

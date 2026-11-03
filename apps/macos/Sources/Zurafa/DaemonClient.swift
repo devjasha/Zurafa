@@ -21,6 +21,8 @@ import Network
     var onSnapshot: (EventSnapshot) -> Void = { _ in }
     var onEvent: (EventEnvelope) -> Void = { _ in }
     var onOutput: (String, Data, UInt64?) -> Void = { _, _, _ in }
+    /// A terminal's real grid, and whether this app is the one sizing it.
+    var onSize: (String, Int, Int, Bool) -> Void = { _, _, _, _ in }
 
     private var conn: NWConnection?
     private var live = false // hello_ok received on `conn`
@@ -140,6 +142,8 @@ import Network
             m.type == "error" ? k.resume(throwing: DaemonError(m.message ?? "daemon error")) : k.resume(returning: m)
         } else if m.type == "output", let t = m.terminal, let data = m.data {
             onOutput(t, data, m.end)
+        } else if m.type == "size", let t = m.terminal, let cols = m.cols, let rows = m.rows {
+            onSize(t, cols, rows, m.mine ?? true)
         } else if m.type == "events.event", let event = m.event {
             if !cursor.accept(event) { return resync() }
             onEvent(event)

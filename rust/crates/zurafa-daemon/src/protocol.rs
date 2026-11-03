@@ -39,10 +39,21 @@ pub enum Msg {
         terminal: String,
         data: String,
     },
+    /// Only the terminal's size owner changes the PTY; anyone else's size is kept for later.
     Resize {
         terminal: String,
         cols: u16,
         rows: u16,
+    },
+    /// Makes this connection the size owner, e.g. when the pane gets focus on its device.
+    Claim {
+        terminal: String,
+        cols: Option<u16>,
+        rows: Option<u16>,
+    },
+    /// This connection stopped showing the terminal, so its size no longer counts.
+    Release {
+        terminal: String,
     },
 }
 

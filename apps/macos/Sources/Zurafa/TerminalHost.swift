@@ -43,6 +43,20 @@ final class PaneTerminal: TerminalView {
         super.setFrameSize(size)
         if size.width > 0, size.height > 0, let callback = onSized { onSized = nil; callback() }
     }
+    /// A hidden pane stops counting for the terminal's size; shown again, it says its size again.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let terminal { TerminalStore.shared.shown(terminal, window != nil) }
+    }
+    /// The frame that holds exactly `cols`×`rows` cells, so another device's grid draws unchanged.
+    func frameSize(cols: Int, rows: Int) -> NSSize? {
+        // shortcut: SwiftTerm keeps its cell size internal, so read it by reflection; nil (the pane fills) if SwiftTerm renames it.
+        guard let cell = Mirror(reflecting: self).superclassMirror?.descendant("cellDimension") as? CGSize else { return nil }
+        let now = terminalDimensions
+        let scroller = getOptimalFrameSize().width - cell.width * CGFloat(now.cols)
+        // Half a point over, so rounding never loses a cell.
+        return NSSize(width: cell.width * CGFloat(cols) + scroller + 0.5, height: cell.height * CGFloat(rows) + 0.5)
+    }
 }
 
 /// Keeps the persistent terminal view attached when SwiftUI collapses a split.
@@ -58,8 +72,10 @@ final class PaneTerminal: TerminalView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        clipsToBounds = true // another device's larger grid shows cut off, not over the next pane
         restoreTerminal()
         claimFocus()
+        if focused, window != nil, let terminalID { TerminalStore.shared.claim(terminalID) }
     }
 
     /// A new pane is often updated before it joins the window, so focus is retried once it does.
@@ -77,7 +93,7 @@ final class PaneTerminal: TerminalView {
         restoring = true
         defer { restoring = false }
         let terminal = TerminalStore.shared.attach(terminalID, program: .shell, to: self)
-        if terminal.frame != bounds { terminal.frame = bounds }
+        TerminalStore.shared.place(terminalID)
         terminal.needsDisplay = true
     }
 }
@@ -93,6 +109,8 @@ final class PaneTerminal: TerminalView {
     private var replayed: [String: UInt64] = [:]
     /// Live output held back while a pane's replay is in flight, so it lands after it.
     private var attaching: [String: [(Data, UInt64?)]] = [:]
+    /// The grid of a terminal another device sizes; this app draws it as-is instead of its own.
+    private var grids: [String: (cols: Int, rows: Int)] = [:]
     private var knownBlocks: Set<String> = []
     private var runningBlocks: Set<String> = []
     private var isDark = false
@@ -116,9 +134,16 @@ final class PaneTerminal: TerminalView {
     override init() {
         super.init()
         daemon.onOutput = { [weak self] id, data, end in self?.receive(id, data, end) }
-        // The iOS app resizes shared terminals to the phone; coming back here takes them back to this window's size.
+        daemon.onSize = { [weak self] id, cols, rows, mine in
+            self?.grids[id] = mine ? nil : (cols, rows)
+            self?.place(id)
+        }
+        // The iPhone may size shared terminals; coming back here takes the focused ones back to this window's size.
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.views.values.forEach { $0.onSized?() } }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                for (id, view) in self.views where view.window != nil && (view.superview as? TerminalContainer)?.focused == true { self.claim(id) }
+            }
         }
     }
 
@@ -230,9 +255,9 @@ final class PaneTerminal: TerminalView {
         configure(view)
         view.linkHighlightMode = .hover
         view.terminalDelegate = self
-        view.onFocus = { [weak self] in self?.onFocus(id) }
+        view.onFocus = { [weak self] in self?.claim(id); self?.onFocus(id) }
         view.onSized = { [weak self, weak view] in
-            guard let self, let view else { return }
+            guard let self, let view, grids[id] == nil else { return }
             let size = view.terminalDimensions
             // A size change makes full-screen programs redraw; the same size alone would not signal them.
             self.daemon.send(Msg(type: "resize", cols: size.cols, rows: max(size.rows - 1, 1), terminal: id))
@@ -270,11 +295,37 @@ final class PaneTerminal: TerminalView {
         // Its old terminal must leave the container before the new one is attached.
         for old in box.subviews where old !== view { old.removeFromSuperview() }
         if view.superview !== box {
-            view.frame = box.bounds
-            view.autoresizingMask = [.width, .height]
             box.addSubview(view)
+            place(id)
         }
         return view
+    }
+
+    /// Fills the pane, or while another device sizes the terminal, shows its grid unchanged at the top left.
+    func place(_ id: String) {
+        guard let view = views[id], let box = view.superview else { return }
+        var frame = box.bounds
+        if let grid = grids[id], let size = view.frameSize(cols: grid.cols, rows: grid.rows) {
+            frame = NSRect(x: 0, y: box.bounds.height - size.height, width: size.width, height: size.height)
+        }
+        view.autoresizingMask = grids[id] == nil ? [.width, .height] : [.minYMargin]
+        if view.frame != frame { view.frame = frame }
+    }
+
+    /// Makes this app size the terminal: the pane got focus or a click here.
+    func claim(_ id: String) {
+        guard let view = views[id], view.terminal != nil else { return }
+        grids[id] = nil
+        place(id)
+        let size = view.terminalDimensions
+        daemon.send(Msg(type: "claim", cols: size.cols, rows: size.rows, terminal: id))
+    }
+
+    func shown(_ id: String, _ visible: Bool) {
+        guard let view = views[id] else { return }
+        if !visible { return daemon.send(Msg(type: "release", terminal: id)) }
+        let size = view.terminalDimensions
+        if grids[id] == nil, size.cols > 0 { daemon.send(Msg(type: "resize", cols: size.cols, rows: size.rows, terminal: id)) }
     }
 
     func exited(_ id: String, code: Int?) {
@@ -285,7 +336,7 @@ final class PaneTerminal: TerminalView {
 
     func sync(blocks: Set<String>, running: Set<String>) {
         for id in Array(views.keys) where !blocks.contains(id) { views.removeValue(forKey: id)?.removeFromSuperview() }
-        for id in knownBlocks.subtracting(blocks) { pendingOutput[id] = nil; replayed[id] = nil }
+        for id in knownBlocks.subtracting(blocks) { pendingOutput[id] = nil; replayed[id] = nil; grids[id] = nil }
         knownBlocks = blocks
         runningBlocks = running
         for (id, view) in views where !running.contains(id) { view.terminal = nil }
@@ -297,6 +348,7 @@ final class PaneTerminal: TerminalView {
         pendingOutput.removeAll()
         replayed.removeAll()
         attaching.removeAll()
+        grids.removeAll()
         knownBlocks.removeAll()
         runningBlocks.removeAll()
     }
@@ -305,7 +357,8 @@ final class PaneTerminal: TerminalView {
         if let id = (source as? PaneTerminal)?.terminal { daemon.send(Msg(type: "input", terminal: id, data: Data(data))) }
     }
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
-        if let id = (source as? PaneTerminal)?.terminal { daemon.send(Msg(type: "resize", cols: newCols, rows: newRows, terminal: id)) }
+        // Showing another device's grid is not this app's own size.
+        if let id = (source as? PaneTerminal)?.terminal, grids[id] == nil { daemon.send(Msg(type: "resize", cols: newCols, rows: newRows, terminal: id)) }
     }
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
         (source as? PaneTerminal)?.openedLink = true
@@ -328,9 +381,11 @@ struct TerminalHost: NSViewRepresentable {
 
     func makeNSView(context: Context) -> TerminalContainer { TerminalContainer() }
     func updateNSView(_ box: TerminalContainer, context: Context) {
+        let gained = focused && (!box.focused || box.terminalID != id)
         box.terminalID = id
         box.focused = focused
         TerminalStore.shared.attach(id, program: program, to: box)
         box.claimFocus()
+        if gained { TerminalStore.shared.claim(id) }
     }
 }

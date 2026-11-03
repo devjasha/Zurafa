@@ -151,6 +151,18 @@ Fire-and-forget messages have no reply; malformed ones are ignored:
 
 - `{type:"input",terminal,data:<base64 bytes>}`
 - `{type:"resize",terminal,cols,rows}` — PTY cell dimensions, not split ratios.
+- `{type:"claim",terminal,cols?,rows?}` — make this connection the terminal's
+  size owner, at `cols`×`rows` when given. Send it when the pane gets focus.
+- `{type:"release",terminal}` — this connection stopped showing the terminal.
+
+Each terminal has one size owner. Only the owner's `resize` changes the PTY;
+anyone else's is kept as that connection's own size. The first connection to
+resize a terminal owns it, and input from a connection that has sent a size for
+it takes it over. When the owner releases the terminal or disconnects, the
+connection that most recently sent a size becomes the owner, at that size. Every
+viewer receives `{type:"size",terminal,cols,rows,owner,mine}` after each of
+these; a viewer with `mine:false` draws the owner's grid as-is and should not
+resize to match it.
 
 Input uses a separate writer thread and a bounded queue of 64 chunks per PTY.
 Chunks over 1 MiB, or chunks arriving when that queue is full, are dropped.

@@ -24,6 +24,7 @@ struct Msg: Codable {
     var end: UInt64? // output byte offset, so a replay and live output can be merged
     var since: UInt64? // attach: only the output after this offset
     var gap: Bool? // attach: `since` was no longer buffered, so `data` is the whole buffer
+    var mine: Bool? // size: this connection is the one sizing the terminal; others show its grid as-is
     // hello_ok and server.status
     var stale: Bool?
     var pid: Int32?

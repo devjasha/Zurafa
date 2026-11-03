@@ -11,6 +11,8 @@ import UIKit
     private var shown: [String: UInt64] = [:]
     /// Live output held back while a pane's replay is in flight, so it lands after it.
     private var attaching: [String: [(Data, UInt64?)]] = [:]
+    /// The grid of a terminal the Mac sizes; the phone draws it as-is instead of its own.
+    private var grids: [String: (cols: Int, rows: Int)] = [:]
 
     /// The Mac's terminal colors for the phone's current appearance; nil keeps SwiftTerm's dark default.
     var colors: MacAppearance.Colors? {
@@ -20,6 +22,17 @@ import UIKit
     override init() {
         super.init()
         mac.onOutput = { [weak self] id, data, end in self?.receive(id, data, end) }
+        mac.onSize = { [weak self] id, cols, rows, mine in
+            self?.grids[id] = mine ? nil : (cols, rows)
+            self?.place(id)
+        }
+        // Back in the app, the pane on screen is sized for the phone again.
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                for (id, view) in self.views where view.window != nil { self.claim(id) }
+            }
+        }
         NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyFont() }
         }
@@ -73,6 +86,31 @@ import UIKit
         }
     }
 
+    /// Fills the screen, or while the Mac sizes the terminal, shows its grid unchanged at the top left.
+    func place(_ id: String) {
+        guard let view = views[id], let box = view.superview else { return }
+        var frame = box.bounds
+        let cell = view.getOptimalFrameSize().size, now = view.terminalDimensions
+        if let grid = grids[id], now.cols > 0, now.rows > 0 {
+            // Half a point over, so rounding never loses a cell.
+            frame.size = CGSize(width: cell.width / CGFloat(now.cols) * CGFloat(grid.cols) + 0.5,
+                                height: cell.height / CGFloat(now.rows) * CGFloat(grid.rows) + 0.5)
+        }
+        if view.frame != frame { view.frame = frame }
+    }
+
+    /// Makes the phone size the terminal: it is on screen here.
+    func claim(_ id: String) {
+        guard let view = views[id] else { return }
+        grids[id] = nil
+        place(id)
+        let size = view.terminalDimensions
+        mac.send(view.bounds.width > 0 && size.cols > 0 ? Msg(type: "claim", cols: size.cols, rows: size.rows, terminal: id) : Msg(type: "claim", terminal: id))
+    }
+
+    /// Off screen, the phone's size stops counting and the terminal goes back to the Mac's.
+    func release(_ id: String) { mac.send(Msg(type: "release", terminal: id)) }
+
     /// As the Mac's `TerminalStore.configureColors`, from its resolved colors.
     private func paint(_ view: TerminalView) {
         guard let colors else {
@@ -90,7 +128,7 @@ import UIKit
 
     /// Panes the Mac closed are forgotten.
     func sync(blocks: Set<String>) {
-        for id in views.keys where !blocks.contains(id) { views[id] = nil; shown[id] = nil }
+        for id in views.keys where !blocks.contains(id) { views[id] = nil; shown[id] = nil; grids[id] = nil }
     }
 
     private func receive(_ id: String, _ data: Data, _ end: UInt64?) {
@@ -106,7 +144,8 @@ import UIKit
         if let id = id(of: source) { mac.send(Msg(type: "input", terminal: id, data: Data(data))) }
     }
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
-        if let id = id(of: source) { mac.send(Msg(type: "resize", cols: newCols, rows: newRows, terminal: id)) }
+        // Showing the Mac's grid is not the phone's own size.
+        if let id = id(of: source), grids[id] == nil { mac.send(Msg(type: "resize", cols: newCols, rows: newRows, terminal: id)) }
     }
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
         if let url = URL(string: link) { UIApplication.shared.open(url) }
@@ -137,11 +176,28 @@ final class PhoneTerminal: TerminalView {
 struct TerminalPane: UIViewRepresentable {
     let id: String
 
-    func makeUIView(context: Context) -> TerminalView {
-        Terminals.shared.view(for: id)
+    func makeUIView(context: Context) -> PaneBox {
+        let box = PaneBox()
+        box.id = id
+        box.clipsToBounds = true // the Mac's larger grid shows cut off
+        box.addSubview(Terminals.shared.view(for: id))
+        return box
     }
 
-    func updateUIView(_ view: TerminalView, context: Context) {}
+    func updateUIView(_ box: PaneBox, context: Context) {}
+}
+
+/// Holds a pane's terminal, which fills it unless the Mac sizes the terminal.
+final class PaneBox: UIView {
+    var id = ""
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        Terminals.shared.place(id)
+    }
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        window == nil ? Terminals.shared.release(id) : Terminals.shared.claim(id)
+    }
 }
 
 /// The shared `NerdFontFallback` looks its font up here; on iOS it is a plain app resource.

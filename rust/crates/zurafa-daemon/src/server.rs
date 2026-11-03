@@ -24,7 +24,86 @@ fn yes() -> bool {
 fn error(id: impl Serialize, message: impl ToString) -> Value {
     json!({"id":id,"type":"error","message":message.to_string()})
 }
-fn reply(msg: Msg, t: &Arc<Terminals>) -> Option<Value> {
+type Size = (u16, u16);
+/// Who sizes each terminal. Only the owner's size reaches the PTY; every other viewer's size
+/// is kept, so the terminal falls back to it when the owner leaves or stops showing it.
+#[derive(Default)]
+pub struct Owners(HashMap<String, Sizing>);
+#[derive(Default)]
+struct Sizing {
+    owner: Option<String>,
+    /// Each viewer's own size, most recently set last.
+    wants: Vec<(String, Size)>,
+}
+impl Sizing {
+    fn want(&mut self, client: &str, size: Size) {
+        self.wants.retain(|(c, _)| c != client);
+        self.wants.push((client.into(), size));
+    }
+    fn wanted(&self, client: &str) -> Option<Size> {
+        self.wants.iter().find(|(c, _)| c == client).map(|w| w.1)
+    }
+}
+/// Each returns the size to give the PTY now, if any.
+impl Owners {
+    pub fn owner(&self, terminal: &str) -> Option<&str> {
+        self.0.get(terminal)?.owner.as_deref()
+    }
+    /// The first client to size a terminal owns it, so a lone or older client works as before.
+    pub fn resize(&mut self, client: &str, terminal: &str, size: Size) -> Option<Size> {
+        let s = self.0.entry(terminal.into()).or_default();
+        s.want(client, size);
+        (s.owner.get_or_insert_with(|| client.into()) == client).then_some(size)
+    }
+    pub fn claim(&mut self, client: &str, terminal: &str, size: Option<Size>) -> Option<Size> {
+        let s = self.0.entry(terminal.into()).or_default();
+        if let Some(size) = size {
+            s.want(client, size);
+        }
+        s.owner = Some(client.into());
+        s.wanted(client)
+    }
+    /// Typing takes the terminal, but only for a client showing it: `zurafa send` has no size.
+    pub fn typed(&mut self, client: &str, terminal: &str) -> Option<Size> {
+        let s = self.0.get_mut(terminal)?;
+        if s.owner.as_deref() == Some(client) {
+            return None;
+        }
+        let size = s.wanted(client)?;
+        s.owner = Some(client.into());
+        Some(size)
+    }
+    /// The client stopped showing the terminal; if it owned it, the latest other viewer takes over.
+    pub fn release(&mut self, client: &str, terminal: &str) -> Option<Size> {
+        let s = self.0.get_mut(terminal)?;
+        s.wants.retain(|(c, _)| c != client);
+        let owned = s.owner.as_deref() == Some(client);
+        if owned {
+            s.owner = s.wants.last().map(|w| w.0.clone());
+        }
+        let next = if owned { s.wants.last().map(|w| w.1) } else { None };
+        if s.owner.is_none() && s.wants.is_empty() {
+            self.0.remove(terminal);
+        }
+        next
+    }
+    /// Releases everything a disconnected client showed; returns the terminals it owned.
+    pub fn left(&mut self, client: &str) -> Vec<(String, Option<Size>)> {
+        let terminals: Vec<String> = self.0.keys().cloned().collect();
+        terminals
+            .into_iter()
+            .filter_map(|t| {
+                let owned = self.owner(&t) == Some(client);
+                let next = self.release(client, &t);
+                owned.then_some((t, next))
+            })
+            .collect()
+    }
+    pub fn forget(&mut self, terminal: &str) {
+        self.0.remove(terminal);
+    }
+}
+fn reply(msg: Msg, t: &Arc<Terminals>, client: &str) -> Option<Value> {
     Some(match msg {
         Msg::Hello {
             id,
@@ -56,6 +135,11 @@ fn reply(msg: Msg, t: &Arc<Terminals>) -> Option<Value> {
             Err(e) => error(id, e),
         },
         Msg::Input { terminal, data } => {
+            // Resized before the keys land, so they act on the grid the typist sees.
+            let size = t.owners.lock().unwrap().typed(client, &terminal);
+            if size.is_some() {
+                t.sized(&terminal, size);
+            }
             if let Ok(bytes) = B64.decode(data) {
                 t.input(&terminal, &bytes);
             }
@@ -66,7 +150,25 @@ fn reply(msg: Msg, t: &Arc<Terminals>) -> Option<Value> {
             cols,
             rows,
         } => {
-            t.resize(&terminal, cols, rows);
+            if cols > 0 && rows > 0 {
+                let size = t.owners.lock().unwrap().resize(client, &terminal, (cols, rows));
+                t.sized(&terminal, size);
+            }
+            return None;
+        }
+        Msg::Claim {
+            terminal,
+            cols,
+            rows,
+        } => {
+            let size = cols.zip(rows).filter(|&(c, r)| c > 0 && r > 0);
+            let size = t.owners.lock().unwrap().claim(client, &terminal, size);
+            t.sized(&terminal, size);
+            return None;
+        }
+        Msg::Release { terminal } => {
+            let size = t.owners.lock().unwrap().release(client, &terminal);
+            t.sized(&terminal, size);
             return None;
         }
     })
@@ -265,6 +367,7 @@ fn subscribe(
 }
 async fn request(
     v: Value,
+    client: &str,
     terms: &Arc<Terminals>,
     subs: &mut HashMap<String, Subscription>,
     tx: &mpsc::Sender<Delivery>,
@@ -274,9 +377,9 @@ async fn request(
     let id = v.get("id").cloned();
     let ty = v.get("type").and_then(Value::as_str).unwrap_or("");
     if !ty.starts_with("events.") && !ty.starts_with("layout.") && !ty.starts_with("hosts.") && !ty.starts_with("status.") && !ty.starts_with("server.") && !ty.starts_with("ui.") && !ty.starts_with("push.") {
-        let t = terms.clone();
+        let (t, client) = (terms.clone(), client.to_owned());
         return match serde_json::from_value::<Msg>(v) {
-            Ok(m) => tokio::task::spawn_blocking(move || reply(m, &t))
+            Ok(m) => tokio::task::spawn_blocking(move || reply(m, &t, &client))
                 .await
                 .ok()
                 .flatten(),
@@ -565,6 +668,10 @@ struct Connected {
 }
 impl Drop for Connected {
     fn drop(&mut self) {
+        let owned = self.terms.owners.lock().unwrap().left(&self.id);
+        for (terminal, size) in owned {
+            self.terms.sized(&terminal, size);
+        }
         self.terms.dispatcher.client_left(&self.id);
     }
 }
@@ -603,7 +710,7 @@ where
     {
         return;
     }
-    let _connected = Connected {
+    let connected = Connected {
         terms: terms.clone(),
         id: terms.dispatcher.client_joined(principal),
     };
@@ -631,7 +738,7 @@ where
                         Some(error(v.get("id"),"requires protocol 2").to_string())
                     }else{
                         let narrows = v["type"]=="attach" || (v["type"]=="spawn" && v["raw"]==true);
-                        let r = request(v,&terms,&mut subs,&tx,&mut generation,&late).await;
+                        let r = request(v,&connected.id,&terms,&mut subs,&tx,&mut generation,&late).await;
                         if let Some(t) = r.as_ref().filter(|_|narrows).and_then(|r|r["terminal"].as_str()) {
                             own.insert(t.to_owned());
                         }
@@ -645,10 +752,14 @@ where
             },
             event=output.recv()=>match event {
                 Ok(frame)=>{
-                    let v = serde_json::from_str::<Value>(&frame).unwrap_or_default();
+                    let mut v = serde_json::from_str::<Value>(&frame).unwrap_or_default();
                     let mine = own.is_empty() || v["terminal"].as_str().is_some_and(|t|own.contains(t));
                     let look = version==2 && v["type"]=="appearance";
-                    if look || (mine && (version==1 || v["type"]=="output")){Some(frame)}else{None}
+                    if v["type"]=="size" {
+                        // Each viewer learns whether it is the one sizing the terminal.
+                        v["mine"] = json!(v["owner"]==connected.id.as_str());
+                        mine.then(||v.to_string())
+                    } else if look || (mine && (version==1 || v["type"]=="output")){Some(frame)}else{None}
                 },
                 Err(RecvError::Lagged(missed))=>Some(json!({"type":"output.gap","missed":missed}).to_string()),
                 Err(RecvError::Closed)=>break,
@@ -674,6 +785,70 @@ mod tests {
         assert_eq!(std::fs::read(&png).unwrap(), b"\x89PNG rest");
         assert!(save_image(b"\xff\xd8\xff").unwrap().ends_with(".jpg"));
     }
+    #[test]
+    fn only_the_owner_sizes_a_terminal() {
+        let mut o = Owners::default();
+        // The first viewer owns it; a second only records its own size.
+        assert_eq!(o.resize("mac", "t", (120, 40)), Some((120, 40)));
+        assert_eq!(o.resize("phone", "t", (50, 30)), None);
+        assert_eq!(o.resize("mac", "t", (100, 40)), Some((100, 40)));
+        assert_eq!(o.owner("t"), Some("mac"));
+        // Typing on the phone hands it over at the phone's size; typing again changes nothing.
+        assert_eq!(o.typed("phone", "t"), Some((50, 30)));
+        assert_eq!(o.typed("phone", "t"), None);
+        assert_eq!(o.resize("mac", "t", (90, 40)), None);
+        // A client that never sized the terminal, like `zurafa send`, cannot take it by typing.
+        assert_eq!(o.typed("cli", "t"), None);
+        assert_eq!(o.owner("t"), Some("phone"));
+        // An explicit claim takes it, at the size it brings.
+        assert_eq!(o.claim("mac", "t", Some((80, 24))), Some((80, 24)));
+        assert_eq!(o.owner("t"), Some("mac"));
+    }
+    #[test]
+    fn the_terminal_falls_back_when_its_owner_goes() {
+        let mut o = Owners::default();
+        o.resize("mac", "t", (120, 40));
+        o.resize("phone", "t", (50, 30));
+        o.resize("mac", "u", (80, 24));
+        o.claim("phone", "t", None);
+        // A viewer that leaves without owning changes nothing.
+        assert_eq!(o.release("phone", "u"), None);
+        assert_eq!(o.owner("u"), Some("mac"));
+        // The owner hiding it hands the terminal to the remaining viewer's size.
+        assert_eq!(o.release("phone", "t"), Some((120, 40)));
+        assert_eq!(o.owner("t"), Some("mac"));
+        o.resize("phone", "t", (50, 30));
+        o.claim("phone", "t", None);
+        // Disconnecting does the same for every terminal it owned.
+        assert_eq!(o.left("phone"), vec![("t".to_owned(), Some((120, 40)))]);
+        let mut gone = o.left("mac");
+        gone.sort();
+        assert_eq!(gone, vec![("t".to_owned(), None), ("u".to_owned(), None)]);
+        assert!(o.0.is_empty());
+    }
+    #[test]
+    fn size_changes_reach_viewers_with_the_owner() {
+        let terms = Terminals::new();
+        let id = terms.spawn(80, 24, None, Some(vec!["/bin/cat".into()]), true).unwrap();
+        let mut events = terms.events.subscribe();
+        let mut size = || loop {
+            let v: Value = serde_json::from_str(&events.try_recv().unwrap()).unwrap();
+            if v["type"] == "size" {
+                break (v["cols"].clone(), v["rows"].clone(), v["owner"].clone());
+            }
+        };
+        let send = |client, v: Value| reply(serde_json::from_value(v).unwrap(), &terms, client);
+        send("mac", json!({"type":"resize","terminal":id,"cols":100,"rows":30}));
+        assert_eq!(size(), (json!(100), json!(30), json!("mac")));
+        send("phone", json!({"type":"resize","terminal":id,"cols":40,"rows":30}));
+        assert_eq!(size(), (json!(100), json!(30), json!("mac")));
+        send("phone", json!({"type":"input","terminal":id,"data":"eA=="}));
+        assert_eq!(size(), (json!(40), json!(30), json!("phone")));
+        assert_eq!(terms.size(&id), Some((40, 30)));
+        send("phone", json!({"type":"release","terminal":id}));
+        assert_eq!(size(), (json!(100), json!(30), json!("mac")));
+        terms.kill(&id).unwrap();
+    }
     #[tokio::test]
     async fn appearance_is_kept_and_broadcast() {
         let terms = Terminals::new();
@@ -682,10 +857,10 @@ mod tests {
         let (late, _late_rx) = mpsc::channel(1);
         let (mut subs, mut generation) = (HashMap::new(), 0);
         let look = json!({"mode":"dark"});
-        request(json!({"id":1,"type":"ui.appearance","appearance":look}), &terms, &mut subs, &tx, &mut generation, &late).await;
+        request(json!({"id":1,"type":"ui.appearance","appearance":look}), "c", &terms, &mut subs, &tx, &mut generation, &late).await;
         let sent: Value = serde_json::from_str(&events.recv().await.unwrap()).unwrap();
         assert_eq!(sent, json!({"type":"appearance","appearance":look}));
-        let got = request(json!({"id":2,"type":"ui.appearance"}), &terms, &mut subs, &tx, &mut generation, &late).await.unwrap();
+        let got = request(json!({"id":2,"type":"ui.appearance"}), "c", &terms, &mut subs, &tx, &mut generation, &late).await.unwrap();
         assert_eq!(got["appearance"], look);
     }
     #[tokio::test]

@@ -138,6 +138,7 @@ pub struct Terminals {
     /// The Mac app's resolved look, opaque here, for the phone to draw the same.
     appearance: Mutex<Value>,
     pub push: Mutex<crate::push::Devices>,
+    pub owners: Mutex<crate::server::Owners>,
 }
 
 fn err(e: impl ToString) -> String {
@@ -215,6 +216,7 @@ impl Terminals {
             next: AtomicU64::new(1),
             appearance: Mutex::new(Value::Null),
             push: Mutex::new(crate::push::Devices::load()),
+            owners: Mutex::default(),
         })
     }
 
@@ -498,6 +500,7 @@ impl Terminals {
             // let the reader drain first, but a grandchild holding the pty must not delay `exited` forever
             let _ = done_rx.recv_timeout(Duration::from_millis(200));
             this.dispatcher.exited(&tid, code);
+            this.owners.lock().unwrap().forget(&tid);
             if let Some(term) = this.map.lock().unwrap().remove(&tid) {
                 term.running.store(false, Ordering::Relaxed);
             }
@@ -532,6 +535,17 @@ impl Terminals {
         }
         if let Some(t) = self.get(id) {
             let _ = t.master.lock().unwrap().resize(size(cols, rows));
+        }
+    }
+
+    /// Applies the size ownership decided on, then tells every viewer the real grid and its owner.
+    pub fn sized(&self, id: &str, apply: Option<(u16, u16)>) {
+        if let Some((cols, rows)) = apply {
+            self.resize(id, cols, rows);
+        }
+        if let Some((cols, rows)) = self.size(id) {
+            let owner = self.owners.lock().unwrap().owner(id).map(str::to_owned);
+            self.emit(json!({"type":"size","terminal":id,"cols":cols,"rows":rows,"owner":owner}));
         }
     }
 }
