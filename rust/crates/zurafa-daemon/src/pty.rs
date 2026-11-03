@@ -139,6 +139,8 @@ pub struct Terminals {
     appearance: Mutex<Value>,
     pub push: Mutex<crate::push::Devices>,
     pub owners: Mutex<crate::server::Owners>,
+    /// UI actions the connected apps offer, for `zurafa do`.
+    pub actions: crate::actions::Apps,
 }
 
 fn err(e: impl ToString) -> String {
@@ -217,6 +219,7 @@ impl Terminals {
             appearance: Mutex::new(Value::Null),
             push: Mutex::new(crate::push::Devices::load()),
             owners: Mutex::default(),
+            actions: Default::default(),
         })
     }
 

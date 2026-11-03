@@ -194,6 +194,8 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
         "prompt" => cmd_prompt(&mut client, &args[1..]),
         "events" => cmd_events(&mut client, &args[1..], global.json),
         "panes" => cmd_panes(&mut client, global.json),
+        "actions" => cmd_actions(&mut client, global.json),
+        "do" => cmd_do(&mut client, &args[1..]),
         other => Err((2, format!("unknown command {other:?}; run `zurafa help`"))),
     }
 }
@@ -1078,6 +1080,51 @@ fn cmd_panes(client: &mut Client, as_json: bool) -> Result<(), (i32, String)> {
     Ok(())
 }
 
+fn cmd_actions(client: &mut Client, as_json: bool) -> Result<(), (i32, String)> {
+    let clients = client.request(json!({"type":"ui.actions.list"})).map_err(|e| (1, e))?["clients"].clone();
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&clients).unwrap());
+        return Ok(());
+    }
+    let clients = clients.as_array().cloned().unwrap_or_default();
+    if clients.is_empty() {
+        println!("No Zurafa app is connected.");
+    }
+    for c in clients {
+        println!("{} {}", strv(&c["client"]), strv(&c["label"]));
+        if c["enabled"] != true {
+            println!("  Agent control is off. Turn on Settings → Integrations → Allow agents to control Zurafa.");
+        }
+        for a in c["actions"].as_array().into_iter().flatten() {
+            let args: Vec<String> = a["args"].as_array().into_iter().flatten()
+                .map(|p| {
+                    let arg = format!("{}={}", strv(&p["name"]), strv(&p["type"]).to_uppercase());
+                    if p["required"] == true { arg } else { format!("[{arg}]") }
+                })
+                .collect();
+            println!("  {:<16} {:<44} {}", strv(&a["name"]), strv(&a["title"]), args.join(" "));
+        }
+    }
+    Ok(())
+}
+
+fn cmd_do(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
+    let words = positionals(args);
+    let action = words.first().ok_or((2, "action required; run `zurafa actions` to list them".into()))?;
+    let mut fields = serde_json::Map::new();
+    for word in &words[1..] {
+        let (k, v) = word.split_once('=').ok_or((2, format!("{word:?} is not KEY=VALUE")))?;
+        fields.insert(k.to_owned(), json!(v));
+    }
+    let timeout = option_value(args, &["-t", "--timeout"]).map(|t| parse_duration(&t)).transpose()?.unwrap_or(Duration::from_secs(10));
+    let reply = client
+        .request(json!({"type":"ui.actions.run","client":option_value(args, &["-C", "--client"]),"action":action,"args":fields,"timeout_ms":timeout.as_millis() as u64}))
+        .map_err(|e| (1, e))?;
+    let message = strv(&reply["message"]);
+    println!("{}", if message.is_empty() { "done" } else { &message });
+    Ok(())
+}
+
 /// Pane ids in a tab's layout tree, in layout order.
 
 fn layout_panes(layout: &Value, out: &mut Vec<String>) {
@@ -1096,7 +1143,8 @@ other coding agents may run in them. Use these tools to see every pane and \
 whether it is idle, working, blocked (waiting on a person), done, error or exited (list_panes), type into a \
 pane (send, key), read its screen (read), and wait for it to finish (wait, prompt). Statuses come from agents \
 that report them, so a pane whose program reports nothing stays idle. Pane targets are ids like t3, a tab or \
-session label, or a session (meaning its focused pane).";
+session label, or a session (meaning its focused pane). If the user allows it, the app's own view can be \
+changed too: switch workspace, select a tab, focus or zoom a pane, open a preview (list_actions, do_action).";
 
 fn mcp_tools() -> Value {
     let pane = json!({"type":"string","description":"Pane id (like t3), label, or session. Defaults to your own pane where that makes sense."});
@@ -1115,7 +1163,13 @@ fn mcp_tools() -> Value {
             "next":{"type":"boolean","description":"Ignore a status left from an earlier turn: wait for the current or next turn to end, e.g. right after send."},
             "timeout":timeout}}},
         {"name":"prompt","description":"Send text and Enter to a pane, wait until its agent finishes, and return the screen. The quickest way to ask another agent something.",
-         "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"timeout":timeout},"required":["pane","text"]}}
+         "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"timeout":timeout},"required":["pane","text"]}},
+        {"name":"list_actions","description":"List the actions the Zurafa app offers agents (switch workspace, select a tab, focus or zoom a pane, open a preview, toggle the sidebar, change the font size), with their arguments. Empty until the user turns on Settings > Integrations > Allow agents to control Zurafa.",
+         "inputSchema":{"type":"object","properties":{}}},
+        {"name":"do_action","description":"Ask the Zurafa app to perform one of its actions (see list_actions) and return its result.",
+         "inputSchema":{"type":"object","properties":{"action":{"type":"string","description":"Action name, like tab.select."},
+            "args":{"type":"object","description":"The action's arguments, like {\"tab\":\"2\"}.","additionalProperties":{"type":["string","number","boolean"]}},
+            "client":{"type":"string","description":"Which app, when several are connected (see list_actions)."}},"required":["action"]}}
     ])
 }
 
@@ -1157,6 +1211,18 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
             v
         }
         "prompt" => vec!["prompt".into(), need("pane")?, "-t".into(), timeout(), "--".into(), need("text")?],
+        "list_actions" => vec!["actions".into()],
+        "do_action" => {
+            let mut v = vec!["do".into()];
+            if let Some(c) = s("client") {
+                v.extend(["-C".into(), c]);
+            }
+            v.push(need("action")?);
+            for (k, val) in a["args"].as_object().into_iter().flatten() {
+                v.push(format!("{k}={}", val.as_str().map(str::to_owned).unwrap_or_else(|| val.to_string())));
+            }
+            v
+        }
         other => return Err(format!("unknown tool {other:?}")),
     })
 }
@@ -2017,7 +2083,9 @@ fn option_value(args: &[String], names: &[&str]) -> Option<String> {
         .map(|w| w[1].clone())
 }
 /// Options that take a value, so their values are not mistaken for positional arguments.
-const VALUED: [&str; 22] = [
+const VALUED: [&str; 24] = [
+    "-C",
+    "--client",
     "--worktree",
     "-s",
     "--session",
@@ -2052,7 +2120,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  float [TARGET]             Float a pane over its tab (a hidden one over the tab in view)\n  hide [TARGET]              Take a pane out of every tab; it keeps running\n  show [TARGET] [--float | --split right|down -b PANE]\n                             Bring a hidden or floating pane back: floating, or docked beside PANE\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  skill setup|remove|status|show      Teach Claude Code, Codex, OpenCode and Pi to use Zurafa:\n                                       a skill, status hooks and session-start context\n  hook claude|codex                    Run by the agent's hooks: status and subagents\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n\nSpawning agents into panes and collecting their results is zurafa-orch's job.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  float [TARGET]             Float a pane over its tab (a hidden one over the tab in view)\n  hide [TARGET]              Take a pane out of every tab; it keeps running\n  show [TARGET] [--float | --split right|down -b PANE]\n                             Bring a hidden or floating pane back: floating, or docked beside PANE\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAPP:\n  actions                              List the actions connected Zurafa apps offer, per client\n  do ACTION [KEY=VALUE...] [-C CLIENT] [-t D]\n                                       Ask the app to do one (default timeout 10s); -C picks\n                                       the app when several are connected. Off until Settings →\n                                       Integrations → Allow agents to control Zurafa is on\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  skill setup|remove|status|show      Teach Claude Code, Codex, OpenCode and Pi to use Zurafa:\n                                       a skill, status hooks and session-start context\n  hook claude|codex                    Run by the agent's hooks: status and subagents\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n\nSpawning agents into panes and collecting their results is zurafa-orch's job.");
 }
 
 #[cfg(test)]
@@ -2227,6 +2295,7 @@ mod tests {
         assert_eq!(args("wait", json!({"pane":"t3","for":["blocked","done"]})), ["wait", "--json", "t3", "-t", "10m", "--for", "blocked,done"]);
         assert_eq!(args("wait", json!({"pane":"t3","next":true})), ["wait", "--json", "t3", "-t", "10m", "--next"]);
         assert_eq!(args("key", json!({"pane":"t3","keys":["escape","enter"]})), ["key", "t3", "escape", "enter"]);
+        assert_eq!(args("do_action", json!({"action":"pane.zoom","client":"c2","args":{"pane":"t3","enabled":true}})), ["do", "-C", "c2", "pane.zoom", "enabled=true", "pane=t3"]);
         assert!(tool_args("spawn", &json!({"agent":"claude"})).is_err(), "spawn is zurafa-orch's");
         assert!(tool_args("read", &json!({})).is_err());
         assert!(tool_args("rm", &json!({})).is_err());
@@ -2267,7 +2336,7 @@ mod tests {
         assert_eq!(init["id"], 1);
         let list = mcp_reply(&json!({"jsonrpc":"2.0","id":"a","method":"tools/list"}), &None).unwrap();
         let names: Vec<_> = list["result"]["tools"].as_array().unwrap().iter().map(|t| strv(&t["name"])).collect();
-        assert_eq!(names, ["list_panes", "send", "key", "read", "wait", "prompt"]);
+        assert_eq!(names, ["list_panes", "send", "key", "read", "wait", "prompt", "list_actions", "do_action"]);
         assert!(mcp_reply(&json!({"jsonrpc":"2.0","method":"notifications/initialized"}), &None).is_none());
         assert_eq!(mcp_reply(&json!({"jsonrpc":"2.0","id":2,"method":"nope"}), &None).unwrap()["error"]["code"], -32601);
     }

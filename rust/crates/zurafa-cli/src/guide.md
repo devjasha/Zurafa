@@ -175,6 +175,22 @@ zurafa preview README.md
 Opens the file in Zurafa's preview beside your pane: Markdown, images, HTML
 and more.
 
+### Change what the user sees in the app
+
+When the user asks you to switch the visible workspace, select a tab, focus or
+zoom a pane, toggle the sidebar or change the font size, ask the app:
+
+```sh
+zurafa actions                       # what the app offers, with arguments
+zurafa do tab.select tab=2           # a tab by position or id
+zurafa do pane.zoom pane=t7 enabled=true
+```
+
+This is off until the user turns on Settings → Integrations → Allow agents to
+control Zurafa; `zurafa do` says so when it is off. Don't ask the user to turn
+it on unless they asked for the change. With several apps connected, pick one
+with `-C CLIENT` from `zurafa actions`.
+
 ### Report your own status
 
 Coding agents set up with Zurafa report on their own. For a long script of your

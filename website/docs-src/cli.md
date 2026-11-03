@@ -71,6 +71,25 @@ zurafa report clear
 
 `--id` and `--title` report one of several tasks in a pane, and `--app` names the program.
 
+## Letting agents control the app
+
+Tabs and splits change the layout, but they don't change what you see in the app. If you allow it, agents can do that too: switch the workspace in view, select a tab, focus or zoom a pane, open a preview, toggle the sidebar and change the font size.
+
+This is off by default. Turn it on in **Settings → Integrations → Allow agents to control Zurafa**. While it is off, the app offers no actions and `zurafa do` says where to turn it on. Agents can't close workspaces or tabs or quit Zurafa this way.
+
+```sh
+zurafa actions                            # the actions each connected app offers
+zurafa do workspace.select workspace=Work # by id, label or position
+zurafa do tab.select tab=2                # a tab in view, by position or id
+zurafa do pane.focus pane=t7              # shows the pane's workspace and tab
+zurafa do pane.zoom pane=t7 enabled=true  # without pane, the focused one; without enabled, toggles
+zurafa do preview.open path=/tmp/plan.md  # beside the focused pane, or pane=t7
+zurafa do sidebar.toggle
+zurafa do font.bigger                     # also font.smaller and font.reset
+```
+
+`zurafa do` waits for the app's answer, 10 seconds unless `-t` says otherwise. When more than one app is connected to the server, `zurafa actions` lists each with a client id and `-C CLIENT` picks one. `zurafa mcp` offers the same as the `list_actions` and `do_action` tools.
+
 ## Taxonomy
 
 Zurafa's public UI uses these names:

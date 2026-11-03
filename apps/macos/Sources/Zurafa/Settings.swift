@@ -315,6 +315,8 @@ private struct IntegrationsPane: View {
     @State private var agents: [SkillAgent] = []
     @State private var busy = false
     @State private var message: String?
+    @EnvironmentObject private var ws: Workspace
+    @AppStorage(ClientAction.settingKey) private var agentControl = false
 
     struct SkillAgent: Decodable {
         let agent: String, name: String, found: Bool, skill: String, hooks: String
@@ -361,6 +363,15 @@ private struct IntegrationsPane: View {
                 }
             } else {
                 Text("This build has no bundled command-line tool.").foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle(isOn: $agentControl) {
+                    Text("Allow agents to control Zurafa")
+                    Text("Agents can switch workspaces and tabs, focus and zoom panes, open previews, toggle the sidebar and change the font size with `zurafa do`. They can't close anything or quit.")
+                }
+                .onChange(of: agentControl) { ws.registerActions() }
+            } header: {
+                Text("Agent Control")
             }
         }
         .task { if let source = CLIInstaller.bundledCLIPath() { await refresh(source) } }

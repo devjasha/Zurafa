@@ -186,12 +186,14 @@ enum EditorKind: String, Identifiable {
         daemon.onSnapshot = { [weak self] snapshot in
             self?.apply(snapshot)
             self?.publishAppearance() // a restarted daemon has forgotten it
+            self?.registerActions() // and every connection's actions
             // A restarted daemon starts with its tailnet listener off; turn it back on if Settings has it on.
             if UserDefaults.standard.bool(forKey: ServerPane.listenKey) {
                 Task { _ = try? await DaemonClient.shared.request(ServerPane.listenRequest(true)) }
             }
         }
         daemon.onEvent = { [weak self] event in self?.apply(event) }
+        daemon.onAction = { [weak self] m in self?.answer(m) }
         daemon.onDisconnect = { [weak self] in self?.commandError = "Reconnecting to daemon…" }
         daemon.start()
         refreshHosts()
@@ -402,7 +404,10 @@ enum EditorKind: String, Identifiable {
     func showHidden() { if let pane = hidden(in: currentSession).last { float(pane) } }
     func toggleZoom() {
         guard !tab.focus.isEmpty else { return }
-        command(["op": .string("zoom"), "session": .string(sessionID), "block": .string(tab.focus), "enabled": .bool(!tab.zoomed)])
+        zoom(tab.focus, in: sessionID, enabled: !tab.zoomed)
+    }
+    func zoom(_ pane: String, in session: String, enabled: Bool) {
+        command(["op": .string("zoom"), "session": .string(session), "block": .string(pane), "enabled": .bool(enabled)])
     }
     func focus(_ id: String) {
         peekFocused = false

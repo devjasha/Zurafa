@@ -33,6 +33,11 @@ struct Msg: Codable {
     var appearance: MacAppearance? // ui.appearance and its broadcast
     var devices: [PushDevice]? // push.list
     var path: String? // ui.paste_image: where the Mac saved the phone's image
+    // ui.action, which the daemon sends the Mac app for an agent, and the app's ui.action.result
+    var call: Int?
+    var action: String?
+    var args: [String: JSONValue]?
+    var ok: Bool?
 }
 
 /// Zurafa's own Tailscale device (`zurafa-tailscale`), as `server.status` reports it.

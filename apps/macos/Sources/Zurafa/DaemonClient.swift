@@ -23,6 +23,8 @@ import Network
     var onOutput: (String, Data, UInt64?) -> Void = { _, _, _ in }
     /// A terminal's real grid, and whether this app is the one sizing it.
     var onSize: (String, Int, Int, Bool) -> Void = { _, _, _, _ in }
+    /// A `ui.action` an agent asked for; answer it with `ui.action.result`.
+    var onAction: (Msg) -> Void = { _ in }
 
     private var conn: NWConnection?
     private var live = false // hello_ok received on `conn`
@@ -147,6 +149,8 @@ import Network
         } else if m.type == "events.event", let event = m.event {
             if !cursor.accept(event) { return resync() }
             onEvent(event)
+        } else if m.type == "ui.action" {
+            onAction(m)
         } else if m.type == "events.gap" || m.type == "output.gap" {
             resync()
         }

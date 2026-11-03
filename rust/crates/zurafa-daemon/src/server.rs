@@ -199,6 +199,40 @@ enum Request {
     /// A phone's pasted image, saved on the Mac so the pane's agent can read it by path.
     #[serde(rename = "ui.paste_image")]
     UiPasteImage { id: u64, data: String },
+    /// The Mac app's UI actions, sent on connect and whenever "Allow agents to control Zurafa"
+    /// changes; an empty list means control is off.
+    #[serde(rename = "ui.actions.register")]
+    UiActionsRegister {
+        id: u64,
+        #[serde(default)]
+        label: String,
+        #[serde(default)]
+        actions: Vec<Value>,
+    },
+    #[serde(rename = "ui.actions.list")]
+    UiActionsList { id: u64 },
+    /// Run an app's action; the reply comes once the app answers or `timeout_ms` passes.
+    #[serde(rename = "ui.actions.run")]
+    UiActionsRun {
+        id: u64,
+        #[serde(default)]
+        client: Option<String>,
+        action: String,
+        #[serde(default)]
+        args: serde_json::Map<String, Value>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
+    /// The app's answer to a `ui.action` the daemon sent it.
+    #[serde(rename = "ui.action.result")]
+    UiActionResult {
+        #[serde(default)]
+        id: Option<u64>,
+        call: u64,
+        ok: bool,
+        #[serde(default)]
+        message: String,
+    },
     /// A phone asking for agent notifications, and the Mac app reading who to notify.
     #[serde(rename = "push.register")]
     PushRegister { id: u64, device: serde_json::Value },
@@ -451,6 +485,28 @@ async fn request(
                 terms.set_appearance(a);
             }
             json!({"id":id,"type":"ui.appearance","appearance":terms.appearance()})
+        }
+        Request::UiActionsRegister { id, label, actions } => match terms.actions.register(late, label, actions) {
+            Ok(client) => json!({"id":id,"type":"ui.actions.registered","client":client}),
+            Err(e) => error(id, e),
+        },
+        Request::UiActionsList { id } => json!({"id":id,"type":"ui.actions.list","clients":terms.actions.list()}),
+        Request::UiActionsRun { id, client, action, args, timeout_ms } => {
+            let (terms, late) = (terms.clone(), late.clone());
+            let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(10_000).clamp(1, 300_000));
+            // Waits on another connection: reply later instead of holding up this client's output.
+            tokio::spawn(async move {
+                let reply = match terms.actions.run(client.as_deref(), &action, Value::Object(args), timeout).await {
+                    Ok(message) => json!({"id":id,"type":"ui.actions.done","message":message}),
+                    Err(e) => error(id, e),
+                };
+                let _ = late.send(reply).await;
+            });
+            return None;
+        }
+        Request::UiActionResult { id, call, ok, message } => {
+            let known = terms.actions.answer(late, call, if ok { Ok(message) } else { Err(message) });
+            return id.map(|id| if known { json!({"id":id,"type":"ok"}) } else { error(id, "unknown call") });
         }
         Request::UiPasteImage { id, data } => match B64.decode(data).map_err(|e| e.to_string()).and_then(|b| save_image(&b).map_err(|e| e.to_string())) {
             Ok(path) => json!({"id":id,"type":"ui.paste_image","path":path}),
@@ -862,6 +918,85 @@ mod tests {
         assert_eq!(sent, json!({"type":"appearance","appearance":look}));
         let got = request(json!({"id":2,"type":"ui.appearance"}), "c", &terms, &mut subs, &tx, &mut generation, &late).await.unwrap();
         assert_eq!(got["appearance"], look);
+    }
+    /// One client connection's request path: what `handle` gives `request` for it.
+    struct Conn {
+        terms: Arc<Terminals>,
+        subs: HashMap<String, Subscription>,
+        tx: mpsc::Sender<Delivery>,
+        generation: u64,
+        late: mpsc::Sender<Value>,
+        late_rx: mpsc::Receiver<Value>,
+        id: String,
+    }
+    impl Conn {
+        fn new(terms: &Arc<Terminals>) -> Self {
+            let (late, late_rx) = mpsc::channel(8);
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let id = format!("conn{}", NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+            Self { terms: terms.clone(), subs: HashMap::new(), tx: mpsc::channel(1).0, generation: 0, late, late_rx, id }
+        }
+        async fn send(&mut self, v: Value) -> Option<Value> {
+            request(v, &self.id, &self.terms, &mut self.subs, &self.tx, &mut self.generation, &self.late).await
+        }
+        async fn next(&mut self) -> Value {
+            tokio::time::timeout(std::time::Duration::from_secs(2), self.late_rx.recv()).await.unwrap().unwrap()
+        }
+    }
+    fn register(actions: Value) -> Value {
+        json!({"id":1,"type":"ui.actions.register","label":"Zurafa","actions":actions})
+    }
+    #[tokio::test]
+    async fn action_goes_to_the_app_and_its_answer_comes_back() {
+        let terms = Terminals::new();
+        let (mut app, mut cli) = (Conn::new(&terms), Conn::new(&terms));
+        let got = app.send(register(json!([{"name":"tab.select","title":"Select Tab"}]))).await.unwrap();
+        assert_eq!(got["client"], "c1");
+        let list = cli.send(json!({"id":1,"type":"ui.actions.list"})).await.unwrap();
+        assert_eq!(list["clients"][0]["actions"][0]["name"], "tab.select");
+        assert!(cli.send(json!({"id":2,"type":"ui.actions.run","action":"tab.select","args":{"tab":"2"}})).await.is_none());
+        let call = app.next().await;
+        assert_eq!((call["type"].as_str(), call["args"]["tab"].as_str()), (Some("ui.action"), Some("2")));
+        // Another connection cannot answer for the app.
+        let spoof = cli.send(json!({"id":3,"type":"ui.action.result","call":call["call"],"ok":true})).await.unwrap();
+        assert_eq!(spoof["type"], "error");
+        assert!(app.send(json!({"type":"ui.action.result","call":call["call"],"ok":true,"message":"Selected tab 2"})).await.is_none());
+        let done = cli.next().await;
+        assert_eq!((done["id"].as_u64(), done["type"].as_str(), done["message"].as_str()), (Some(2), Some("ui.actions.done"), Some("Selected tab 2")));
+        // The app's refusal reaches the caller as an error.
+        cli.send(json!({"id":4,"type":"ui.actions.run","action":"tab.select","args":{"tab":"9"}})).await;
+        let call = app.next().await;
+        app.send(json!({"type":"ui.action.result","call":call["call"],"ok":false,"message":"no tab 9"})).await;
+        assert_eq!(cli.next().await, json!({"id":4,"type":"error","message":"no tab 9"}));
+        let unknown = { cli.send(json!({"id":5,"type":"ui.actions.run","action":"app.quit"})).await; cli.next().await };
+        assert!(unknown["message"].as_str().unwrap().contains("no action \"app.quit\""));
+    }
+    #[tokio::test]
+    async fn action_fails_without_an_app_while_disabled_and_on_timeout() {
+        let terms = Terminals::new();
+        let mut cli = Conn::new(&terms);
+        let run = json!({"id":1,"type":"ui.actions.run","action":"tab.select","timeout_ms":50});
+        cli.send(run.clone()).await;
+        assert!(cli.next().await["message"].as_str().unwrap().contains("no Zurafa app"));
+        let mut app = Conn::new(&terms);
+        app.send(register(json!([]))).await;
+        cli.send(run.clone()).await;
+        assert_eq!(cli.next().await["message"], crate::actions::DISABLED);
+        app.send(register(json!([{"name":"tab.select"}]))).await;
+        cli.send(run.clone()).await;
+        assert_eq!(app.next().await["type"], "ui.action");
+        assert!(cli.next().await["message"].as_str().unwrap().contains("did not answer"));
+        // A second app makes the caller pick one; a closed app drops out.
+        let mut other = Conn::new(&terms);
+        other.send(register(json!([{"name":"tab.select"}]))).await;
+        cli.send(run.clone()).await;
+        assert!(cli.next().await["message"].as_str().unwrap().contains("-C: c1 (Zurafa), c2 (Zurafa)"));
+        cli.send(json!({"id":2,"type":"ui.actions.run","action":"tab.select","client":"c2","timeout_ms":50})).await;
+        assert_eq!(other.next().await["type"], "ui.action");
+        drop(other);
+        cli.next().await;
+        let list = cli.send(json!({"id":3,"type":"ui.actions.list"})).await.unwrap();
+        assert_eq!(list["clients"].as_array().unwrap().len(), 1);
     }
     #[tokio::test]
     async fn lag_is_explicit_and_resync_replaces_receiver() {
