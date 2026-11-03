@@ -99,7 +99,7 @@ enum Request {
     UiPasteImage { id: u64, data: String },
     /// A phone asking for agent notifications, and the Mac app reading who to notify.
     #[serde(rename = "push.register")]
-    PushRegister { id: u64, device: crate::push::Device },
+    PushRegister { id: u64, device: serde_json::Value },
     #[serde(rename = "push.unregister")]
     PushUnregister { id: u64, token: String },
     #[serde(rename = "push.list")]

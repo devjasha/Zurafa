@@ -14,7 +14,32 @@
 		A10000000000000000000005 /* NerdFontFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* NerdFontFallback.swift */; };
 		A10000000000000000000006 /* Resources/SymbolsNerdFontMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */; };
 		A10000000000000000000007 /* Program.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Program.swift */; };
+		A10000000000000000000008 /* ZurafaAgents.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* ZurafaAgents.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AB0000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A70000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A60000000000000000000002;
+			remoteInfo = ZurafaAgents;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A40000000000000000000004 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000000000000000000008 /* ZurafaAgents.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protocol.swift; sourceTree = "<group>"; };
@@ -24,7 +49,19 @@
 		A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/SymbolsNerdFontMono-Regular.ttf"; sourceTree = "<group>"; };
 		A20000000000000000000006 /* Program.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Program.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* ZurafaMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZurafaMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000011 /* ZurafaAgents.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ZurafaAgents.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A30000000000000000000003 /* Exceptions for "ZurafaAgents" folder in "ZurafaMobile" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AgentsWidget.swift,
+				Assets.xcassets,
+			);
+			target = A60000000000000000000001 /* ZurafaMobile */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A30000000000000000000001 /* ZurafaMobile */ = {
@@ -32,9 +69,24 @@
 			path = ZurafaMobile;
 			sourceTree = "<group>";
 		};
+		A30000000000000000000002 /* ZurafaAgents */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A30000000000000000000003 /* Exceptions for "ZurafaAgents" folder in "ZurafaMobile" target */,
+			);
+			path = ZurafaAgents;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A40000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A40000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -50,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				A30000000000000000000001 /* ZurafaMobile */,
+				A30000000000000000000002 /* ZurafaAgents */,
 				A50000000000000000000002 /* Shared */,
 				A50000000000000000000003 /* Products */,
 			);
@@ -73,6 +126,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000010 /* ZurafaMobile.app */,
+				A20000000000000000000011 /* ZurafaAgents.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,13 +141,16 @@
 				A40000000000000000000002 /* Sources */,
 				A40000000000000000000001 /* Frameworks */,
 				A40000000000000000000003 /* Resources */,
+				A40000000000000000000004 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AC0000000000000000000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A30000000000000000000001 /* ZurafaMobile */,
+				A30000000000000000000002 /* ZurafaAgents */,
 			);
 			name = ZurafaMobile;
 			packageProductDependencies = (
@@ -102,6 +159,26 @@
 			productName = ZurafaMobile;
 			productReference = A20000000000000000000010 /* ZurafaMobile.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A60000000000000000000002 /* ZurafaAgents */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000003 /* Build configuration list for PBXNativeTarget "ZurafaAgents" */;
+			buildPhases = (
+				A40000000000000000000005 /* Sources */,
+				A40000000000000000000006 /* Frameworks */,
+				A40000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A30000000000000000000002 /* ZurafaAgents */,
+			);
+			name = ZurafaAgents;
+			productName = ZurafaAgents;
+			productReference = A20000000000000000000011 /* ZurafaAgents.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -131,11 +208,19 @@
 			projectRoot = "";
 			targets = (
 				A60000000000000000000001 /* ZurafaMobile */,
+				A60000000000000000000002 /* ZurafaAgents */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A40000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A40000000000000000000003 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -147,6 +232,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A40000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A40000000000000000000002 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -160,6 +252,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AC0000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A60000000000000000000002 /* ZurafaAgents */;
+			targetProxy = AB0000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A80000000000000000000011 /* Debug */ = {
@@ -253,6 +353,54 @@
 			};
 			name = Release;
 		};
+		A80000000000000000000031 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = K8T3LW283A;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "ZurafaAgents-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Zurafa agents";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.zurafa.mobile.agents;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "WIDGET $(inherited)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A80000000000000000000032 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = K8T3LW283A;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "ZurafaAgents-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Zurafa agents";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.zurafa.mobile.agents;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "WIDGET $(inherited)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -270,6 +418,15 @@
 			buildConfigurations = (
 				A80000000000000000000021 /* Debug */,
 				A80000000000000000000022 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000000000000000000003 /* Build configuration list for PBXNativeTarget "ZurafaAgents" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000031 /* Debug */,
+				A80000000000000000000032 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

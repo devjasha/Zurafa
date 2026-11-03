@@ -27,6 +27,13 @@ import Network
     var pushToken: String? {
         didSet { registerPush() }
     }
+    /// The Live Activity's push-to-start token and the running activity's token ("" once it ended).
+    var startToken: String? {
+        didSet { registerPush() }
+    }
+    var activityToken: String? {
+        didSet { registerPush() }
+    }
 
     private(set) var address = ""
     private var conn: NWConnection?
@@ -237,7 +244,11 @@ extension MacClient {
         #endif
         // The vendor id names this phone, so a reinstall replaces its old token on the Mac.
         let name = UIDevice.current.identifierForVendor?.uuidString ?? ""
-        Task { _ = try? await request(["type": .string("push.register"), "device": .object(["token": .string(pushToken), "sandbox": .bool(sandbox), "name": .string(name)])]) }
+        var device: [String: JSONValue] = ["token": .string(pushToken), "sandbox": .bool(sandbox), "name": .string(name)]
+        // Absent fields keep what the Mac already has.
+        if let startToken { device["start_token"] = .string(startToken) }
+        if let activityToken { device["activity_token"] = .string(activityToken) }
+        Task { _ = try? await request(["type": .string("push.register"), "device": .object(device)]) }
     }
 
     /// Answers a permission prompt from its notification, if the pane is still asking; as the Mac's banner does.

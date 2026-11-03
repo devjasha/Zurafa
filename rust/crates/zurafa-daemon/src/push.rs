@@ -12,6 +12,12 @@ pub struct Device {
     pub sandbox: bool,
     #[serde(default)]
     pub name: String,
+    /// ActivityKit push-to-start token, hex.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_token: Option<String>,
+    /// Push token of the phone's running Live Activity, hex; registering "" clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity_token: Option<String>,
 }
 
 pub struct Devices {
@@ -36,9 +42,26 @@ impl Devices {
         self.list.clone()
     }
 
-    pub fn register(&mut self, device: Device) -> Result<(), String> {
-        if device.token.len() < 32 || !device.token.bytes().all(|b| b.is_ascii_hexdigit()) {
+    /// Registers a phone, or updates one with the same token: fields in `fields` overwrite, absent ones are kept.
+    pub fn register(&mut self, fields: serde_json::Value) -> Result<(), String> {
+        let mut merged = fields["token"]
+            .as_str()
+            .and_then(|t| self.list.iter().find(|d| d.token == t))
+            .map(|d| serde_json::to_value(d).unwrap())
+            .unwrap_or_else(|| serde_json::json!({}));
+        for (k, v) in fields.as_object().ok_or("invalid push device")? {
+            merged[k] = v.clone();
+        }
+        let mut device: Device = serde_json::from_value(merged).map_err(|e| e.to_string())?;
+        let hex = |t: &str| t.len() >= 32 && t.len() <= 200 && t.bytes().all(|b| b.is_ascii_hexdigit());
+        if !hex(&device.token)
+            || device.start_token.as_deref().is_some_and(|t| !hex(t))
+            || device.activity_token.as_deref().is_some_and(|t| !t.is_empty() && !hex(t))
+        {
             return Err("invalid push token".into());
+        }
+        if device.activity_token.as_deref() == Some("") {
+            device.activity_token = None;
         }
         // One entry per phone: a reinstall gets a new token under the same name.
         self.list.retain(|d| d.token != device.token && (device.name.is_empty() || d.name != device.name));
@@ -68,14 +91,33 @@ mod tests {
     #[test]
     fn registers_once_per_phone_and_persists() {
         let path = std::env::temp_dir().join(format!("zurafa-push-{}.json", std::process::id()));
-        let device = |token: &str| Device { token: token.into(), sandbox: true, name: "iPhone".into() };
+        let device = |token: &str| Device { token: token.into(), sandbox: true, name: "iPhone".into(), start_token: None, activity_token: None };
+        let json = |token: &str| serde_json::to_value(device(token)).unwrap();
         let mut devices = Devices::at(path.clone());
-        devices.register(device(&"a".repeat(64))).unwrap();
-        devices.register(device(&"b".repeat(64))).unwrap();
+        devices.register(json(&"a".repeat(64))).unwrap();
+        devices.register(json(&"b".repeat(64))).unwrap();
         assert_eq!(Devices::at(path.clone()).list(), vec![device(&"b".repeat(64))]);
-        assert!(devices.register(device("not-hex")).is_err());
+        assert!(devices.register(json("not-hex")).is_err());
         devices.unregister(&"b".repeat(64)).unwrap();
         assert!(Devices::at(path.clone()).list().is_empty());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn merges_live_activity_tokens() {
+        let path = std::env::temp_dir().join(format!("zurafa-push-merge-{}.json", std::process::id()));
+        let (token, start, activity) = ("a".repeat(64), "c".repeat(64), "d".repeat(64));
+        let mut devices = Devices::at(path.clone());
+        devices.register(serde_json::json!({"token": token, "sandbox": true, "name": "iPhone", "start_token": start})).unwrap();
+        devices.register(serde_json::json!({"token": token, "activity_token": activity})).unwrap();
+        let full = Device { token: token.clone(), sandbox: true, name: "iPhone".into(), start_token: Some(start.clone()), activity_token: Some(activity) };
+        assert_eq!(Devices::at(path.clone()).list(), vec![full.clone()]);
+        devices.register(serde_json::json!({"token": token, "activity_token": ""})).unwrap();
+        assert_eq!(devices.list(), vec![Device { activity_token: None, ..full.clone() }]);
+        assert!(devices.register(serde_json::json!({"token": token, "start_token": "zz"})).is_err());
+        assert!(devices.register(serde_json::json!({"token": token, "start_token": ""})).is_err());
+        assert!(devices.register(serde_json::json!({"token": token, "activity_token": "not-hex"})).is_err());
+        assert_eq!(devices.list(), vec![Device { activity_token: None, ..full }]);
         let _ = fs::remove_file(path);
     }
 }

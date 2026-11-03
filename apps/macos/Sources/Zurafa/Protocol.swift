@@ -51,6 +51,8 @@ struct PushDevice: Codable {
     var token: String // APNs device token, hex
     var sandbox: Bool // development builds go through Apple's sandbox
     var name: String
+    var start_token: String? // ActivityKit push-to-start token
+    var activity_token: String? // the running Live Activity's push token
 }
 
 /// The Mac's look with its theme resolved for both appearances, so the phone draws exactly what the Mac draws.

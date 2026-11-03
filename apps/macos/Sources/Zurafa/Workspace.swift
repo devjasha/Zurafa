@@ -89,7 +89,10 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var tabs: [Tab] = []
     @Published private(set) var selected = 0
     @Published private(set) var metas: [String: PaneMeta] = [:] {
-        didSet { Attention.shared.setBadge(metas.values.filter { $0.status == "blocked" }.count) }
+        didSet {
+            Attention.shared.setBadge(metas.values.filter { $0.status == "blocked" }.count)
+            publishActivity()
+        }
     }
     @Published private(set) var sessionID = "default"
     @Published private(set) var hosts: [RemoteHost] = []
@@ -420,6 +423,28 @@ enum EditorKind: String, Identifiable {
         }
         if NSApp.isActive && session.sessionID == sessionID && tab.layout.panes.contains(pane) { return }
         Attention.shared.notify(pane: pane, title: title, subtitle: subtitle, body: body, answerable: m.waitingForPermission)
+    }
+
+    /// Agents for the phone's Live Activity: live panes reporting a status (agents report theirs through hooks or OSC 7501).
+    private func publishActivity() {
+        guard let snapshot else { return }
+        var agents: [PhonePush.Agent] = []
+        for session in snapshot.sessions.values {
+            for tab in tabs(in: session) {
+                for pane in tab.layout.panes {
+                    let m = meta(pane)
+                    guard m.ended == nil, let state = m.record?.state, state != "idle" else { continue }
+                    agents.append(PhonePush.Agent(
+                        pane: pane, name: m.program.title, glyph: m.program.badge.glyph, symbol: m.program.icon, color: m.program.badge.color,
+                        place: "\(session.label) · \(tab.label)", status: state == "done" ? "completed" : state,
+                        message: String((m.statusMessage ?? m.title).prefix(120)), permission: m.waitingForPermission))
+                }
+            }
+        }
+        let rank = ["blocked": 0, "working": 1]
+        agents.sort { (rank[$0.status] ?? 2, $0.place, $0.pane) < (rank[$1.status] ?? 2, $1.place, $1.pane) }
+        PhonePush.activity(.init(agents: Array(agents.prefix(6)), working: agents.filter { $0.status == "working" }.count,
+                                 blocked: agents.filter { $0.status == "blocked" }.count))
     }
 
     /// Answers a permission prompt from its notification, if the pane is still asking.

@@ -17,5 +17,8 @@
 			</array>
 		</dict>
 	</array>
+	<!-- The "Zurafa agents" Live Activity, started and updated by the Mac through APNs. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>
