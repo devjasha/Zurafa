@@ -773,7 +773,7 @@ struct UpdateButton: View {
 struct PaletteButton: View {
     @EnvironmentObject var ws: Workspace
     var body: some View {
-        BarButton(symbol: "command", help: "Command Palette (⌘K)") { ws.sessionPickerOpen = false; ws.paletteOpen.toggle() }
+        BarButton(symbol: "command", help: "Command Palette (⇧⌘P)") { ws.sessionPickerOpen = false; ws.paletteOpen.toggle() }
     }
 }
 

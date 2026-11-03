@@ -1,6 +1,6 @@
 # Appearance & Ghostty settings
 
-Zurafa offers Follow System, Light, and Dark modes. Open `⌘K` and choose an appearance directly; the change takes effect immediately. `⇧⌘A` switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.
+Zurafa offers Follow System, Light, and Dark modes. Open `⇧⌘P` and choose an appearance directly; the change takes effect immediately. `⇧⌘A` switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.
 
 ## Configuration file
 
@@ -19,15 +19,15 @@ sidebar-position = left
 tab-icon-stack = right
 ```
 
-`theme` accepts any Ghostty theme name from `~/.config/ghostty/themes` or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (`foreground`, `background`, `cursor-color`, `palette`, `font-family`, `font-size`) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. `sidebar-position` is `left` or `right`; **Move Sidebar to Right** in `⌘K` sets it for you. `tab-icon-stack` is `right`, `left`, `down` or `up`: where a tab's other pane icons peek out from behind its icon.
+`theme` accepts any Ghostty theme name from `~/.config/ghostty/themes` or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (`foreground`, `background`, `cursor-color`, `palette`, `font-family`, `font-size`) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. `sidebar-position` is `left` or `right`; **Move Sidebar to Right** in `⇧⌘P` sets it for you. `tab-icon-stack` is `right`, `left`, `down` or `up`: where a tab's other pane icons peek out from behind its icon.
 
 ## Import Ghostty settings
 
-Choose **Import Ghostty Settings** from `⌘K`. Zurafa reads Ghostty's standard XDG and macOS configuration paths, including supported includes and named light and dark themes. The import can apply the terminal font family, font size, foreground and background colors, cursor and selection colors, and the ANSI palette.
+Choose **Import Ghostty Settings** from `⇧⌘P`. Zurafa reads Ghostty's standard XDG and macOS configuration paths, including supported includes and named light and dark themes. The import can apply the terminal font family, font size, foreground and background colors, cursor and selection colors, and the ANSI palette.
 
 The imported background color tints the entire workspace surface; terminal drawing areas stay transparent so the pane and window feel continuous. Color changes remain local to Zurafa after import. If you later edit Ghostty's files, run the import again to refresh Zurafa's copy.
 
-Choose **Use Zurafa Terminal Defaults** in `⌘K` to clear the imported settings. Ghostty keybindings, shell commands, and window layout are outside the import scope.
+Choose **Use Zurafa Terminal Defaults** in `⇧⌘P` to clear the imported settings. Ghostty keybindings, shell commands, and window layout are outside the import scope.
 
 ## Icons and fonts
 

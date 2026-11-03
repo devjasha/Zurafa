@@ -859,7 +859,8 @@ struct Command: Identifiable {
         // Shift turns ] into } before menus match, so a "]" + Shift item never fires.
         Command(title: "Next Workspace", key: "}", mods: [.command, .shift]) { $0.workspaceStep(1) },
         Command(title: "Previous Workspace", key: "{", mods: [.command, .shift]) { $0.workspaceStep(-1) },
-        Command(title: "Command Palette", key: "k") { $0.paletteOpen = true },
+        Command(title: "Command Palette", key: "p", mods: [.command, .shift]) { $0.sessionPickerOpen = false; $0.paletteOpen = true },
+        Command(title: "Change Session", key: "k") { $0.paletteOpen = false; $0.sessionPickerOpen = true },
         Command(title: "Jump to Pane Needing You", key: "j") { $0.jumpToAttention() },
     ] + (1...9).map { n in
         Command(title: "Select Tab \(n)", key: KeyEquivalent(Character("\(n)"))) { ws in

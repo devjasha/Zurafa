@@ -21,7 +21,7 @@ Direct tabs reconnect like bridged ones: the tab says *Connection lost; reconnec
 
 For a Linux host with systemd that you reach over SSH with a key, the app sets everything up:
 
-1. Open `⌘K`, find the host under **Saved Hosts** and click its **bolt** button.
+1. Open `⇧⌘P`, find the host under **Saved Hosts** and click its **bolt** button.
 2. Choose **Turn On**. The status bar shows *Setting up direct connection…* and then the result.
 3. Open a new tab to that host. It now connects directly.
 

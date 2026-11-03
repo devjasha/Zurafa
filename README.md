@@ -85,7 +85,7 @@ stop it before opening the new app. This ends terminals owned by that older daem
 After a daemon restart, the app reconnects and rebuilds its layout from a fresh
 snapshot. Terminal screen output produced while the app is disconnected is not replayed.
 
-Click the workspace name to switch sessions. Use ⌘K for the command picker,
+Click the workspace name or press ⌘K to switch sessions. Use ⇧⌘P for the command picker,
 including session rename, new session, and Add Remote Host. The Add Host picker
 accepts a host name, SSH alias, `user@host:port`, or `ssh://user@host:port`. If
 Tailscale is running, it also lists your online Linux and Mac tailnet machines,
@@ -105,11 +105,11 @@ Serve, or tailnet port 7297) without SSH, much like Rex. A root login server
 account `/etc/zurafa/accounts.jsonc` allows. See the website's
 [Direct over Tailscale](https://zurafa-website.vercel.app/docs/remote-access/) guide and `docs/ipc-protocol.md`. Saved hosts persist on disk, while open
 sessions and their PTYs live only for the current daemon process.
-Use ⌘K to choose Follow System, Light, or Dark appearance immediately; ⇧⌘A
+Use ⇧⌘P to choose Follow System, Light, or Dark appearance immediately; ⇧⌘A
 switches between light and dark. Zurafa remembers the choice across launches. In Follow
 System mode, the window and terminals update when macOS changes appearance.
 
-Use ⌘K → Import Ghostty Settings to copy terminal font, font size, foreground,
+Use ⇧⌘P → Import Ghostty Settings to copy terminal font, font size, foreground,
 background tint, cursor, selection, and ANSI palette settings from Ghostty's
 standard XDG and macOS configuration paths. Includes and named light/dark themes
 are supported. Zurafa keeps its own glass window design and does not import

@@ -4,7 +4,7 @@ Remote sessions connect with the **system SSH client**, so they use your usual `
 
 ## Add a host
 
-Open `⌘K` and choose **Add Remote Host**. The address field accepts a hostname or SSH alias, `user@host:port`, or `ssh://user@host:port`.
+Open `⇧⌘P` and choose **Add Remote Host**. The address field accepts a hostname or SSH alias, `user@host:port`, or `ssh://user@host:port`.
 
 If Tailscale is running on this Mac, the sheet also lists your online Linux and Mac tailnet machines. Use ↑↓ and Return, or click one, to save it and connect. Zurafa uses the machine's MagicDNS name when this Mac can resolve it, and its Tailscale IP otherwise (for example when **Use Tailscale DNS** is off). Tailnet machines are saved without an SSH user, so SSH uses your Mac username unless `~/.ssh/config` says otherwise; set the user with the gear icon if it differs.
 

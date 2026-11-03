@@ -4,7 +4,7 @@ Zurafa can place a softly visible, dithered image behind the workspace. It is op
 
 ## Set an image
 
-1. Open the command picker with `⌘K`.
+1. Open the command picker with `⇧⌘P`.
 2. Choose **Set Background Image…**.
 3. Select an image from the macOS file picker.
 
@@ -12,6 +12,6 @@ Zurafa resizes large images before processing them and applies an ordered Bayer 
 
 ## Show or hide it
 
-Open `⌘K` and choose **Hide Background Image** or **Show Background Image**. The selection and toggle state persist across launches. Choosing **Set Background Image…** again replaces the saved background.
+Open `⇧⌘P` and choose **Hide Background Image** or **Show Background Image**. The selection and toggle state persist across launches. Choosing **Set Background Image…** again replaces the saved background.
 
 The image is intentionally subtle so terminal text remains readable. Imported Ghostty background color, if any, still tints the workspace beneath it.
