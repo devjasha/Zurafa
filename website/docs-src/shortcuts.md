@@ -21,6 +21,9 @@ The command picker is the quickest way to discover an action. Press `⌘K`, type
 | Split pane right | `⌘D` |
 | Split pane down | `⇧⌘D` |
 | Zoom or unzoom pane | `⇧⌘↩` |
+| Float or dock pane | `⌥⌘F` |
+| Hide pane | `⌃⌘H` |
+| Show the last hidden pane | `⇧⌃⌘H` |
 | Next pane | `⌘]` |
 | Previous pane | `⌘[` |
 | Swap pane with the next one | `⌥⌘]` |
@@ -32,7 +35,7 @@ The command picker is the quickest way to discover an action. Press `⌘K`, type
 
 ## Command picker actions
 
-You can change or rename a workspace, rename a tab, add a remote host, create workspaces and tabs, open a directory in a new local tab, close a tab or workspace, refresh workspaces, switch the tab layout, choose Follow System / Light / Dark, import or clear Ghostty settings, set and toggle a dithered background image, split panes, and toggle pane zoom.
+You can change or rename a workspace, rename a tab, add a remote host, create workspaces and tabs, open a directory in a new local tab, close a tab or workspace, refresh workspaces, switch the tab layout, choose Follow System / Light / Dark, import or clear Ghostty settings, set and toggle a dithered background image, split panes, toggle pane zoom, float, dock or hide a pane, and show hidden panes.
 
 ## Input focus
 

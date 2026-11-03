@@ -23,7 +23,7 @@ struct TerminalScreen: View {
     private var block: BlockSnapshot? { session?.blocks[id] }
     /// The Mac tab this pane is in.
     private var window: WindowSnapshot? {
-        session?.windows.first { $0.layout.panes.contains(id) } ?? session?.windows.first { $0.windowID == knownWindow }
+        session?.windows.first { $0.panes.contains(id) } ?? session?.windows.first { $0.windowID == knownWindow }
     }
     @State private var knownWindow: String?
     /// Bumped on each switch between panes of one tab; the pane map shows briefly for each.
@@ -63,7 +63,7 @@ struct TerminalScreen: View {
                 }
             }
             .onChange(of: id) { old, new in
-                let tab = session?.windows.first { $0.layout.panes.contains(new) }?.windowID
+                let tab = session?.windows.first { $0.panes.contains(new) }?.windowID
                 if tab != nil, tab == knownWindow, old != new { paneSwitches += 1 }
                 if let tab { knownWindow = tab }
             }
@@ -113,7 +113,7 @@ struct TerminalScreen: View {
     }
 
     private var paneRow: some View {
-        let ids = window?.layout.panes ?? [id]
+        let ids = window?.panes ?? [id]
         return HStack(spacing: 8) {
             HStack(spacing: 2) {
                 ForEach(ids, id: \.self) { pane in
@@ -174,7 +174,7 @@ struct TerminalScreen: View {
     private var header: some View {
         HStack(spacing: 10) {
             PaneStack(front: block?.program(remote: session?.remote) ?? .shell,
-                      behind: (window?.layout.panes ?? []).filter { $0 != id }.prefix(2)
+                      behind: (window?.panes ?? []).filter { $0 != id }.prefix(2)
                         .map { session?.blocks[$0]?.program(remote: session?.remote) ?? .shell },
                       size: 34)
             VStack(alignment: .leading, spacing: 0) {
@@ -184,9 +184,12 @@ struct TerminalScreen: View {
                         ForEach(mac.sessions, id: \.sessionID) { session in
                             Section(session.label) {
                                 ForEach(session.windows, id: \.windowID) { window in
-                                    ForEach(window.layout.panes, id: \.self) { pane in
+                                    ForEach(window.panes, id: \.self) { pane in
                                         Text(session.blocks[pane]?.title ?? window.label).tag(pane)
                                     }
+                                }
+                                ForEach(session.hidden ?? [], id: \.self) { pane in
+                                    Text("\(session.blocks[pane]?.title ?? "Pane") (hidden)").tag(pane)
                                 }
                             }
                         }
@@ -213,7 +216,7 @@ struct TerminalScreen: View {
     /// Closes a pane; closing the current one moves to its neighbour, and the tab's last pane goes back to the list.
     private func close(_ pane: String) {
         guard let session else { return }
-        let panes = window?.layout.panes ?? [pane]
+        let panes = window?.panes ?? [pane]
         let i = panes.firstIndex(of: pane) ?? 0
         let next = panes.indices.contains(i + 1) ? panes[i + 1] : panes.indices.contains(i - 1) ? panes[i - 1] : nil
         Task {

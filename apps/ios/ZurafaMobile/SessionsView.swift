@@ -31,14 +31,25 @@ struct SessionsView: View {
                             let id = window.selectedBlock
                             NavigationLink(value: id) {
                                 PaneRow(label: window.label, block: session.blocks[id], remote: session.remote,
-                                        behind: window.layout.panes.filter { $0 != id }.prefix(2)
+                                        behind: window.panes.filter { $0 != id }.prefix(2)
                                             .map { session.blocks[$0]?.program(remote: session.remote) ?? .shell })
                             }
                             .listRowBackground(rowBackground)
                             .swipeActions {
                                 Button("Close", role: .destructive) {
-                                    run { for pane in window.layout.panes { try await mac.close(pane, in: session.sessionID) } }
+                                    // Floating panes first, so none is docked in place of a closed one.
+                                    run { for pane in (window.floating ?? []).map(\.blockID) + window.layout.panes { try await mac.close(pane, in: session.sessionID) } }
                                 }
+                            }
+                        }
+                        // Running in no tab on the Mac, which lists them under its tabs too.
+                        ForEach(session.hidden ?? [], id: \.self) { id in
+                            NavigationLink(value: id) {
+                                PaneRow(label: "Hidden", block: session.blocks[id], remote: session.remote, hidden: true)
+                            }
+                            .listRowBackground(rowBackground)
+                            .swipeActions {
+                                Button("Show", systemImage: "eye") { run { try await mac.float(id, in: session.sessionID) } }
                             }
                         }
                         Button("New Tab", systemImage: "plus") { newTab(in: session) }
@@ -124,6 +135,7 @@ struct PaneRow: View {
     let remote: RemoteHost?
     /// The tab's other panes, peeking out behind its tile.
     var behind: [Program] = []
+    var hidden = false
 
     var body: some View {
         HStack {
@@ -133,6 +145,7 @@ struct PaneRow: View {
                 if let pwd = block?.pwd { Text(URL(string: pwd)?.path ?? pwd).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head) }
             }
             Spacer()
+            if hidden { Image(systemName: "eye.slash").foregroundStyle(.secondary).accessibilityLabel("Hidden") }
             Self.badge(block)
         }
     }

@@ -193,6 +193,9 @@ and reply with `ok`:
 {"op":"zoom","session":"default","block":"t1","enabled":true}
 {"op":"resize","session":"default","window":"w1","path":[],"ratio":0.6}
 {"op":"close","session":"default","block":"t1"}
+{"op":"float","session":"default","block":"t1","frame":[0.2,0.2,0.6,0.6]}
+{"op":"dock","session":"default","block":"t1","target":"t2","axis":"vertical"}
+{"op":"hide","session":"default","block":"t1"}
 {"op":"label","session":"default","window":"w1","label":"Build"}
 {"op":"label","session":"default","label":"Work"}
 {"op":"create_session","session":"project","label":"Project"}
@@ -279,6 +282,16 @@ Close and session destruction request termination of the removed blocks' PTYs.
 A removed block no longer emits structured terminal events; `kill` instead
 retains it so clients can observe `child_exited` and its final statuses.
 
+`float` moves a docked or hidden block over a window (a hidden one over the
+active window), or moves a floating one to `frame`. `frame` is optional and is
+`[x, y, w, h]` in fractions of the window. It is kept inside the window, at least
+0.1 on each side, and defaults to `[0.2, 0.2, 0.6, 0.6]`. A window's only docked
+block cannot float. `dock` splits the docked block `target` and puts a floating or
+hidden block beside it. `hide` takes a block out of every window and lists it in
+the session's `hidden`. When a window loses its last docked block, its first
+floating block is docked in its place. A window with no blocks left closes.
+Only docked blocks can be split.
+
 Validation and mutation are serialized. Rejected commands publish nothing and
 leave state and revisions unchanged. No-op commands also publish nothing.
 Changes publish their specific events followed by `session_view_changed` with
@@ -329,6 +342,8 @@ an atomic boundary.
 The snapshot stores session IDs, labels, optional `remote` host records,
 revisions, active windows, ordered
 windows with their binary layouts, selected/zoomed block IDs, and a block map.
+A window may also carry `floating:[{block_id,frame}]`, and a session
+`hidden:[block_id]`. Both are left out when they are empty.
 Each block contains `running`, nullable `exit_code`, latest nullable `title` and
 `pwd`, and `statuses:{records:{<record id>:<record>}}`. Root status ID is `""`.
 The `clients` map contains negotiated live IPC connections. Since this protocol

@@ -185,6 +185,7 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
         }
         "tab" if args.get(1).is_some_and(|s| s == "new") => cmd_tab(&mut client, &args[2..]),
         "split" => cmd_split(&mut client, &args[1..]),
+        "float" | "hide" | "show" => cmd_place(&mut client, &args[0], &args[1..]),
         "preview" => cmd_preview(&mut client, &args[1..]),
         "send" => cmd_send(&mut client, &args[1..]),
         "key" => cmd_key(&mut client, &args[1..]),
@@ -315,6 +316,32 @@ fn cmd_split(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> 
     let command = command_after_double_dash(args);
     let reply = client.request(json!({"type":"layout.split","session":strv(&session["session_id"]),"block":pane,"axis":axis,"cols":80,"rows":24,"cwd":cwd,"command":command})).map_err(|e| (1, e))?;
     println!("created pane {}", strv(&reply["terminal"]));
+    Ok(())
+}
+
+/// `float`, `hide` and `show`: moves a running pane over its tab, out of every tab, or back.
+fn cmd_place(client: &mut Client, verb: &str, args: &[String]) -> Result<(), (i32, String)> {
+    let snapshot = client.snapshot().map_err(|e| (1, e))?;
+    // The pane is the positional or this pane; `show`'s -b names the pane to dock beside.
+    let target = first_positional(args).or_else(|| env::var("ZURAFA_PANE").ok());
+    let scope: Vec<String> = option_value(args, &["-s", "--session"]).map(|s| vec!["-s".into(), s]).unwrap_or_default();
+    let (session, pane) = target_pane(&snapshot, &scope, target)?;
+    let split = option_value(args, &["--split"]).filter(|_| verb == "show");
+    let command = match split {
+        None if verb == "hide" => json!({"op":"hide","session":session,"block":pane}),
+        None => json!({"op":"float","session":session,"block":pane}),
+        Some(dir) => {
+            let axis = match dir.as_str() {
+                "right" | "horizontal" => "horizontal",
+                "down" | "vertical" => "vertical",
+                _ => return Err((2, "--split must be right or down".into())),
+            };
+            let beside = option_value(args, &["-b", "--pane", "--block"]).ok_or((2, "--split needs -b PANE to dock beside".into()))?;
+            let (beside, _) = resolve_pane(&resolve_session(&snapshot, &session)?, &beside)?;
+            json!({"op":"dock","session":session,"block":pane,"target":beside,"axis":axis})
+        }
+    };
+    client.request(json!({"type":"layout.command","command":command})).map_err(|e| (1, e))?;
     Ok(())
 }
 
@@ -1000,25 +1027,34 @@ fn cmd_panes(client: &mut Client, as_json: bool) -> Result<(), (i32, String)> {
     let here = env::var("ZURAFA_PANE").ok();
     let mut rows = vec![];
     for session in sessions(&snapshot) {
+        let mut places = vec![];
         for tab in session["windows"].as_array().into_iter().flatten() {
             let mut ids = vec![];
             layout_panes(&tab["layout"], &mut ids);
-            for id in ids {
-                let pane = &session["blocks"][&id];
-                let (status, record) = pane_status(&pane["statuses"], pane["running"].as_bool().unwrap_or(false));
-                let message = strv(&record["msg"]);
-                let cwd = strv(&pane["foreground"]["cwd"]);
-                rows.push(json!({
-                    "pane": id,
-                    "session": strv(&session["session_id"]),
-                    "tab": strv(&tab["label"]),
-                    "program": strv(&pane["foreground"]["name"]),
-                    "status": status,
-                    "message": message,
-                    "cwd": match cwd.strip_prefix(&home) { Some(rest) if !home.is_empty() => format!("~{rest}"), _ => cwd },
-                    "current": here.as_deref() == Some(id.as_str()),
-                }));
+            places.extend(ids.into_iter().map(|id| (id, strv(&tab["label"]), "docked")));
+            for f in tab["floating"].as_array().into_iter().flatten() {
+                places.push((strv(&f["block_id"]), strv(&tab["label"]), "floating"));
             }
+        }
+        for id in session["hidden"].as_array().into_iter().flatten() {
+            places.push((strv(id), String::new(), "hidden"));
+        }
+        for (id, tab, place) in places {
+            let pane = &session["blocks"][&id];
+            let (status, record) = pane_status(&pane["statuses"], pane["running"].as_bool().unwrap_or(false));
+            let message = strv(&record["msg"]);
+            let cwd = strv(&pane["foreground"]["cwd"]);
+            rows.push(json!({
+                "pane": id,
+                "session": strv(&session["session_id"]),
+                "tab": tab,
+                "place": place,
+                "program": strv(&pane["foreground"]["name"]),
+                "status": status,
+                "message": message,
+                "cwd": match cwd.strip_prefix(&home) { Some(rest) if !home.is_empty() => format!("~{rest}"), _ => cwd },
+                "current": here.as_deref() == Some(id.as_str()),
+            }));
         }
     }
     if as_json {
@@ -1032,7 +1068,7 @@ fn cmd_panes(client: &mut Client, as_json: bool) -> Result<(), (i32, String)> {
             "{:<8} {:<12} {:<24} {:<10} {:<8} {:<28} {}",
             format!("{}{mark}", strv(&r["pane"])),
             truncate(&strv(&r["session"]), 12),
-            truncate(&strv(&r["tab"]), 24),
+            truncate(&match strv(&r["place"]).as_str() { "docked" => strv(&r["tab"]), "hidden" => "(hidden)".into(), place => format!("{} ({place})", strv(&r["tab"])) }, 24),
             truncate(&strv(&r["program"]), 10),
             strv(&r["status"]),
             truncate(&strv(&r["cwd"]), 28),
@@ -1901,7 +1937,13 @@ fn print_session(session: &Value) {
                 active
             );
             println!("    selected pane: {}", strv(&w["selected_block"]));
+            for f in w["floating"].as_array().into_iter().flatten() {
+                println!("    floating pane: {} at {}", strv(&f["block_id"]), f["frame"]);
+            }
         }
+    }
+    for id in session["hidden"].as_array().into_iter().flatten() {
+        println!("  Hidden pane: {}", strv(id));
     }
 }
 
@@ -1975,7 +2017,7 @@ fn option_value(args: &[String], names: &[&str]) -> Option<String> {
         .map(|w| w[1].clone())
 }
 /// Options that take a value, so their values are not mistaken for positional arguments.
-const VALUED: [&str; 21] = [
+const VALUED: [&str; 22] = [
     "--worktree",
     "-s",
     "--session",
@@ -1986,6 +2028,7 @@ const VALUED: [&str; 21] = [
     "--label",
     "--cwd",
     "--axis",
+    "--split",
     "-n",
     "--lines",
     "--for",
@@ -2009,7 +2052,7 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  skill setup|remove|status|show      Teach Claude Code, Codex, OpenCode and Pi to use Zurafa:\n                                       a skill, status hooks and session-start context\n  hook claude|codex                    Run by the agent's hooks: status and subagents\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n\nSpawning agents into panes and collecting their results is zurafa-orch's job.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  float [TARGET]             Float a pane over its tab (a hidden one over the tab in view)\n  hide [TARGET]              Take a pane out of every tab; it keeps running\n  show [TARGET] [--float | --split right|down -b PANE]\n                             Bring a hidden or floating pane back: floating, or docked beside PANE\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  skill setup|remove|status|show      Teach Claude Code, Codex, OpenCode and Pi to use Zurafa:\n                                       a skill, status hooks and session-start context\n  hook claude|codex                    Run by the agent's hooks: status and subagents\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n\nSpawning agents into panes and collecting their results is zurafa-orch's job.");
 }
 
 #[cfg(test)]

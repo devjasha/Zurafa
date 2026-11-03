@@ -25,6 +25,8 @@ zurafa session inspect            # inspect the current or default session
 zurafa pane inspect               # inspect the current pane inside a Zurafa terminal
 zurafa tab new --label Build      # create a new tab in the current session
 zurafa split --axis vertical      # split the current pane
+zurafa float t7                   # float a pane over its tab; `hide` takes it out of every tab
+zurafa show t7 --split right -b t2  # bring a hidden or floating pane back, docked beside t2
 zurafa preview README.md          # open a file in the preview beside the current pane
 ```
 

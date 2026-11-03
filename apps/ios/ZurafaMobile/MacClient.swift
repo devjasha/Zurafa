@@ -289,6 +289,11 @@ extension MacClient {
         _ = try await request(["type": .string("layout.command"), "command": .object(["op": .string("close"), "session": .string(session), "block": .string(pane)])])
     }
 
+    /// Floats a hidden pane over the Mac's tab in view, as the Mac's sidebar does.
+    func float(_ pane: String, in session: String) async throws {
+        _ = try await request(["type": .string("layout.command"), "command": .object(["op": .string("float"), "session": .string(session), "block": .string(pane)])])
+    }
+
     /// Deletes a whole session and its terminals, as the Mac's Delete Workspace does.
     func deleteSession(_ session: String) async throws {
         _ = try await request(["type": .string("layout.command"), "command": .object(["op": .string("destroy_session"), "session": .string(session)])])

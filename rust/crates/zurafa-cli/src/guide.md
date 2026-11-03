@@ -46,6 +46,8 @@ terminal.
 | Type into it, press a key | `zurafa send PANE TEXT --enter`, `zurafa key PANE ctrl+c` |
 | Is it done, wait for it | `zurafa wait PANE` |
 | Show me this file | `zurafa preview FILE` |
+| Float it, put it out of the way | `zurafa float PANE`, `zurafa hide PANE` |
+| Bring it back | `zurafa show PANE`, or docked: `zurafa show PANE --split right -b t2` |
 
 Targets match a pane id (`t7`), a tab or workspace label (case-insensitive), a
 position (`1`), or the end of an id. A workspace means its focused pane. Prefer
@@ -82,6 +84,10 @@ or `zurafa report`). A program that reports nothing stays `idle` while it runs.
   opens a pane beside yours** (`-b PANE` beside another, `--axis vertical` to
   stack it below).
 - **Both print the new pane's id** (`created pane t9`). Use it in later commands.
+- **A pane can float or hide.** `float` lifts it over its tab, `hide` takes it out
+  of every tab, `show` floats it again or (`--split right|down -b PANE`) docks it
+  beside a pane. Its program keeps running: `panes` lists it as floating or
+  hidden, and `read`, `send` and `wait` work on it as before.
 - **Text that starts with `-`** goes after `--`: `zurafa send t7 --enter -- -v`.
 
 ## Common requests

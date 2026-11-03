@@ -166,6 +166,30 @@ pub struct Window {
     pub layout: Layout,
     pub selected_block: String,
     pub zoomed_block: Option<String>,
+    /// Panes over the layout instead of in it, in stacking order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub floating: Vec<Floating>,
+}
+/// A pane floating over its tab, its frame `[x, y, w, h]` in fractions of the tab.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Floating {
+    pub block_id: String,
+    pub frame: [f64; 4],
+}
+/// Where a newly floated pane goes: centered, at 60% of the tab.
+pub const FLOAT_FRAME: [f64; 4] = [0.2, 0.2, 0.6, 0.6];
+/// Keeps a frame inside its tab, at least a tenth of it on each side.
+fn fit([x, y, w, h]: [f64; 4]) -> Result<[f64; 4], String> {
+    if ![x, y, w, h].iter().all(|v| v.is_finite()) {
+        return Err("frame must be four numbers".into());
+    }
+    let (w, h) = (w.clamp(0.1, 1.0), h.clamp(0.1, 1.0));
+    Ok([x.clamp(0.0, 1.0 - w), y.clamp(0.0, 1.0 - h), w, h])
+}
+impl Window {
+    fn holds(&self, block: &str) -> bool {
+        self.layout.contains(block) || self.floating.iter().any(|f| f.block_id == block)
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
@@ -223,6 +247,49 @@ pub struct Session {
     pub active_window: Option<String>,
     pub windows: Vec<Window>,
     pub blocks: BTreeMap<String, Block>,
+    /// Running panes in no tab, until they are shown again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden: Vec<String>,
+}
+impl Session {
+    /// Takes `block` out of its tab, or out of the hidden list. A tab left without a docked pane
+    /// docks its first floating one, or closes when it has none.
+    fn detach(&mut self, block: &str, events: &mut Vec<SessionEvent>) -> Result<(), String> {
+        if let Some(i) = self.hidden.iter().position(|b| b == block) {
+            self.hidden.remove(i);
+            return Ok(());
+        }
+        let pos = self.windows.iter().position(|w| w.holds(block)).ok_or("unknown block")?;
+        let w = &mut self.windows[pos];
+        w.floating.retain(|f| f.block_id != block);
+        if w.layout.contains(block) {
+            match w.layout.clone().remove(block) {
+                Some(layout) => w.layout = layout,
+                None if !w.floating.is_empty() => {
+                    w.layout = Layout::Block { block_id: w.floating.remove(0).block_id }
+                }
+                None => {
+                    let w = self.windows.remove(pos);
+                    events.push(SessionEvent::WindowClosed { window_id: w.window_id.clone() });
+                    if self.active_window.as_ref() == Some(&w.window_id) {
+                        // The tab before the closed one, as in a browser; the new first tab if it was first.
+                        self.active_window = self.windows.get(pos.saturating_sub(1)).map(|w| w.window_id.clone());
+                        if let Some(id) = &self.active_window {
+                            events.push(SessionEvent::ActiveWindowChanged { window_id: id.clone() });
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+        }
+        if w.selected_block == block {
+            w.selected_block = w.layout.first();
+        }
+        if w.zoomed_block.as_deref() == Some(block) {
+            w.zoomed_block = None;
+        }
+        Ok(())
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteHost {
@@ -267,6 +334,25 @@ pub enum Command {
         session: String,
         block: String,
         with: String,
+    },
+    /// Floats a docked or hidden pane over the tab in view, or moves a floating one to `frame`.
+    Float {
+        session: String,
+        block: String,
+        #[serde(default)]
+        frame: Option<[f64; 4]>,
+    },
+    /// Puts a floating or hidden pane back in a tab, split beside the docked pane `target`.
+    Dock {
+        session: String,
+        block: String,
+        target: String,
+        axis: Axis,
+    },
+    /// Takes a pane out of every tab; it keeps running and can be floated or docked again.
+    Hide {
+        session: String,
+        block: String,
     },
     Label {
         session: String,
@@ -444,6 +530,9 @@ impl Dispatcher {
         if split.is_some_and(|b| !s.blocks.contains_key(b)) {
             return Err("unknown block".into());
         }
+        if split.is_some_and(|b| !s.windows.iter().any(|w| w.layout.contains(b))) {
+            return Err("only a docked pane can be split".into());
+        }
         // An unknown parent just means the pane stands on its own.
         let parent = parent.filter(|p| i.snapshot.sessions.values().any(|s| s.blocks.contains_key(p)));
         // A spawned agent's tab opens behind the one you are in; the app shows it beside its parent.
@@ -485,6 +574,7 @@ impl Dispatcher {
                 },
                 selected_block: block.into(),
                 zoomed_block: None,
+                floating: vec![],
             });
             (next, true)
         };
@@ -538,6 +628,7 @@ impl Dispatcher {
                     active_window: None,
                     windows: vec![],
                     blocks: BTreeMap::new(),
+                    hidden: vec![],
                 },
             );
             i.emit(Event::Server {
@@ -570,6 +661,9 @@ impl Dispatcher {
             | Command::Resize { session, .. }
             | Command::Close { session, .. }
             | Command::Swap { session, .. }
+            | Command::Float { session, .. }
+            | Command::Dock { session, .. }
+            | Command::Hide { session, .. }
             | Command::Label { session, .. } => session.clone(),
             _ => unreachable!(),
         };
@@ -592,7 +686,7 @@ impl Dispatcher {
                 let w = s
                     .windows
                     .iter_mut()
-                    .find(|w| w.layout.contains(&block))
+                    .find(|w| w.holds(&block))
                     .ok_or("unknown block")?;
                 w.selected_block = block.clone();
                 if zoom || w.zoomed_block.is_some() {
@@ -613,7 +707,7 @@ impl Dispatcher {
                 let w = s
                     .windows
                     .iter_mut()
-                    .find(|w| w.layout.contains(&block))
+                    .find(|w| w.holds(&block))
                     .ok_or("unknown block")?;
                 w.zoomed_block = None;
             }
@@ -639,35 +733,7 @@ impl Dispatcher {
                 events.push(SessionEvent::BlockClosed {
                     block_id: block.clone(),
                 });
-                let pos = s
-                    .windows
-                    .iter()
-                    .position(|w| w.layout.contains(&block))
-                    .unwrap();
-                let w = &mut s.windows[pos];
-                if let Some(layout) = w.layout.clone().remove(&block) {
-                    w.layout = layout;
-                    if w.selected_block == block {
-                        w.selected_block = w.layout.first();
-                    }
-                    if w.zoomed_block.as_ref() == Some(&block) {
-                        w.zoomed_block = None;
-                    }
-                } else {
-                    let w = s.windows.remove(pos);
-                    events.push(SessionEvent::WindowClosed {
-                        window_id: w.window_id.clone(),
-                    });
-                    if s.active_window.as_ref() == Some(&w.window_id) {
-                        // The tab before the closed one, as in a browser; the new first tab if it was first.
-                        s.active_window = s.windows.get(pos.saturating_sub(1)).map(|w| w.window_id.clone());
-                        if let Some(id) = &s.active_window {
-                            events.push(SessionEvent::ActiveWindowChanged {
-                                window_id: id.clone(),
-                            });
-                        }
-                    }
-                }
+                s.detach(&block, &mut events)?;
             }
             Command::Swap { block, with, .. } => {
                 s.windows
@@ -676,6 +742,52 @@ impl Dispatcher {
                     .ok_or("panes are not in the same tab")?
                     .layout
                     .swap(&block, &with);
+            }
+            Command::Float { block, frame, .. } => {
+                let frame = frame.map(fit).transpose()?;
+                let floating = s.windows.iter_mut().flat_map(|w| w.floating.iter_mut()).find(|f| f.block_id == block);
+                if let Some(f) = floating {
+                    if let Some(frame) = frame {
+                        f.frame = frame;
+                    }
+                } else {
+                    let window = match s.windows.iter().find(|w| w.layout.contains(&block)) {
+                        Some(w) if w.layout == (Layout::Block { block_id: block.clone() }) => {
+                            return Err("a tab's last docked pane cannot float".into())
+                        }
+                        Some(w) => w.window_id.clone(),
+                        None if s.hidden.contains(&block) => s.active_window.clone().ok_or("the workspace has no tab")?,
+                        None => return Err("unknown block".into()),
+                    };
+                    s.detach(&block, &mut events)?;
+                    let w = s.windows.iter_mut().find(|w| w.window_id == window).unwrap();
+                    w.floating.push(Floating { block_id: block.clone(), frame: frame.unwrap_or(FLOAT_FRAME) });
+                    w.selected_block = block;
+                }
+            }
+            Command::Dock { block, target, axis, .. } => {
+                if s.windows.iter().any(|w| w.layout.contains(&block)) {
+                    return Err("pane is already docked".into());
+                }
+                if !s.windows.iter().any(|w| w.layout.contains(&target)) {
+                    return Err("target pane is not docked in this workspace".into());
+                }
+                s.detach(&block, &mut events)?;
+                let w = s.windows.iter_mut().find(|w| w.layout.contains(&target)).unwrap();
+                w.layout.split(&target, &block, axis);
+                w.selected_block = block;
+                w.zoomed_block = None;
+                if s.active_window.as_ref() != Some(&w.window_id) {
+                    events.push(SessionEvent::ActiveWindowChanged { window_id: w.window_id.clone() });
+                }
+                s.active_window = Some(w.window_id.clone());
+            }
+            Command::Hide { block, .. } => {
+                if !s.blocks.contains_key(&block) {
+                    return Err("unknown block".into());
+                }
+                s.detach(&block, &mut events)?;
+                s.hidden.push(block);
             }
             Command::Label { window, label, .. } => {
                 if let Some(window) = window {
@@ -855,6 +967,83 @@ mod tests {
         d.command(Command::Focus { session: "default".into(), block: "b".into() }).unwrap();
         close("b");
         assert_eq!(active().as_deref(), Some("d"), "the first tab hands over to the next");
+    }
+
+    #[test]
+    fn panes_float_hide_show_and_dock_while_running() {
+        let d = Dispatcher::new(256);
+        add(&d, "a", None);
+        add(&d, "b", Some("a"));
+        add(&d, "c", Some("b"));
+        let run = |c: Command| d.command(c);
+        let float = |b: &str, frame| run(Command::Float { session: "default".into(), block: b.into(), frame });
+        let hide = |b: &str| run(Command::Hide { session: "default".into(), block: b.into() });
+        let dock = |b: &str, t: &str| run(Command::Dock { session: "default".into(), block: b.into(), target: t.into(), axis: Axis::Vertical });
+        let tab = || d.snapshot().sessions["default"].windows[0].clone();
+        fn leaves(l: &Layout) -> Vec<String> {
+            match l {
+                Layout::Block { block_id } => vec![block_id.clone()],
+                Layout::Split { first, second, .. } => [leaves(first), leaves(second)].concat(),
+            }
+        }
+        let docked = || leaves(&tab().layout);
+
+        float("c", None).unwrap();
+        assert_eq!(docked(), ["a", "b"]);
+        assert_eq!(tab().floating, [Floating { block_id: "c".into(), frame: FLOAT_FRAME }]);
+        assert_eq!(tab().selected_block, "c");
+        // Moving it keeps the frame inside the tab.
+        float("c", Some([0.9, -1.0, 0.5, 0.02])).unwrap();
+        assert_eq!(tab().floating[0].frame, [0.5, 0.0, 0.5, 0.1]);
+        assert!(float("c", Some([f64::NAN, 0.0, 0.5, 0.5])).is_err());
+        d.command(Command::Focus { session: "default".into(), block: "c".into() }).unwrap();
+        assert!(d.add_block("default", "x", Some("c"), Axis::Horizontal, "Shell".into(), None).is_err(), "a floating pane is not split");
+
+        hide("c").unwrap();
+        let s = &d.snapshot().sessions["default"];
+        assert!(tab().floating.is_empty());
+        assert_eq!(s.hidden, ["c"]);
+        assert!(s.blocks["c"].running, "a hidden pane keeps running");
+        assert_eq!(tab().selected_block, "a");
+        assert!(d.command(Command::Focus { session: "default".into(), block: "c".into() }).is_err());
+
+        // Shown again floating, then docked below b.
+        float("c", None).unwrap();
+        assert!(d.snapshot().sessions["default"].hidden.is_empty());
+        dock("c", "b").unwrap();
+        assert_eq!(docked(), ["a", "b", "c"]);
+        assert!(tab().floating.is_empty());
+        assert!(dock("c", "a").is_err(), "already docked");
+        hide("b").unwrap();
+        dock("b", "a").unwrap();
+        assert_eq!(docked(), ["a", "b", "c"]);
+
+        // A tab's only docked pane stays; with floats beside it, hiding it docks the first float.
+        add(&d, "e", None);
+        let last = || d.snapshot().sessions["default"].windows.last().unwrap().clone();
+        assert!(float("e", None).is_err());
+        add(&d, "f", Some("e"));
+        float("f", None).unwrap();
+        hide("e").unwrap();
+        assert_eq!(last().layout, Layout::Block { block_id: "f".into() });
+        assert!(last().floating.is_empty());
+
+        // Closing every pane of a tab closes it, floats included; hidden panes stay with the workspace.
+        add(&d, "g", Some("f"));
+        float("g", None).unwrap();
+        hide("a").unwrap();
+        let window = last().window_id;
+        for b in ["g", "f"] {
+            run(Command::Close { session: "default".into(), block: b.into() }).unwrap();
+        }
+        let s = &d.snapshot().sessions["default"];
+        assert!(s.windows.iter().all(|w| w.window_id != window));
+        assert_eq!(s.hidden, ["e", "a"]);
+        run(Command::Close { session: "default".into(), block: "a".into() }).unwrap();
+        assert_eq!(d.snapshot().sessions["default"].hidden, ["e"]);
+        // Old clients and saved layouts without these fields still decode.
+        let v = serde_json::to_value(&d.snapshot().sessions["default"].windows[0]).unwrap();
+        assert!(v.get("floating").is_none());
     }
 
     #[test]

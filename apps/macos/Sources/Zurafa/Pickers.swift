@@ -826,9 +826,13 @@ struct CommandPicker: View {
             .init(id: "Split Pane Right", detail: nil, shortcut: "⌘D") { ws.split(.horizontal) },
             .init(id: "Split Pane Down", detail: nil, shortcut: "⇧⌘D") { ws.split(.vertical) },
             .init(id: "Toggle Pane Zoom", detail: nil, shortcut: "⇧⌘↩") { ws.toggleZoom() },
+            .init(id: "Float or Dock Pane", detail: nil, shortcut: "⌥⌘F") { ws.toggleFloating() },
+            .init(id: "Hide Pane", detail: "It keeps running", shortcut: "⌃⌘H") { ws.hideFocused() },
             .init(id: "Move Pane Forward", detail: "Swap with the next pane", shortcut: "⌥⌘]") { ws.swapStep(1) },
             .init(id: "Move Pane Back", detail: "Swap with the previous pane", shortcut: "⌥⌘[") { ws.swapStep(-1) },
-        ]
+        ] + ws.hidden(in: ws.currentSession).map { pane in
+            .init(id: "hidden:\(pane)", title: "Show Hidden Pane: \(ws.meta(pane).title)", detail: ws.meta(pane).cwd, shortcut: nil) { ws.float(pane) }
+        }
     }
     private var filtered: [PaletteEntry] {
         entries.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)

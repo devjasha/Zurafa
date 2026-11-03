@@ -11,14 +11,14 @@ struct AgentFamily {
         self.tabs = tabs
         self.meta = meta
         var map: [String: Tab] = [:]
-        for tab in tabs { for pane in tab.layout.panes { map[pane] = tab } }
+        for tab in tabs { for pane in tab.panes { map[pane] = tab } }
         tabOfPane = map
     }
 
     /// Every pane spawned from this tab, including ones its agents spawned in turn, oldest first.
     func agents(of tab: Tab) -> [String] {
         var found: [String] = []
-        var parents = Set(tab.layout.panes)
+        var parents = Set(tab.panes)
         while true {
             let next = tabOfPane.keys
                 .filter { pane in meta(pane).parent.map(parents.contains) == true && !found.contains(pane) }
@@ -31,7 +31,7 @@ struct AgentFamily {
 
     /// A tab made only of panes spawned from another tab here: it is shown inside that tab's card.
     func isNested(_ tab: Tab) -> Bool {
-        tab.layout.panes.allSatisfy { pane in
+        tab.panes.allSatisfy { pane in
             guard let parent = meta(pane).parent, let home = tabOfPane[parent] else { return false }
             return home.id != tab.id
         }
@@ -40,7 +40,7 @@ struct AgentFamily {
     /// Native subagents of this tab's agents and the agents they spawned, while those agents run.
     func natives(of tab: Tab) -> [NativeAgent] {
         // An agent split beside its parent is in both lists.
-        (tab.layout.panes + agents(of: tab).filter { !tab.layout.panes.contains($0) }).flatMap { pane -> [NativeAgent] in
+        (tab.panes + agents(of: tab).filter { !tab.panes.contains($0) }).flatMap { pane -> [NativeAgent] in
             let m = meta(pane)
             // Finished subagents outlive the agent that ran them; the daemon clears only working records.
             guard m.ended == nil, m.program != .shell else { return [] }

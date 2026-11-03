@@ -77,6 +77,10 @@ struct Tab: Identifiable {
     var layout: Layout
     var focus: String
     var zoomed: Bool
+    var floating: [FloatingPane] = []
+    /// Docked panes in layout order, then floating ones.
+    var panes: [String] { layout.panes + floating.map(\.blockID) }
+    func isFloating(_ pane: String) -> Bool { floating.contains { $0.blockID == pane } }
 }
 
 enum EditorKind: String, Identifiable {
@@ -128,8 +132,8 @@ enum EditorKind: String, Identifiable {
     @Published var peekFocused = false
     /// Nil once the pane is gone, or while its own tab is in view: a terminal shows in one place at a time.
     var peek: String? {
-        guard let pane = peeks[sessionID], tabs.contains(where: { $0.layout.panes.contains(pane) }),
-              !tab.layout.panes.contains(pane) else { return nil }
+        guard let pane = peeks[sessionID], tabs.contains(where: { $0.panes.contains(pane) }),
+              !tab.panes.contains(pane) else { return nil }
         return pane
     }
     @Published private(set) var backgroundImage = BackgroundImageStore.load()
@@ -162,7 +166,7 @@ enum EditorKind: String, Identifiable {
     /// Live metas cover every workspace, so the sidebar and session switches show current icons and statuses.
     func meta(_ id: String) -> PaneMeta { metas[id] ?? PaneMeta() }
     func tabs(in session: SessionSnapshot) -> [Tab] {
-        session.windows.map { w in Tab(id: w.windowID, label: w.label, layout: w.layout, focus: w.selectedBlock, zoomed: w.zoomedBlock != nil) }
+        session.windows.map { w in Tab(id: w.windowID, label: w.label, layout: w.layout, focus: w.selectedBlock, zoomed: w.zoomedBlock != nil, floating: w.floating ?? []) }
     }
 
     init() {
@@ -377,6 +381,25 @@ enum EditorKind: String, Identifiable {
     func closePreview() { previews[sessionID] = nil }
     func openPeek(_ pane: String) { peeks[sessionID] = pane }
     func closePeek() { peeks[sessionID] = nil; peekFocused = false }
+    func float(_ id: String, frame: [Double]? = nil, in session: String? = nil) {
+        var body: [String: JSONValue] = ["op": .string("float"), "session": .string(session ?? sessionID), "block": .string(id)]
+        if let frame { body["frame"] = .array(frame.map(JSONValue.number)) }
+        command(body)
+    }
+    func dock(_ id: String, beside target: String, axis: Axis = .horizontal) {
+        command(["op": .string("dock"), "session": .string(sessionID), "block": .string(id), "target": .string(target), "axis": .string(axis.rawValue)])
+    }
+    func hide(_ id: String) { command(["op": .string("hide"), "session": .string(sessionID), "block": .string(id)]) }
+    /// Floats the focused pane, or docks a floating one beside the tab's last docked pane.
+    func toggleFloating() {
+        guard !tab.focus.isEmpty else { return }
+        if tab.isFloating(tab.focus) { dock(tab.focus, beside: tab.layout.panes.last ?? "") } else { float(tab.focus) }
+    }
+    func hideFocused() { if !tab.focus.isEmpty { hide(tab.focus) } }
+    /// Running panes in no tab, most recently hidden last.
+    func hidden(in session: SessionSnapshot?) -> [String] { session?.hidden ?? [] }
+    /// Floats the most recently hidden pane over the tab in view.
+    func showHidden() { if let pane = hidden(in: currentSession).last { float(pane) } }
     func toggleZoom() {
         guard !tab.focus.isEmpty else { return }
         command(["op": .string("zoom"), "session": .string(sessionID), "block": .string(tab.focus), "enabled": .bool(!tab.zoomed)])
@@ -386,16 +409,16 @@ enum EditorKind: String, Identifiable {
         let owner = snapshot?.sessions.first(where: { $0.value.blocks[id] != nil })?.key ?? sessionID
         command(["op": .string("focus"), "session": .string(owner), "block": .string(id)])
     }
-    /// Shows a pane in whichever workspace holds it.
+    /// Shows a pane in whichever workspace holds it; a hidden one comes back floating.
     func jump(to pane: String) {
         guard let owner = snapshot?.sessions.first(where: { $0.value.blocks[pane] != nil })?.key else { return }
         if owner != sessionID { selectSession(owner) }
-        focus(pane)
+        if hidden(in: snapshot?.sessions[owner]).contains(pane) { float(pane, in: owner) } else { focus(pane) }
     }
 
     /// Panes waiting on you, or else finished ones, in workspace, tab and pane order.
     var panesNeedingYou: [String] {
-        let all = orderedSessions.flatMap { tabs(in: $0).flatMap(\.layout.panes) }
+        let all = orderedSessions.flatMap { tabs(in: $0).flatMap(\.panes) + hidden(in: $0) }
         let waiting = all.filter { meta($0).status == "blocked" }
         return waiting.isEmpty ? all.filter { meta($0).status == "completed" } : waiting
     }
@@ -413,7 +436,7 @@ enum EditorKind: String, Identifiable {
         let m = meta(pane)
         let failed = m.record?.state == "error"
         let verb = m.status == "completed" ? "finished" : failed ? "failed" : "needs you"
-        let tabLabel = tabs(in: session).first { $0.layout.panes.contains(pane) }?.label
+        let tabLabel = tabs(in: session).first { $0.panes.contains(pane) }?.label
         let title = "\(m.program.title) \(verb)"
         let subtitle = [session.label, tabLabel].compactMap { $0 }.joined(separator: " · ")
         let body = m.statusMessage ?? m.title
@@ -421,7 +444,7 @@ enum EditorKind: String, Identifiable {
         if !PhonePush.userAtMac {
             PhonePush.send(pane: pane, thread: session.sessionID, title: title, subtitle: subtitle, body: body, answerable: m.waitingForPermission)
         }
-        if NSApp.isActive && session.sessionID == sessionID && tab.layout.panes.contains(pane) { return }
+        if NSApp.isActive && session.sessionID == sessionID && tab.panes.contains(pane) { return }
         Attention.shared.notify(pane: pane, title: title, subtitle: subtitle, body: body, answerable: m.waitingForPermission)
     }
 
@@ -431,7 +454,7 @@ enum EditorKind: String, Identifiable {
         var agents: [PhonePush.Agent] = []
         for session in snapshot.sessions.values {
             for tab in tabs(in: session) {
-                for pane in tab.layout.panes {
+                for pane in tab.panes {
                     let m = meta(pane)
                     guard m.ended == nil, let state = m.record?.state, state != "idle" else { continue }
                     agents.append(PhonePush.Agent(
@@ -462,7 +485,7 @@ enum EditorKind: String, Identifiable {
     }
     /// Cycles the tab's panes, then the agent pane beside them when one is open.
     func focusStep(_ step: Int) {
-        let panes = tab.layout.panes + (peek.map { [$0] } ?? [])
+        let panes = tab.panes + (peek.map { [$0] } ?? [])
         let current = peekFocused && peek != nil ? peek : tab.focus
         guard let i = panes.firstIndex(where: { $0 == current }) else { return }
         let next = panes[(i + step + panes.count) % panes.count]
@@ -796,7 +819,8 @@ enum EditorKind: String, Identifiable {
     }
 
     func closeTab(_ target: Tab? = nil) {
-        let ids = (target ?? tab).layout.panes
+        // Floating panes first, so none is docked in place of a closed one.
+        let ids = (target ?? tab).floating.map(\.blockID) + (target ?? tab).layout.panes
         let target = sessionID
         Task {
             do {
@@ -877,6 +901,9 @@ struct Command: Identifiable {
         Command(title: "Split Down", key: "d", mods: [.command, .shift]) { $0.split(.vertical) },
         Command(title: "Close Pane", key: "w") { $0.closeFocused() },
         Command(title: "Toggle Zoom", key: .return, mods: [.command, .shift]) { $0.toggleZoom() },
+        Command(title: "Float or Dock Pane", key: "f", mods: [.command, .option]) { $0.toggleFloating() },
+        Command(title: "Hide Pane", key: "h", mods: [.command, .control]) { $0.hideFocused() },
+        Command(title: "Show Hidden Pane", key: "h", mods: [.command, .control, .shift]) { $0.showHidden() },
         Command(title: "Next Pane", key: "]") { $0.focusStep(1) },
         Command(title: "Previous Pane", key: "[") { $0.focusStep(-1) },
         Command(title: "Move Pane Forward", key: "]", mods: [.command, .option]) { $0.swapStep(1) },

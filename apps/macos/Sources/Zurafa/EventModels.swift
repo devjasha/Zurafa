@@ -91,7 +91,17 @@ struct WindowSnapshot: Codable {
     var layout: Layout
     var selectedBlock: String
     var zoomedBlock: String?
-    enum CodingKeys: String, CodingKey { case windowID = "window_id", label, layout, selectedBlock = "selected_block", zoomedBlock = "zoomed_block" }
+    /// Panes over the layout; absent from older daemons.
+    var floating: [FloatingPane]?
+    enum CodingKeys: String, CodingKey { case windowID = "window_id", label, layout, selectedBlock = "selected_block", zoomedBlock = "zoomed_block", floating }
+    /// Docked panes in layout order, then floating ones.
+    var panes: [String] { layout.panes + (floating ?? []).map(\.blockID) }
+}
+/// A pane floating over its tab, its frame `[x, y, w, h]` in fractions of the tab.
+struct FloatingPane: Codable, Equatable {
+    var blockID: String
+    var frame: [Double]
+    enum CodingKeys: String, CodingKey { case blockID = "block_id", frame }
 }
 struct SessionSnapshot: Codable {
     var sessionID: String
@@ -101,7 +111,9 @@ struct SessionSnapshot: Codable {
     var activeWindow: String?
     var windows: [WindowSnapshot]
     var blocks: [String: BlockSnapshot]
-    enum CodingKeys: String, CodingKey { case sessionID = "session_id", label, remote, revision, activeWindow = "active_window", windows, blocks }
+    /// Running panes in no tab; absent from older daemons.
+    var hidden: [String]?
+    enum CodingKeys: String, CodingKey { case sessionID = "session_id", label, remote, revision, activeWindow = "active_window", windows, blocks, hidden }
 }
 struct EventSnapshot: Codable {
     var protocolVersion: Int

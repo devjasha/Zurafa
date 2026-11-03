@@ -77,6 +77,12 @@ fn restore_session(terms: &Arc<Terminals>, s: &Session, ids: &mut HashMap<String
         let new = open(terms, s, &first, None, Axis::Horizontal, &w.label, ids)?;
         ids.insert(first, new.clone());
         build(terms, s, &w.layout, ids)?;
+        // Opened as splits, then floated, so the docked panes keep their shape.
+        for f in &w.floating {
+            let pane = open(terms, s, &f.block_id, Some(new.clone()), Axis::Horizontal, "", ids)?;
+            ids.insert(f.block_id.clone(), pane.clone());
+            terms.command(Command::Float { session: s.session_id.clone(), block: pane, frame: Some(f.frame) })?;
+        }
         let window = terms.dispatcher.snapshot().sessions[&s.session_id]
             .windows
             .iter()
@@ -86,6 +92,12 @@ fn restore_session(terms: &Arc<Terminals>, s: &Session, ids: &mut HashMap<String
         // Splitting evens out panes; put back the sizes they had.
         ratios(terms, &s.session_id, &window, &w.layout, &mut vec![]);
         focus(terms, s, ids, &w.selected_block);
+    }
+    // Opened as a tab of its own, which closes again as the pane is hidden.
+    for old in &s.hidden {
+        let pane = open(terms, s, old, None, Axis::Horizontal, "", ids)?;
+        ids.insert(old.clone(), pane.clone());
+        terms.command(Command::Hide { session: s.session_id.clone(), block: pane })?;
     }
     let active = s.windows.iter().find(|w| Some(&w.window_id) == s.active_window.as_ref());
     if let Some(w) = active {
@@ -226,7 +238,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("zurafa-restore-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("layout.json");
-        // Two tabs; the first split three ways, with an agent in the right half.
+        // Two tabs; the first split three ways, with an agent in the right half and a pane floating
+        // over it. One more pane is hidden.
         let layout = json!({"type":"split","axis":"horizontal","ratio":0.3,
             "first":{"type":"block","block_id":"t1"},
             "second":{"type":"split","axis":"vertical","ratio":0.6,"first":{"type":"block","block_id":"t2"},"second":{"type":"block","block_id":"t3"}}});
@@ -234,16 +247,22 @@ mod tests {
         let b = |id: &str, resume: serde_json::Value| json!({"block_id":id,"running":true,"exit_code":null,"statuses":{"records":{}},"title":null,"pwd":null,
             "foreground":{"name":"fish","cwd":"/","pid":1,"argv":["fish","-l"]},"resume":resume});
         let saved = json!({"default":{"session_id":"default","label":"Work","revision":3,"active_window":"w9",
-            "windows":[{"window_id":"w8","label":"Code","layout":layout,"selected_block":"t3","zoomed_block":null},
+            "windows":[{"window_id":"w8","label":"Code","layout":layout,"selected_block":"t3","zoomed_block":null,
+                        "floating":[{"block_id":"t5","frame":[0.1,0.2,0.3,0.4]}]},
                        {"window_id":"w9","label":"Logs","layout":{"type":"block","block_id":"t4"},"selected_block":"t4","zoomed_block":null}],
-            "blocks":{"t1":b("t1",json!(null)),"t2":b("t2",json!(null)),"t3":b("t3",json!({"agent":"claude","session":"abc-1"})),"t4":b("t4",json!(null))}}});
+            "blocks":{"t1":b("t1",json!(null)),"t2":b("t2",json!(null)),"t3":b("t3",json!({"agent":"claude","session":"abc-1"})),"t4":b("t4",json!(null)),
+                "t5":b("t5",json!(null)),"t6":b("t6",json!(null))},"hidden":["t6"]}});
         fs::write(&file, saved.to_string()).unwrap();
 
-        assert_eq!(restore(&terms, &file).unwrap(), 4);
+        assert_eq!(restore(&terms, &file).unwrap(), 6);
         let s = &terms.dispatcher.snapshot().sessions["default"];
         assert_eq!(s.label, "Work");
         let labels: Vec<&str> = s.windows.iter().map(|w| w.label.as_str()).collect();
         assert_eq!(labels, ["Code", "Logs"]);
+        assert_eq!(s.windows[0].floating.len(), 1);
+        assert_eq!(s.windows[0].floating[0].frame, [0.1, 0.2, 0.3, 0.4]);
+        assert_eq!(s.hidden.len(), 1);
+        assert!(s.blocks[&s.hidden[0]].running);
         let Layout::Split { ratio, second, .. } = &s.windows[0].layout else { panic!("first tab is not split") };
         assert_eq!(*ratio, 0.3);
         let Layout::Split { ratio, second: agent, .. } = second.as_ref() else { panic!("right half is not split") };

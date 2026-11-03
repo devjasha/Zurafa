@@ -2,6 +2,18 @@ import XCTest
 @testable import Zurafa
 
 final class LayoutTests: XCTestCase {
+    func testFloatingAndHiddenPanesDecodeAndOlderSnapshotsStillDo() throws {
+        let window = try JSONDecoder().decode(WindowSnapshot.self, from: Data(#"""
+            {"window_id":"w1","label":"Code","layout":{"type":"block","block_id":"t1"},"selected_block":"t2","zoomed_block":null,
+             "floating":[{"block_id":"t2","frame":[0.2,0.2,0.6,0.6]}]}
+            """#.utf8))
+        XCTAssertEqual(window.panes, ["t1", "t2"])
+        let old = try JSONDecoder().decode(WindowSnapshot.self, from: Data(#"""
+            {"window_id":"w1","label":"Code","layout":{"type":"block","block_id":"t1"},"selected_block":"t1","zoomed_block":null}
+            """#.utf8))
+        XCTAssertEqual(old.panes, ["t1"])
+        XCTAssertEqual(FloatingPaneView.fit([0.9, -1, 0.5, 0.02]), [0.5, 0, 0.5, 0.1])
+    }
     func testAppearanceCanFollowSystemAndToggleInOnePress() {
         XCTAssertNil(AppearanceMode.system.colorScheme)
         XCTAssertEqual(AppearanceMode.system.toggled(systemDark: false), .dark)

@@ -305,6 +305,7 @@ struct RootView: View {
                     PaneView(id: ws.tab.focus)
                 } else {
                     LayoutView(layout: ws.tab.layout, window: ws.tab.id)
+                        .overlay { FloatingPanes(tab: ws.tab) }
                 }
             }
             if let peek = ws.peek {
@@ -474,6 +475,7 @@ struct VerticalTabSidebar: View {
                             }
                             .transition(tabTransition)
                         }
+                        HiddenPanes(session: session, current: current)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -518,7 +520,7 @@ struct SidebarTabRow: View {
                     if state.working { Spinner().frame(width: 12, height: 12) }
                     Spacer(minLength: 0)
                 }
-                ForEach(tab.layout.panes, id: \.self) { paneID in
+                ForEach(tab.panes, id: \.self) { paneID in
                     let pane = ws.meta(paneID)
                     // The tab's logo, spinner and done dot already show the program's own status; a row
                     // adds only named tasks, or that it needs you.
@@ -551,7 +553,7 @@ struct TileStack: View {
     @EnvironmentObject var ws: Workspace
 
     var body: some View {
-        let behind = tab.layout.panes.filter { $0 != tab.focus }.prefix(2).map { ws.meta($0).program }
+        let behind = tab.panes.filter { $0 != tab.focus }.prefix(2).map { ws.meta($0).program }
         // (x, y) step per tile behind, the side the tiles shrink toward, and where the front tile sits.
         let (dx, dy, anchor, front): (CGFloat, CGFloat, UnitPoint, Alignment) = switch ws.style.tabIconStack {
         case "left": (-1, 0, .leading, .trailing)
@@ -588,14 +590,14 @@ struct TaskDoneDot: View {
 
 extension Workspace {
     func taskState(for tab: Tab) -> TabTaskState {
-        let states = tab.layout.panes.flatMap { meta($0).statuses.values.map(\.state) }
+        let states = tab.panes.flatMap { meta($0).statuses.values.map(\.state) }
         return TabTaskState(working: states.contains("working"), done: states.contains("done"))
     }
 
     /// Every agent status record in the current workspace, across all its tabs and panes.
     var sessionAgentStates: [String] {
         guard let session = currentSession else { return [] }
-        return tabs(in: session).flatMap(\.layout.panes).flatMap { meta($0).statuses.values.map(\.state) }
+        return tabs(in: session).flatMap(\.panes).flatMap { meta($0).statuses.values.map(\.state) }
     }
 }
 
@@ -861,16 +863,19 @@ struct PaneView: View {
     var entrance: Edge?
     /// Shown as the agent pane beside the tab, which keeps its own focus and header buttons.
     var peek = false
+    /// Set for a floating pane: its header moves it, with the drag's translation and whether it ended.
+    var move: ((CGSize, Bool) -> Void)?
     @EnvironmentObject var ws: Workspace
     @State private var shown: Bool
     @State private var dropTarget = false
     /// Pane ids already on screen, so tab switches and re-splits don't replay the entrance animation.
     private static var seen = Set<String>()
 
-    init(id: String, entrance: Edge? = nil, peek: Bool = false) {
+    init(id: String, entrance: Edge? = nil, peek: Bool = false, move: ((CGSize, Bool) -> Void)? = nil) {
         self.id = id
         self.entrance = entrance
         self.peek = peek
+        self.move = move
         _shown = State(initialValue: Self.seen.contains(id))
     }
 
@@ -893,10 +898,15 @@ struct PaneView: View {
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 4) {
-                    IconButton(symbol: "rectangle.split.2x1", help: "Split Right") { ws.focus(id); ws.split(.horizontal) }
-                    IconButton(symbol: "rectangle.split.1x2", help: "Split Down") { ws.focus(id); ws.split(.vertical) }
-                    IconButton(symbol: ws.tab.zoomed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                               help: "Toggle Zoom") { ws.focus(id); ws.toggleZoom() }
+                    if move == nil {
+                        IconButton(symbol: "rectangle.split.2x1", help: "Split Right") { ws.focus(id); ws.split(.horizontal) }
+                        IconButton(symbol: "rectangle.split.1x2", help: "Split Down") { ws.focus(id); ws.split(.vertical) }
+                        IconButton(symbol: ws.tab.zoomed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                                   help: "Toggle Zoom") { ws.focus(id); ws.toggleZoom() }
+                    }
+                    IconButton(symbol: move == nil ? "macwindow.on.rectangle" : "dock.rectangle",
+                               help: move == nil ? "Float Pane (⌥⌘F)" : "Dock Pane (⌥⌘F)") { ws.focus(id); ws.toggleFloating() }
+                    IconButton(symbol: "eye.slash", help: "Hide Pane (⌃⌘H)") { ws.hide(id) }
                     IconButton(symbol: "xmark", help: "Close Pane") { ws.close(id) }
                 }
                 .opacity(focused && !peek ? 1 : 0)
@@ -906,10 +916,8 @@ struct PaneView: View {
             .padding(.leading, style.panePadding ?? 14).padding(.trailing, 8).frame(height: 38)
             .contentShape(Rectangle())
             .onTapGesture { if peek { ws.peekFocused = true } else { ws.focus(id) } }
-            // Dragging a header onto another pane of the tab swaps the two.
-            .draggable(PaneDrag(id: id)) {
-                Label(m.title, systemImage: "rectangle.on.rectangle").padding(6)
-            }
+            // Dragging a header onto another pane of the tab swaps the two; a floating pane's header moves it.
+            .modifier(HeaderDrag(id: id, title: m.title, move: move))
             TerminalHost(id: id, program: m.program,
                          focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
                 .padding(.leading, style.panePadding ?? 14).padding(.trailing, style.panePadding ?? 8)
@@ -918,15 +926,15 @@ struct PaneView: View {
         }
         // Inactive panes recede into the backdrop: faint fill, faint stroke, no lift.
         // The fill follows window-opacity so a translucent window stays see-through.
-        .background(Theme.paneTint.opacity((focused ? 1 : 0.35) * style.windowOpacity), in: shape)
+        .background(Theme.paneTint.opacity(move != nil ? 1 : (focused ? 1 : 0.35) * style.windowOpacity), in: shape)
         .overlay(shape.strokeBorder(Theme.paneStroke.opacity(focused ? 1 : 0.5), lineWidth: 1))
         .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 2).opacity(dropTarget ? 1 : 0))
         .dropDestination(for: PaneDrag.self) { items, _ in
-            guard !peek, let from = items.first?.id, from != id, ws.tab.layout.panes.contains(from) else { return false }
+            guard !peek, move == nil, let from = items.first?.id, from != id, ws.tab.layout.panes.contains(from) else { return false }
             ws.swap(from, with: id)
             return true
         } isTargeted: { dropTarget = $0 && !peek }
-        .shadow(color: .black.opacity(focused ? 0.10 : 0), radius: 12, y: 3)
+        .shadow(color: .black.opacity(move != nil ? 0.25 : focused ? 0.10 : 0), radius: 12, y: 3)
         .animation(.easeInOut(duration: 0.2), value: focused)
         .padding(style.paneGap / 2)
         .opacity(shown ? 1 : 0)
