@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Appearance, config &amp; Ghostty · Zurafa Docs</title><meta name="description" content="Zurafa offers Follow System, Light, and Dark modes. Open `⌘K` and choose an appearance directly; the change takes effect immediately. `⇧⌘A` switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.">
+  <title>Appearance, config &amp; Ghostty · Zurafa Docs</title><meta name="description" content="Zurafa offers Follow System, Light, and Dark modes. Open `⇧⌘P` and choose an appearance directly; the change takes effect immediately. `⇧⌘A` switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.">
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7ead7"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/appearance/">
   <link rel="icon" href="/assets/zurafa-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav id="site-nav" aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.33-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.34-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
     <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
   </div></header>
   <div class="docs-layout shell">
@@ -73,7 +73,7 @@
 <a href="/docs/changelog/" data-page="changelog">Changelog</a>
 </div>
     </div></aside>
-    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Personalization</div><h1>Appearance, config &amp; Ghostty</h1><div class="prose"><p>Zurafa offers Follow System, Light, and Dark modes. Open <code>⌘K</code> and choose an appearance directly; the change takes effect immediately. <code>⇧⌘A</code> switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.</p>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Personalization</div><h1>Appearance, config &amp; Ghostty</h1><div class="prose"><p>Zurafa offers Follow System, Light, and Dark modes. Open <code>⇧⌘P</code> and choose an appearance directly; the change takes effect immediately. <code>⇧⌘A</code> switches between light and dark in one press. Follow System updates with the macOS appearance. Zurafa remembers your choice across launches.</p>
 <h2 id="configuration-file">Configuration file</h2>
 <p>Press <code>⌘,</code> to open <code>~/.config/config.zurafa</code> (or <code>$XDG_CONFIG_HOME/config.zurafa</code>) in your default text editor. The first time, Zurafa writes a commented template that lists every setting; remove the <code>#</code> in front of a line to use it. Changes apply a moment after you save, and deleting a line returns that setting to its default.</p>
 <pre><code>theme = light:Catppuccin Latte,dark:Catppuccin Mocha
@@ -86,11 +86,11 @@ unfocused-pane-opacity = 0.7
 sidebar-width = 194
 sidebar-position = left
 tab-icon-stack = right</code></pre>
-<p><code>theme</code> accepts any Ghostty theme name from <code>~/.config/ghostty/themes</code> or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (<code>foreground</code>, <code>background</code>, <code>cursor-color</code>, <code>palette</code>, <code>font-family</code>, <code>font-size</code>) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. <code>sidebar-position</code> is <code>left</code> or <code>right</code>; <strong>Move Sidebar to Right</strong> in <code>⌘K</code> sets it for you. <code>tab-icon-stack</code> is <code>right</code>, <code>left</code>, <code>down</code> or <code>up</code>: where a tab&#x27;s other pane icons peek out from behind its icon.</p>
+<p><code>theme</code> accepts any Ghostty theme name from <code>~/.config/ghostty/themes</code> or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (<code>foreground</code>, <code>background</code>, <code>cursor-color</code>, <code>palette</code>, <code>font-family</code>, <code>font-size</code>) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. <code>sidebar-position</code> is <code>left</code> or <code>right</code>; <strong>Move Sidebar to Right</strong> in <code>⇧⌘P</code> sets it for you. <code>tab-icon-stack</code> is <code>right</code>, <code>left</code>, <code>down</code> or <code>up</code>: where a tab&#x27;s other pane icons peek out from behind its icon.</p>
 <h2 id="import-ghostty-settings">Import Ghostty settings</h2>
-<p>Choose <strong>Import Ghostty Settings</strong> from <code>⌘K</code>. Zurafa reads Ghostty&#x27;s standard XDG and macOS configuration paths, including supported includes and named light and dark themes. The import can apply the terminal font family, font size, foreground and background colors, cursor and selection colors, and the ANSI palette.</p>
+<p>Choose <strong>Import Ghostty Settings</strong> from <code>⇧⌘P</code>. Zurafa reads Ghostty&#x27;s standard XDG and macOS configuration paths, including supported includes and named light and dark themes. The import can apply the terminal font family, font size, foreground and background colors, cursor and selection colors, and the ANSI palette.</p>
 <p>The imported background color tints the entire workspace surface; terminal drawing areas stay transparent so the pane and window feel continuous. Color changes remain local to Zurafa after import. If you later edit Ghostty&#x27;s files, run the import again to refresh Zurafa&#x27;s copy.</p>
-<p>Choose <strong>Use Zurafa Terminal Defaults</strong> in <code>⌘K</code> to clear the imported settings. Ghostty keybindings, shell commands, and window layout are outside the import scope.</p>
+<p>Choose <strong>Use Zurafa Terminal Defaults</strong> in <code>⇧⌘P</code> to clear the imported settings. Ghostty keybindings, shell commands, and window layout are outside the import scope.</p>
 <h2 id="icons-and-fonts">Icons and fonts</h2>
 <p>Zurafa bundles Symbols Nerd Font Mono as a fallback for missing Nerd Font glyphs in terminal content. Your selected terminal font still renders ordinary text and glyphs it already contains. Zurafa also uses foreground-process information reported by the Rust PTY manager to choose pane and tab program icons when that information is available.</p>
 <h2 id="background-images">Background images</h2>

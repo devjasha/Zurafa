@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav id="site-nav" aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.33-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.34-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
     <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
   </div></header>
   <div class="docs-layout shell">
@@ -81,9 +81,22 @@
 <p>A tab is a top-level terminal layout. Add one with <code>⌘T</code>, the plus button, or the command picker. Select tabs in the top bar or with <code>⌘1</code> through <code>⌘9</code>. Press <code>⌥⌘T</code> to switch between horizontal and vertical tab bars. Rename the current tab from <code>⌘K</code>. The <strong>Close Tab</strong> command is <code>⌥⌘W</code> and closes every pane in that tab.</p>
 <h2 id="panes">Panes</h2>
 <p>Split the focused pane right with <code>⌘D</code> or down with <code>⇧⌘D</code>. The new pane receives its own shell or SSH process. Resize a split by dragging the divider. Click a pane to focus it; <code>⌘[</code> and <code>⌘]</code> cycle focus. To rearrange, drag a pane&#x27;s header onto another pane in the tab to swap the two, or press <code>⌥⌘[</code> / <code>⌥⌘]</code> to swap the focused pane with its neighbour. <code>⇧⌘↩</code> zooms the focused pane without closing the others. <code>⌘W</code> closes only the focused pane. Closing one side of a split collapses the layout while the surviving pane keeps its process.</p>
+<h2 id="floating-and-hidden-panes">Floating and hidden panes</h2>
+<p>A pane can leave its tab&#x27;s split layout and keep running.</p>
+<ul>
+<li><strong>Float</strong> a pane with <code>⌥⌘F</code> or the float button in its header. It sits over the tab, centered at 60% of the tab at first. Drag its header to move it and its bottom-right corner to resize it. Press <code>⌥⌘F</code> again, or click the dock button, to dock it back as a split beside the tab&#x27;s last pane.</li>
+<li><strong>Hide</strong> a pane with <code>⌃⌘H</code> or the hide button. It leaves every tab but keeps running. Hidden panes are listed under their workspace&#x27;s tabs in the vertical sidebar, and in the command picker as &quot;Show Hidden Pane&quot;. Click one to bring it back floating, or right-click it to dock it in the current tab. <code>⇧⌃⌘H</code> brings back the most recently hidden pane.</li>
+<li>A tab always keeps one docked pane. If you hide or close that pane, the tab&#x27;s first floating pane takes its place. Closing a tab closes its floating panes too. Hidden panes belong to the workspace, not to a tab.</li>
+<li>Floating and hidden panes survive a daemon restart. <code>zurafa panes</code> lists them, and <code>read</code>, <code>send</code> and <code>wait</code> work on them as before. On iPhone, floating panes appear in their tab&#x27;s pane bar, and hidden ones appear as rows under their workspace.</li>
+</ul>
+<p>From the CLI:</p>
+<pre><code>zurafa float t7                       # float t7 over its tab
+zurafa hide t7                        # take t7 out of every tab
+zurafa show t7                        # bring it back floating
+zurafa show t7 --split right -b t2    # or docked beside t2 (right or down)</code></pre>
 <h2 id="how-layout-updates-reach-the-app">How layout updates reach the app</h2>
 <p>The Rust daemon validates and commits each layout command, increments that session&#x27;s layout revision, and emits a <code>session_view_changed</code> event. The app then reads a fresh authoritative snapshot. Structural events can accompany the revision signal, but the frontend does not reconstruct a full layout by guessing from individual events. <a href="/docs/architecture/">Read the architecture guide</a>.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/agents/"><small>← Previous</small><strong>Connect your agents</strong></a><a href="/docs/shortcuts/"><small>Next →</small><strong>Commands &amp; shortcuts</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#sessions">Sessions</a><a href="#tabs">Tabs</a><a href="#panes">Panes</a><a href="#how-layout-updates-reach-the-app">How layout updates reach the app</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#sessions">Sessions</a><a href="#tabs">Tabs</a><a href="#panes">Panes</a><a href="#floating-and-hidden-panes">Floating and hidden panes</a><a href="#how-layout-updates-reach-the-app">How layout updates reach the app</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>

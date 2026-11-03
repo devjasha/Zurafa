@@ -1,0 +1,8 @@
+- **Floating and hidden panes.** Float a pane over its tab with ⌥⌘F or the float button in its header; drag the header to move it and the bottom-right corner to resize it. Hide a pane with ⌃⌘H: it keeps running and is listed under its workspace in the sidebar, where a click brings it back. From the terminal: `zurafa float`, `zurafa hide` and `zurafa show`.
+- **Let agents drive the app.** Turn on **Settings → Integrations → Allow agents to control Zurafa**, and agents can switch workspaces and tabs, focus or zoom a pane, open a preview, toggle the sidebar and change the font size with `zurafa actions` and `zurafa do` (also as MCP tools). It is off by default, and nothing an agent can do this way closes anything.
+- **Mac and iPhone no longer fight over a terminal's size.** The device you type on or focus sizes the terminal; the other one shows it at that size instead of resizing it back.
+- **Zurafa agents Live Activity on iPhone.** Working and blocked agents show on the Lock Screen and in the Dynamic Island, with an alert when one becomes blocked.
+- The command palette moved to ⇧⌘P; ⌘K now changes session.
+- Delete a workspace from its header on iPhone.
+- Remote panes show the program running in them instead of a globe, and pi panes show the Pi icon.
+- This update needs a server restart (**Restart Server to Finish Update…** in the menu bar); it closes open terminals, and their layout comes back afterwards.

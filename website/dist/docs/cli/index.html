@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav id="site-nav" aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.33-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.34-macos-arm64.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
     <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
   </div></header>
   <div class="docs-layout shell">
@@ -88,6 +88,8 @@ zurafa session inspect            # inspect the current or default session
 zurafa pane inspect               # inspect the current pane inside a Zurafa terminal
 zurafa tab new --label Build      # create a new tab in the current session
 zurafa split --axis vertical      # split the current pane
+zurafa float t7                   # float a pane over its tab; `hide` takes it out of every tab
+zurafa show t7 --split right -b t2  # bring a hidden or floating pane back, docked beside t2
 zurafa preview README.md          # open a file in the preview beside the current pane</code></pre>
 <p>Run <code>zurafa help</code> for the full command list.</p>
 <h2 id="driving-panes-from-agents">Driving panes from agents</h2>
@@ -113,6 +115,18 @@ zurafa report done &quot;Deployed to staging&quot;
 zurafa report clear</code></pre>
 <p><code>zurafa setup claude</code> and <code>zurafa setup codex</code> add these reports to the agent&#x27;s hooks for you; Pi sends them on its own. The hooks also run <code>zurafa hook claude</code> or <code>zurafa hook codex</code>, which read the hook event from stdin. They show the agent&#x27;s own subagents in its card. See <a href="/docs/agents/#subagents">Connect your agents</a>.</p>
 <p><code>--id</code> and <code>--title</code> report one of several tasks in a pane, and <code>--app</code> names the program.</p>
+<h2 id="letting-agents-control-the-app">Letting agents control the app</h2>
+<p>Tabs and splits change the layout, but they don&#x27;t change what you see in the app. If you allow it, agents can do that too: switch the workspace in view, select a tab, focus or zoom a pane, open a preview, toggle the sidebar and change the font size.</p>
+<p>This is off by default. Turn it on in <strong>Settings → Integrations → Allow agents to control Zurafa</strong>. While it is off, the app offers no actions and <code>zurafa do</code> says where to turn it on. Agents can&#x27;t close workspaces or tabs or quit Zurafa this way.</p>
+<pre><code>zurafa actions                            # the actions each connected app offers
+zurafa do workspace.select workspace=Work # by id, label or position
+zurafa do tab.select tab=2                # a tab in view, by position or id
+zurafa do pane.focus pane=t7              # shows the pane&#x27;s workspace and tab
+zurafa do pane.zoom pane=t7 enabled=true  # without pane, the focused one; without enabled, toggles
+zurafa do preview.open path=/tmp/plan.md  # beside the focused pane, or pane=t7
+zurafa do sidebar.toggle
+zurafa do font.bigger                     # also font.smaller and font.reset</code></pre>
+<p><code>zurafa do</code> waits for the app&#x27;s answer, 10 seconds unless <code>-t</code> says otherwise. When more than one app is connected to the server, <code>zurafa actions</code> lists each with a client id and <code>-C CLIENT</code> picks one. <code>zurafa mcp</code> offers the same as the <code>list_actions</code> and <code>do_action</code> tools.</p>
 <h2 id="taxonomy">Taxonomy</h2>
 <p>Zurafa&#x27;s public UI uses these names:</p>
 <ul>
@@ -158,7 +172,7 @@ zurafa --json pane inspect t1</code></pre>
 <tr><td>4</td><td>The daemon could not be reached</td></tr>
 <tr><td>5</td><td><code>--timeout</code> passed</td></tr>
 </table></div></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/ipc-reference/"><small>← Previous</small><strong>IPC protocol</strong></a><a href="/docs/build/"><small>Next →</small><strong>Build from source</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#try-it">Try it</a><a href="#commands">Commands</a><a href="#driving-panes-from-agents">Driving panes from agents</a><a href="#taxonomy">Taxonomy</a><a href="#command-targets">Command targets</a><a href="#machine-readable-output">Machine-readable output</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#try-it">Try it</a><a href="#commands">Commands</a><a href="#driving-panes-from-agents">Driving panes from agents</a><a href="#letting-agents-control-the-app">Letting agents control the app</a><a href="#taxonomy">Taxonomy</a><a href="#command-targets">Command targets</a><a href="#machine-readable-output">Machine-readable output</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>
