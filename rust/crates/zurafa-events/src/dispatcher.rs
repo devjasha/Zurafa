@@ -509,6 +509,12 @@ impl Dispatcher {
         }
         Ok(())
     }
+    /// Whether `block` is the only docked pane of its tab, so floating it would leave the tab empty.
+    pub fn sole_docked(&self, session: &str, block: &str) -> bool {
+        let i = self.inner.lock().unwrap();
+        let only = Layout::Block { block_id: block.to_string() };
+        i.snapshot.sessions.get(session).is_some_and(|s| s.windows.iter().any(|w| w.layout == only))
+    }
     pub fn add_block(
         &self,
         session: &str,

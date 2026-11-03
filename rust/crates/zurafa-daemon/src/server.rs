@@ -576,6 +576,19 @@ async fn request(
             }
         }
         Request::Layout { id, command } => {
+            // A tab keeps one docked pane: floating its only one opens a shell in its place first.
+            if let Command::Float { session, block, .. } = &command {
+                if terms.dispatcher.sole_docked(session, block) {
+                    let (t, session, block) = (terms.clone(), session.clone(), block.clone());
+                    let (cols, rows) = terms.size(&block).unwrap_or((80, 24));
+                    let options = SpawnOptions { cols, rows, cwd: None, command: None, session, split: Some(block), axis: Axis::Horizontal, label: label(), raw: false, parent: None };
+                    match tokio::task::spawn_blocking(move || t.spawn_at(options)).await {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(e)) => return Some(error(id, e)),
+                        Err(e) => return Some(error(id, e)),
+                    }
+                }
+            }
             let t = terms.clone();
             match tokio::task::spawn_blocking(move || t.command(command)).await {
                 Ok(Ok(())) => json!({"id":id,"type":"ok"}),
@@ -904,6 +917,19 @@ mod tests {
         send("phone", json!({"type":"release","terminal":id}));
         assert_eq!(size(), (json!(100), json!(30), json!("mac")));
         terms.kill(&id).unwrap();
+    }
+    #[tokio::test]
+    async fn floating_a_tabs_only_pane_opens_a_shell_in_its_place() {
+        let terms = Terminals::new();
+        let mut c = Conn::new(&terms);
+        let tab = c.send(json!({"id":1,"type":"layout.tab","session":"default","cols":80,"rows":24,"command":["/bin/cat"]})).await.unwrap();
+        let pane = tab["terminal"].as_str().unwrap().to_string();
+        let got = c.send(json!({"id":2,"type":"layout.command","command":{"op":"float","session":"default","block":pane}})).await.unwrap();
+        assert_eq!(got["type"], "ok", "{got}");
+        let s = terms.dispatcher.snapshot().sessions["default"].clone();
+        let w = s.windows.iter().find(|w| w.floating.iter().any(|f| f.block_id == pane)).expect("pane floats");
+        assert!(matches!(&w.layout, zurafa_events::Layout::Block { block_id } if *block_id != pane), "a new shell is docked behind it: {:?}", w.layout);
+        for b in s.blocks.keys() { let _ = terms.kill(b); }
     }
     #[tokio::test]
     async fn appearance_is_kept_and_broadcast() {
