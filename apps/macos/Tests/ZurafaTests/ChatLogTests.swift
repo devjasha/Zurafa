@@ -28,6 +28,26 @@ final class ChatLogTests: XCTestCase {
         XCTAssertEqual(log.items.map(\.text), ["hi gemini", "Hello!"])
     }
 
+    func testTurnsFoldTheWorkAndEndOnTheAnswer() {
+        var log = ChatLog()
+        for line in [
+            #"{"kind":"user","id":"u1","text":"fix it","at":"2026-11-08T10:00:00.000Z"}"#,
+            #"{"kind":"assistant","id":"a1","text":"Looking.","at":"2026-11-08T10:00:05.000Z"}"#,
+            #"{"kind":"tool","id":"t1","tool":"Bash","input":"cargo test","at":"2026-11-08T10:00:06.000Z"}"#,
+            #"{"kind":"result","for":"t1","text":"ok","ok":true,"at":"2026-11-08T10:01:00.000Z"}"#,
+            #"{"kind":"assistant","id":"a2","text":"Fixed.","at":"2026-11-08T10:01:56.000Z"}"#,
+            #"{"kind":"user","id":"u2","text":"thanks"}"#,
+            #"{"kind":"assistant","id":"a3","text":"Checking one more thing."}"#,
+        ] { log.add(Data(line.utf8)) }
+        let turns = log.turns(live: true)
+        XCTAssertEqual(turns.map { $0.work.map(\.id) }, [["a1", "t1"], ["a3"]])
+        XCTAssertEqual(turns[0].answer?.text, "Fixed.")
+        XCTAssertEqual(turns[0].end!.timeIntervalSince(turns[0].start!), 116)
+        XCTAssertNil(turns[1].answer, "a live turn's latest text may be a step")
+        XCTAssertEqual(log.turns(live: false)[1].answer?.id, "a3")
+        XCTAssertEqual(duration(116), "1m 56s")
+    }
+
     func testBlocksDecodeTheAgentSessionTheyRun() throws {
         let json = #"{"block_id":"t4","running":true,"statuses":{"records":{}},"resume":{"agent":"claude","session":"c0ef"}}"#
         let block = try JSONDecoder().decode(BlockSnapshot.self, from: Data(json.utf8))
