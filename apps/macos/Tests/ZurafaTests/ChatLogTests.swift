@@ -48,6 +48,16 @@ final class ChatLogTests: XCTestCase {
         XCTAssertEqual(duration(116), "1m 56s")
     }
 
+    func testSettingsFollowTheTranscriptAndBecomeStartFlags() {
+        var log = ChatLog()
+        log.add(Data(#"{"kind":"settings","model":"gpt-6-sol","mode":"bypassPermissions"}"#.utf8))
+        log.add(Data(#"{"kind":"settings","effort":"low"}"#.utf8))
+        XCTAssertEqual(log.settings, AgentSettings(model: "gpt-6-sol", effort: "low", mode: "bypassPermissions"))
+        XCTAssertEqual(NewChat.flags("codex", log.settings), ["-m", "gpt-6-sol", "-c", "model_reasoning_effort=low", "--dangerously-bypass-approvals-and-sandbox"])
+        XCTAssertEqual(NewChat.flags("claude", AgentSettings(mode: "plan")), ["--permission-mode", "plan"])
+        XCTAssertEqual(NewChat.flags("pi", AgentSettings(effort: "high")), ["--thinking", "high"])
+    }
+
     func testBlocksDecodeTheAgentSessionTheyRun() throws {
         let json = #"{"block_id":"t4","running":true,"statuses":{"records":{}},"resume":{"agent":"claude","session":"c0ef"}}"#
         let block = try JSONDecoder().decode(BlockSnapshot.self, from: Data(json.utf8))

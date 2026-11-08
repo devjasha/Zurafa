@@ -33,6 +33,8 @@ struct ChatLog {
     /// The agent has no transcript zurafa-orch can read: only its answers come in, so the view
     /// keeps the messages it sends itself.
     private(set) var statusOnly = false
+    /// The model, effort and permission mode the agent last showed running with.
+    private(set) var settings = AgentSettings()
 
     /// A message typed in the chat, for an agent whose transcript can't show it.
     mutating func sent(_ text: String) {
@@ -46,6 +48,10 @@ struct ChatLog {
         let s = { (k: String) in v[k]?.string ?? "" }
         let at = v["at"]?.string.flatMap { try? Self.iso.parse($0) }
         if kind == "mode" { statusOnly = s("mode") == "status"; return }
+        if kind == "settings" {
+            settings.merge(AgentSettings(model: v["model"]?.string, effort: v["effort"]?.string, mode: v["mode"]?.string))
+            return
+        }
         if kind == "result" {
             guard let i = index[s("for")] else { return }
             items[i].result = s("text")
@@ -150,6 +156,9 @@ struct ChatView: View {
     @EnvironmentObject var ws: Workspace
     @StateObject private var feed = ChatFeed()
     @State private var draft = ""
+    /// What the chips changed, shown until the transcript catches up.
+    @State private var changed = AgentSettings()
+    @State private var problem: String?
     @FocusState private var composing: Bool
 
     var body: some View {
@@ -181,6 +190,10 @@ struct ChatView: View {
             Group {
                 if m.record?.state == "blocked" { blocked(m) }
                 composer(m)
+                ComposerFooter(dir: m.pwd ?? NSHomeDirectory(), working: live) {
+                    Label(m.pwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? m.cwd, systemImage: "folder").help(m.pwd ?? m.cwd)
+                    if let problem { Text(problem).foregroundStyle(.red).lineLimit(1).help(problem) }
+                }
             }
             .padding(.horizontal, 12)
             .frame(maxWidth: ChatView.width).frame(maxWidth: .infinity)
@@ -217,9 +230,33 @@ struct ChatView: View {
     }
 
     private func composer(_ m: PaneMeta) -> some View {
-        Composer(draft: $draft, placeholder: "Ask \(m.agentName), or describe a change…", focus: $composing, send: send) {
-            AgentChip(program: m.program, name: m.agentName)
+        var settings = feed.log.settings
+        settings.merge(changed)
+        let agent: String = m.thread?.agent ?? { switch m.program { case .claude: "claude"; case .codex: "codex"; case .pi: "pi"; default: "" } }()
+        return Composer(draft: $draft, focus: $composing, send: send) {
+            // Only Claude Code takes these while it runs; the others show what they started with.
+            AgentControls(agent: agent, settings: settings, change: agent == "claude" ? apply : nil, attach: attach)
         }
+    }
+
+    private func apply(_ s: AgentSettings) {
+        let before = changed
+        changed.merge(s)
+        problem = nil
+        var args = ["set", pane]
+        for (flag, value) in [("--model", s.model), ("--effort", s.effort), ("--mode", s.mode)] {
+            if let value { args += [flag, value] }
+        }
+        Task {
+            if await runOrch(args) == nil {
+                changed = before
+                problem = "Could not change that in this session"
+            }
+        }
+    }
+
+    private func attach(_ urls: [URL]) {
+        draft += (draft.isEmpty || draft.hasSuffix(" ") ? "" : " ") + urls.map { "@" + $0.path }.joined(separator: " ") + " "
     }
 
     private func send() {
@@ -438,51 +475,37 @@ private struct WorkRow: View {
 /// The chat's input, as in Monocode: the text on top, the agent's chips and the send button under it.
 struct Composer<Chips: View>: View {
     @Binding var draft: String
-    let placeholder: String
+    var placeholder = "Ask, build, / for commands, @ for references…"
     var focus: FocusState<Bool>.Binding
     let send: () -> Void
     @ViewBuilder let chips: Chips
 
     var body: some View {
         let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             TextField(placeholder, text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .lineLimit(1...8)
+                .font(.system(size: 14))
+                .lineLimit(1...10)
+                .frame(minHeight: 44, alignment: .topLeading)
                 .focused(focus)
                 .onSubmit(send)
             HStack(spacing: 6) {
                 chips
                 Spacer(minLength: 0)
                 Button(action: send) {
-                    Image(systemName: "arrow.up").font(.system(size: 12, weight: .semibold))
-                        .frame(width: 26, height: 26)
-                        .foregroundStyle(ready ? Theme.background : Theme.ink.opacity(0.45))
-                        .background(ready ? Theme.ink : Theme.ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    Image(systemName: "chevron.up").font(.system(size: 13, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                        .foregroundStyle(Theme.ink.opacity(ready ? 0.9 : 0.4))
+                        .background(Theme.ink.opacity(ready ? 0.25 : 0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(!ready)
                 .help("Send (Return; ⌥Return for a new line)")
             }
         }
-        .padding(12)
-        .background(Theme.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.ink.opacity(focus.wrappedValue ? 0.22 : 0.1)))
-    }
-}
-
-/// The agent a chat talks to, as a chip in the composer.
-struct AgentChip: View {
-    let program: Program
-    let name: String
-    var body: some View {
-        HStack(spacing: 5) {
-            AgentGlyph(program: program).frame(width: 12, height: 12)
-            Text(name)
-        }
-        .font(.system(size: 12))
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(Theme.ink.opacity(0.06), in: Capsule())
+        .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 10)
+        .background(Theme.ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.ink.opacity(focus.wrappedValue ? 0.2 : 0.1)))
     }
 }
