@@ -28,6 +28,8 @@ struct PaneMeta {
     /// The pane that spawned this one, and when this one started.
     var parent: String?
     var started: Date?
+    /// The agent conversation running in the pane, which the chat view shows.
+    var thread: AgentThread?
     /// Native subagents of the pane's agent, reported as "agent/<id>". They run inside it with no
     /// pane of their own, so they show in its agent card and never stand for the pane's own state.
     var subagents: [String: ProgramStatus] = [:]
@@ -261,6 +263,11 @@ enum EditorKind: String, Identifiable {
         m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
                                    argv: block.foreground?.argv, remote: session.remote != nil,
                                    remoteShell: session.remote?.shellProgram ?? .ssh)
+        // `resume` outlives the agent: once a plain shell is back in front, the pane no longer runs the thread.
+        // A shell still running `-c` is the one `zurafa-orch spawn` started the agent with (zurafa-orch's agent_left).
+        let fg = block.foreground
+        let shellBack = ["zsh", "bash", "fish", "sh", "dash", "ksh"].contains(fg?.name ?? "") && !(fg?.argv ?? []).contains("-c")
+        m.thread = block.running && !shellBack ? block.resume : nil
         return m
     }
 
@@ -391,6 +398,22 @@ enum EditorKind: String, Identifiable {
     func dock(_ id: String, beside target: String, axis: Axis = .horizontal) {
         command(["op": .string("dock"), "session": .string(sessionID), "block": .string(id), "target": .string(target), "axis": .string(axis.rawValue)])
     }
+    /// Agent panes showing their chat instead of their terminal.
+    @Published var chatPanes: Set<String> = []
+    func toggleChat(_ id: String) {
+        if chatPanes.remove(id) == nil { chatPanes.insert(id) }
+    }
+    func toggleChatFocused() { if metas[tab.focus]?.thread != nil { toggleChat(tab.focus) } }
+    /// Types `text` into the pane's agent the way `zurafa send` does: a bracketed paste, then Enter
+    /// on its own, so a multi-line message arrives whole instead of submitting at its first line.
+    func sendChat(_ pane: String, _ text: String) {
+        let clean = text.replacingOccurrences(of: "\u{1b}", with: "")
+        daemon.send(Msg(type: "input", terminal: pane, data: Data("\u{1b}[200~\(clean)\u{1b}[201~".utf8)))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [daemon] in
+            daemon.send(Msg(type: "input", terminal: pane, data: Data("\r".utf8)))
+        }
+    }
+
     func hide(_ id: String) { command(["op": .string("hide"), "session": .string(sessionID), "block": .string(id)]) }
     /// Floats the focused pane, or docks a floating one beside the tab's last docked pane.
     func toggleFloating() {
@@ -907,6 +930,7 @@ struct Command: Identifiable {
         Command(title: "Close Pane", key: "w") { $0.closeFocused() },
         Command(title: "Toggle Zoom", key: .return, mods: [.command, .shift]) { $0.toggleZoom() },
         Command(title: "Float or Dock Pane", key: "f", mods: [.command, .option]) { $0.toggleFloating() },
+        Command(title: "Chat or Terminal", key: "c", mods: [.command, .option]) { $0.toggleChatFocused() },
         Command(title: "Hide Pane", key: "h", mods: [.command, .control]) { $0.hideFocused() },
         Command(title: "Show Hidden Pane", key: "h", mods: [.command, .control, .shift]) { $0.showHidden() },
         Command(title: "Next Pane", key: "]") { $0.focusStep(1) },
