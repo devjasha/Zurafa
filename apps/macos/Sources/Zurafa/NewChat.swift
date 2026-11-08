@@ -69,30 +69,12 @@ struct NewChat: View {
         }
     }
 
-    /// The command-line flags that start `agent` with what was picked; unpicked keeps its default.
-    static func flags(_ agent: String, _ s: AgentSettings) -> [String] {
-        switch agent {
-        case "claude":
-            return (s.model.map { ["--model", $0] } ?? []) + (s.effort.map { ["--effort", $0] } ?? [])
-                + (s.mode.map { ["--permission-mode", $0] } ?? [])
-        case "codex":
-            let access: [String: [String]] = ["manual": ["-a", "untrusted"], "acceptEdits": ["-a", "on-request", "-s", "workspace-write"],
-                                              "auto": ["-a", "never", "-s", "workspace-write"], "bypassPermissions": ["--dangerously-bypass-approvals-and-sandbox"]]
-            return (s.model.map { ["-m", $0] } ?? []) + (s.effort.map { ["-c", "model_reasoning_effort=\($0)"] } ?? [])
-                + (s.mode.flatMap { access[$0] } ?? [])
-        case "pi":
-            return (s.model.map { ["--model", $0] } ?? []) + (s.effort.map { ["--thinking", $0] } ?? [])
-        default:
-            return []
-        }
-    }
-
     private func start(in dir: String) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !starting else { return }
         starting = true
         problem = nil
-        let flags = Self.flags(agent, settings)
+        let flags = settings.startFlags(agent)
         Task {
             let out = await runOrch(["spawn", agent, text, "--cwd", dir, "--no-parent", "-l", "\(agent): \(text.prefix(24))"] + (flags.isEmpty ? [] : ["--"] + flags))
             starting = false

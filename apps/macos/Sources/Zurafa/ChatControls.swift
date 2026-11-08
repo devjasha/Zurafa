@@ -1,24 +1,5 @@
 import SwiftUI
 
-/// What an agent runs with, as its transcript shows (`settings` lines from `zurafa-orch follow`);
-/// nil is the agent's own default. Modes use Claude Code's names for every agent.
-struct AgentSettings: Equatable {
-    var model: String?
-    var effort: String?
-    var mode: String?
-    mutating func merge(_ other: AgentSettings) {
-        model = other.model ?? model
-        effort = other.effort ?? effort
-        mode = other.mode ?? mode
-    }
-}
-
-struct AgentModel: Identifiable, Hashable {
-    let id: String
-    let name: String
-    var efforts: [String] = []
-}
-
 /// The models each agent offers: Claude Code's are fixed, Codex lists its own in
 /// ~/.codex/models_cache.json, Pi prints its catalog (`pi --list-models`, read once).
 @MainActor final class ModelCatalog: ObservableObject {
@@ -89,19 +70,6 @@ struct AgentModel: Identifiable, Hashable {
             piLoading = false
         }
     }
-}
-
-/// Permission modes, by Claude Code's name, as the access menu shows them.
-struct AccessMode {
-    let id: String, title: String, icon: String, detail: String
-    static let all = [
-        AccessMode(id: "manual", title: "Supervised", icon: "lock", detail: "Ask before commands and file changes."),
-        AccessMode(id: "acceptEdits", title: "Auto-accept edits", icon: "square.and.pencil", detail: "Auto-approve edits, ask before other actions."),
-        AccessMode(id: "auto", title: "Auto", icon: "sparkles", detail: "The agent decides what needs your approval."),
-        AccessMode(id: "bypassPermissions", title: "Full access", icon: "exclamationmark.shield", detail: "Allow commands and edits without asking."),
-    ]
-    static let plan = AccessMode(id: "plan", title: "Plan mode", icon: "lightbulb", detail: "Review a plan before building.")
-    static func of(_ id: String?) -> AccessMode? { (all + [plan]).first { $0.id == id } }
 }
 
 /// The composer's chips, as in Monocode: "+" to add to the message, the model with its reasoning

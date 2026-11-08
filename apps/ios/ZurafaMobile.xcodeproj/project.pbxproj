@@ -14,6 +14,7 @@
 		A10000000000000000000005 /* NerdFontFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* NerdFontFallback.swift */; };
 		A10000000000000000000006 /* Resources/SymbolsNerdFontMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */; };
 		A10000000000000000000007 /* Program.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Program.swift */; };
+		A1000000000000000000C0DE /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* ChatModel.swift */; };
 		A10000000000000000000008 /* ZurafaAgents.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* ZurafaAgents.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -48,6 +49,7 @@
 		A20000000000000000000004 /* NerdFontFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NerdFontFallback.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/SymbolsNerdFontMono-Regular.ttf"; sourceTree = "<group>"; };
 		A20000000000000000000006 /* Program.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Program.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* ChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModel.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* ZurafaMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZurafaMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000011 /* ZurafaAgents.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ZurafaAgents.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -116,6 +118,7 @@
 				A20000000000000000000003 /* Layout.swift */,
 				A20000000000000000000004 /* NerdFontFallback.swift */,
 				A20000000000000000000006 /* Program.swift */,
+				A20000000000000000000007 /* ChatModel.swift */,
 				A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */,
 			);
 			name = Shared;
@@ -248,6 +251,7 @@
 				A10000000000000000000007 /* Program.swift in Sources */,
 				A10000000000000000000002 /* EventModels.swift in Sources */,
 				A10000000000000000000003 /* Layout.swift in Sources */,
+				A1000000000000000000C0DE /* ChatModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

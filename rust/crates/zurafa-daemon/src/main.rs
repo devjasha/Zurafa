@@ -1,5 +1,6 @@
 mod actions;
 mod awake;
+mod chat;
 mod hosts;
 mod listen;
 mod login;
