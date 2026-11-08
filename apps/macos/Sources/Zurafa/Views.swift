@@ -298,6 +298,9 @@ struct RootView: View {
 
     @ViewBuilder private var terminalContent: some View {
         HStack(spacing: 0) {
+            if ws.fileTreeOpen {
+                FileTreePane().frame(minWidth: 200, idealWidth: 260, maxWidth: 340)
+            }
             Group {
                 if ws.tabs.isEmpty {
                     Text("Starting terminal…").foregroundStyle(Theme.inkSoft).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -362,6 +365,7 @@ struct TopBar: View {
             AgentSummary()
             UpdateButton()
             PaletteButton()
+            BarButton(symbol: "sidebar.left", help: "Toggle File Tree (⌥⌘B)") { ws.fileTreeOpen.toggle() }
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
         }
         .padding(.trailing, 6)
@@ -441,6 +445,7 @@ struct VerticalTabSidebar: View {
                 Spacer(minLength: 0)
                 UpdateButton()
                 PaletteButton()
+                BarButton(symbol: "sidebar.left", help: "Toggle File Tree (⌥⌘B)") { ws.fileTreeOpen.toggle() }
                 BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
             }
             .padding(.trailing, 4)

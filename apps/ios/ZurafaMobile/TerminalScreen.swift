@@ -41,6 +41,8 @@ struct TerminalScreen: View {
     var body: some View {
         TerminalPane(id: id)
             .id(id)
+            // The pill animates a pane switch; the terminal swaps at once instead of crossfading two live grids.
+            .transaction { $0.animation = nil }
             .padding(.horizontal, 6)
             .background((mac.appearance.map { Color(hex: $0.colors(scheme).background) } ?? Color(white: 0.08)).ignoresSafeArea())
             .safeAreaInset(edge: .bottom) {

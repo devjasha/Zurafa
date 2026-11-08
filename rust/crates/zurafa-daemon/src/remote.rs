@@ -60,7 +60,8 @@ fn binary_for(uname: &str) -> Option<PathBuf> {
     let triple = match uname.trim() {
         "Linux x86_64" => "x86_64-unknown-linux-musl",
         "Linux aarch64" | "Linux arm64" => "aarch64-unknown-linux-musl",
-        "Darwin arm64" if cfg!(all(target_os = "macos", target_arch = "aarch64")) => return Some(exe),
+        // shortcut: assumes this binary is universal (bundle.sh builds it so); a bare `cargo build` would upload the wrong arch to a Mac of the other kind.
+        "Darwin arm64" | "Darwin x86_64" if cfg!(target_os = "macos") => return Some(exe),
         _ => return None,
     };
     let dir = env::var_os("ZURAFA_REMOTE_BINARIES")
@@ -673,8 +674,9 @@ mod tests {
     #[test]
     fn picks_a_build_per_remote_platform() {
         assert_eq!(binary_for("FreeBSD amd64"), None);
-        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        if cfg!(target_os = "macos") {
             assert_eq!(binary_for("Darwin arm64\n"), env::current_exe().ok());
+            assert_eq!(binary_for("Darwin x86_64\n"), env::current_exe().ok());
         }
     }
 }

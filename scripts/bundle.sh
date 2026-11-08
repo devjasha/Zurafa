@@ -25,14 +25,26 @@ case "$variant" in
 esac
 app="$root/build/$app_name.app"
 
-(cd "$root/rust" && cargo build --release)
+# Universal: one download for Apple silicon and Intel Macs.
+mac_targets=(aarch64-apple-darwin x86_64-apple-darwin)
+(cd "$root/rust" && rustup target add "${mac_targets[@]}" >/dev/null &&
+  cargo build --release $(printf -- '--target %s ' "${mac_targets[@]}"))
+mkdir -p "$root/build"
+for b in zurafa-daemon zurafa; do
+  lipo -create -output "$root/build/$b" "$root/rust/target/"{aarch64,x86_64}"-apple-darwin/release/$b"
+done
 remote_targets=(x86_64-unknown-linux-musl aarch64-unknown-linux-musl)
 (cd "$root/rust" && rustup target add "${remote_targets[@]}" >/dev/null &&
   cargo build --release -p zurafa-daemon $(printf -- '--target %s ' "${remote_targets[@]}"))
 # The app's own Tailscale device (Settings → Server), a Go program because tsnet is Go.
-(cd "$root/tailscale" && go build -trimpath -ldflags="-s -w" -o "$root/build/zurafa-tailscale" .)
-(cd "$root/apps/macos" && swift build -c release)
-bin="$(cd "$root/apps/macos" && swift build -c release --show-bin-path)"
+# cgo otherwise targets the build machine's macOS, and the helper would not launch on older systems.
+for a in arm64 amd64; do
+  (cd "$root/tailscale" && CGO_CFLAGS=-mmacosx-version-min=14.0 CGO_LDFLAGS=-mmacosx-version-min=14.0 CGO_ENABLED=1 GOARCH=$a go build -trimpath -ldflags="-s -w" -o "$root/build/zurafa-tailscale-$a" .)
+done
+lipo -create -output "$root/build/zurafa-tailscale" "$root/build/zurafa-tailscale-"{arm64,amd64}
+swift_arch=(-c release --arch arm64 --arch x86_64)
+(cd "$root/apps/macos" && swift build "${swift_arch[@]}")
+bin="$(cd "$root/apps/macos" && swift build "${swift_arch[@]}" --show-bin-path)"
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
@@ -59,11 +71,11 @@ cp -R "$bin/Highlightr_Highlightr.bundle" "$app/Contents/Resources/Highlightr_Hi
 cp -R "$bin/SwiftMath_SwiftMath.bundle" "$app/Contents/Resources/SwiftMath_SwiftMath.bundle"
 # Its fonts ship executable; signing them adds xattrs that Sparkle cannot diff, so no deltas get built.
 find "$app/Contents/Resources/SwiftMath_SwiftMath.bundle" -type f -exec chmod a-x {} +
-cp "$root/rust/target/release/zurafa-daemon" "$app/Contents/MacOS/zurafa-daemon"
+cp "$root/build/zurafa-daemon" "$app/Contents/MacOS/zurafa-daemon"
 cp "$root/build/zurafa-tailscale" "$app/Contents/MacOS/zurafa-tailscale"
 # Resources, not MacOS: a "zurafa" file there would collide with the "Zurafa" app
 # executable on the case-insensitive APFS volumes macOS ships by default.
-cp "$root/rust/target/release/zurafa" "$app/Contents/Resources/zurafa"
+cp "$root/build/zurafa" "$app/Contents/Resources/zurafa"
 # Daemons uploaded to Linux hosts for remote sessions. Not executable here: the release
 # script signs every executable in Resources, and xattr signatures on ELF files break Sparkle deltas.
 for target in "${remote_targets[@]}"; do

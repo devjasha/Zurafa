@@ -106,6 +106,7 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var vmHosts: [RemoteHost] = []
     @Published var paletteOpen = false
     @Published var sidebarHidden = false
+    @Published var fileTreeOpen = false
     @Published var sessionPickerOpen = false
     @Published var editor: EditorKind?
     @Published private(set) var editingHost: RemoteHost?
@@ -381,6 +382,12 @@ enum EditorKind: String, Identifiable {
         return true
     }
     func closePreview() { previews[sessionID] = nil }
+    /// Types `path` at the focused pane's prompt, relative to its directory when inside it.
+    func insertPath(_ path: String) {
+        let pwd = meta(tab.focus).pwd.map { $0.hasSuffix("/") ? $0 : $0 + "/" }
+        let shown = pwd.map { path.hasPrefix($0) ? String(path.dropFirst($0.count)) : path } ?? path
+        daemon.send(Msg(type: "input", terminal: tab.focus, data: Data((Self.shellQuotedPath(shown) + " ").utf8)))
+    }
     func openPeek(_ pane: String) { peeks[sessionID] = pane }
     func closePeek() { peeks[sessionID] = nil; peekFocused = false }
     func float(_ id: String, frame: [Double]? = nil, in session: String? = nil) {
@@ -900,6 +907,7 @@ struct Command: Identifiable {
         Command(title: "Close Tab", key: "w", mods: [.command, .option]) { $0.closeTab() },
         Command(title: "Toggle Tab Layout", key: "t", mods: [.command, .option]) { $0.toggleTabStripLayout() },
         Command(title: "Toggle Sidebar", key: "b") { $0.sidebarHidden.toggle() },
+        Command(title: "Toggle File Tree", key: "b", mods: [.command, .option]) { $0.fileTreeOpen.toggle() },
         Command(title: "Go to Directory", key: "g", mods: [.command, .shift]) { $0.editor = .goDirectory },
         Command(title: "Refresh Sessions", key: "r") { $0.refreshSessions() },
         Command(title: "Split Right", key: "d") { $0.split(.horizontal) },

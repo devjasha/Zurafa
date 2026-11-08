@@ -171,7 +171,7 @@ struct GitStatus: Equatable {
         return status
     }
 
-    private static func git(_ args: [String], in dir: String) -> String? {
+    static func git(_ args: [String], in dir: String) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["-C", dir] + args

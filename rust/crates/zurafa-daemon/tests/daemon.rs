@@ -535,7 +535,7 @@ fn bridge_starts_detached_daemon_and_attach_replays_raw_output() {
 }
 
 /// End to end without a network: a fake `ssh` runs the remote command locally under a fake HOME.
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(target_os = "macos")]
 #[test]
 fn remote_helper_uploads_daemon_survives_a_dropped_connection_and_returns_exit_code() {
     use std::os::unix::fs::PermissionsExt;

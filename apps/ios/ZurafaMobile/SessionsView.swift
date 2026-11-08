@@ -32,7 +32,8 @@ struct SessionsView: View {
                             NavigationLink(value: id) {
                                 PaneRow(label: window.label, block: session.blocks[id], remote: session.remote,
                                         behind: window.panes.filter { $0 != id }.prefix(2)
-                                            .map { session.blocks[$0]?.program(remote: session.remote) ?? .shell })
+                                            .map { session.blocks[$0]?.program(remote: session.remote) ?? .shell },
+                                        agentStates: window.panes.flatMap { session.blocks[$0]?.statuses.agentStates ?? [] })
                             }
                             .listRowBackground(rowBackground)
                             .swipeActions {
@@ -135,6 +136,7 @@ struct PaneRow: View {
     let remote: RemoteHost?
     /// The tab's other panes, peeking out behind its tile.
     var behind: [Program] = []
+    var agentStates: [String] = []
     var hidden = false
 
     var body: some View {
@@ -146,7 +148,7 @@ struct PaneRow: View {
             }
             Spacer()
             if hidden { Image(systemName: "eye.slash").foregroundStyle(.secondary).accessibilityLabel("Hidden") }
-            Self.badge(block)
+            if agentStates.isEmpty { Self.badge(block) } else { AgentSummary(states: agentStates) }
         }
     }
 
@@ -163,5 +165,48 @@ struct PaneRow: View {
             default: EmptyView()
             }
         }
+    }
+}
+
+private extension StatusRecords {
+    /// The same records counted by the Mac overview; native subagents have their own agent card there.
+    var agentStates: [String] {
+        records.compactMap { key, record in
+            !key.hasPrefix("agent/") && ["blocked", "error", "working", "done"].contains(record.state) ? record.state : nil
+        }
+    }
+}
+
+/// Counts of agents needing attention, working and done in one tab.
+private struct AgentSummary: View {
+    let states: [String]
+
+    var body: some View {
+        let attention = states.filter { $0 == "blocked" || $0 == "error" }.count
+        let working = states.filter { $0 == "working" }.count
+        let done = states.filter { $0 == "done" }.count
+        HStack(spacing: 8) {
+            if attention > 0 { count(attention, symbol: "smallcircle.filled.circle", color: .yellow, label: "need attention") }
+            if working > 0 {
+                HStack(spacing: 3) {
+                    ProgressView().controlSize(.small)
+                    Text("\(working)").monospacedDigit()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(working) working")
+            }
+            if done > 0 { count(done, symbol: "checkmark.circle.fill", color: .green, label: "done") }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+    }
+
+    private func count(_ n: Int, symbol: String, color: Color, label: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: symbol).foregroundStyle(color)
+            Text("\(n)").monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(n) \(label)")
     }
 }
