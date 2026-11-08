@@ -64,7 +64,12 @@ impl Owners {
         s.wanted(client)
     }
     /// Typing takes the terminal, but only for a client showing it: `zurafa send` has no size.
-    pub fn typed(&mut self, client: &str, terminal: &str) -> Option<Size> {
+    /// Input led by ESC is not typing: it is mostly the terminal answering a query, or a mouse or
+    /// focus report, which every viewer sends after a resize, so it would trade the terminal back and forth.
+    pub fn typed(&mut self, client: &str, terminal: &str, bytes: &[u8]) -> Option<Size> {
+        if bytes.first() == Some(&0x1b) {
+            return None;
+        }
         let s = self.0.get_mut(terminal)?;
         if s.owner.as_deref() == Some(client) {
             return None;
@@ -135,12 +140,12 @@ fn reply(msg: Msg, t: &Arc<Terminals>, client: &str) -> Option<Value> {
             Err(e) => error(id, e),
         },
         Msg::Input { terminal, data } => {
-            // Resized before the keys land, so they act on the grid the typist sees.
-            let size = t.owners.lock().unwrap().typed(client, &terminal);
-            if size.is_some() {
-                t.sized(&terminal, size);
-            }
             if let Ok(bytes) = B64.decode(data) {
+                // Resized before the keys land, so they act on the grid the typist sees.
+                let size = t.owners.lock().unwrap().typed(client, &terminal, &bytes);
+                if size.is_some() {
+                    t.sized(&terminal, size);
+                }
                 t.input(&terminal, &bytes);
             }
             return None;
@@ -863,11 +868,14 @@ mod tests {
         assert_eq!(o.resize("mac", "t", (100, 40)), Some((100, 40)));
         assert_eq!(o.owner("t"), Some("mac"));
         // Typing on the phone hands it over at the phone's size; typing again changes nothing.
-        assert_eq!(o.typed("phone", "t"), Some((50, 30)));
-        assert_eq!(o.typed("phone", "t"), None);
+        // A terminal's own answer (here to `ESC[c`) is not typing.
+        assert_eq!(o.typed("phone", "t", b"\x1b[?62;22c"), None);
+        assert_eq!(o.owner("t"), Some("mac"));
+        assert_eq!(o.typed("phone", "t", b"l"), Some((50, 30)));
+        assert_eq!(o.typed("phone", "t", b"s"), None);
         assert_eq!(o.resize("mac", "t", (90, 40)), None);
         // A client that never sized the terminal, like `zurafa send`, cannot take it by typing.
-        assert_eq!(o.typed("cli", "t"), None);
+        assert_eq!(o.typed("cli", "t", b"x"), None);
         assert_eq!(o.owner("t"), Some("phone"));
         // An explicit claim takes it, at the size it brings.
         assert_eq!(o.claim("mac", "t", Some((80, 24))), Some((80, 24)));

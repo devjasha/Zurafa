@@ -158,7 +158,8 @@ Fire-and-forget messages have no reply; malformed ones are ignored:
 Each terminal has one size owner. Only the owner's `resize` changes the PTY;
 anyone else's is kept as that connection's own size. The first connection to
 resize a terminal owns it, and input from a connection that has sent a size for
-it takes it over. When the owner releases the terminal or disconnects, the
+it takes it over, unless the input starts with ESC (query answers, mouse and
+focus reports). When the owner releases the terminal or disconnects, the
 connection that most recently sent a size becomes the owner, at that size. Every
 viewer receives `{type:"size",terminal,cols,rows,owner,mine}` after each of
 these; a viewer with `mine:false` draws the owner's grid as-is and should not
