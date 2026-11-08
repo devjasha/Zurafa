@@ -201,6 +201,17 @@ enum Request {
     /// With `appearance` the Mac app publishes its look; without, a client asks for it.
     #[serde(rename = "ui.appearance")]
     UiAppearance { id: u64, appearance: Option<Value> },
+    /// A pane's agent conversation as `zurafa-orch follow` lines, from index `from` (see chat.rs).
+    #[serde(rename = "ui.chat.read")]
+    UiChatRead {
+        id: u64,
+        block: String,
+        #[serde(default)]
+        from: usize,
+    },
+    /// One zurafa-orch command run on this machine (set, spawn, threads) and its output.
+    #[serde(rename = "ui.orch")]
+    UiOrch { id: u64, args: Vec<String> },
     /// A phone's pasted image, saved on the Mac so the pane's agent can read it by path.
     #[serde(rename = "ui.paste_image")]
     UiPasteImage { id: u64, data: String },
@@ -513,6 +524,16 @@ async fn request(
             let known = terms.actions.answer(late, call, if ok { Ok(message) } else { Err(message) });
             return id.map(|id| if known { json!({"id":id,"type":"ok"}) } else { error(id, "unknown call") });
         }
+        Request::UiChatRead { id, block, from } => match tokio::task::spawn_blocking(move || crate::chat::read(&block, from)).await {
+            Ok(Ok((lines, next))) => json!({"id":id,"type":"ui.chat","lines":lines,"next":next}),
+            Ok(Err(e)) => error(id, e),
+            Err(e) => error(id, e),
+        },
+        Request::UiOrch { id, args } => match tokio::task::spawn_blocking(move || crate::chat::run(&args)).await {
+            Ok(Ok(out)) => json!({"id":id,"type":"ui.orch","out":out}),
+            Ok(Err(e)) => error(id, e),
+            Err(e) => error(id, e),
+        },
         Request::UiPasteImage { id, data } => match B64.decode(data).map_err(|e| e.to_string()).and_then(|b| save_image(&b).map_err(|e| e.to_string())) {
             Ok(path) => json!({"id":id,"type":"ui.paste_image","path":path}),
             Err(e) => error(id, e),

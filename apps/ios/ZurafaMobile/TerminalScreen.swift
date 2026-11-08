@@ -29,6 +29,10 @@ struct TerminalScreen: View {
     /// Bumped on each switch between panes of one tab; the pane map shows briefly for each.
     @State private var paneSwitches = 0
     @State private var mapShown = false
+    /// Agent panes the user switched back to their terminal.
+    @State private var terminals: Set<String> = []
+    @State private var newChat = false
+    private var chat: Bool { block?.hasChat == true && !terminals.contains(id) }
     private var view: TerminalView { Terminals.shared.view(for: id) }
 
     /// `fish ~/src/app`, like the Mac's tab title.
@@ -39,16 +43,21 @@ struct TerminalScreen: View {
     }
 
     var body: some View {
-        TerminalPane(id: id)
+        Group {
+            if chat {
+                PhoneChat(pane: id, block: block, remote: session?.remote)
+            } else {
+                TerminalPane(id: id).padding(.horizontal, 6)
+            }
+        }
             .id(id)
             // The pill animates a pane switch; the terminal swaps at once instead of crossfading two live grids.
             .transaction { $0.animation = nil }
-            .padding(.horizontal, 6)
             .background((mac.appearance.map { Color(hex: $0.colors(scheme).background) } ?? Color(white: 0.08)).ignoresSafeArea())
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 10) {
                     panes
-                    KeyBar(view: view)
+                    if !chat { KeyBar(view: view) }
                 }
                 .glassGroup()
                 .padding(.bottom, 8)
@@ -83,6 +92,12 @@ struct TerminalScreen: View {
                 ToolbarItem(placement: .principal) { header }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis") {
+                        Button("New Chat", systemImage: "bubble.left.and.text.bubble.right") { newChat = true }
+                        if block?.hasChat == true {
+                            Button(chat ? "Show Terminal" : "Show Chat", systemImage: chat ? "terminal" : "text.bubble") {
+                                if chat { terminals.insert(id) } else { terminals.remove(id) }
+                            }
+                        }
                         Button("New Tab", systemImage: "plus", action: newTab)
                         Button("Paste", systemImage: "doc.on.clipboard") { view.paste(nil) }
                         Button("Close Pane", systemImage: "xmark", role: .destructive) { close(id) }
@@ -91,6 +106,9 @@ struct TerminalScreen: View {
             }
             // Without a theme from the Mac the terminal stays dark, so its chrome does too.
             .environment(\.colorScheme, mac.appearance == nil ? .dark : scheme)
+            .sheet(isPresented: $newChat) {
+                PhoneNewChat(session: session?.sessionID ?? "default") { pane in id = pane }
+            }
             .alert("Zurafa", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {} message: { Text(error ?? "") }
             .onAppear { UIApplication.shared.isIdleTimerDisabled = keepAwake }
             .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }

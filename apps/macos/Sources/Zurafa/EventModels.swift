@@ -76,7 +76,14 @@ struct BlockSnapshot: Codable {
     var parent: String?
     /// Milliseconds since the Unix epoch.
     var started: Double?
-    enum CodingKeys: String, CodingKey { case blockID = "block_id", running, exitCode = "exit_code", statuses, title, pwd, foreground, parent, started }
+    /// The agent session the pane's agent reported; kept after the agent quits.
+    var resume: AgentThread?
+    enum CodingKeys: String, CodingKey { case blockID = "block_id", running, exitCode = "exit_code", statuses, title, pwd, foreground, parent, started, resume }
+}
+/// A Claude Code session or Codex thread: what `zurafa-orch follow` takes.
+struct AgentThread: Codable, Equatable {
+    var agent: String
+    var session: String
 }
 struct ForegroundProcess: Codable {
     var name: String

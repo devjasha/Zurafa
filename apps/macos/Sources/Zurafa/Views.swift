@@ -291,6 +291,7 @@ struct RootView: View {
         .preferredColorScheme(ws.appearance.colorScheme)
         .onAppear { ws.syncTerminalAppearance(systemScheme) }
         .onChange(of: systemScheme) { _, newScheme in ws.syncTerminalAppearance(newScheme) }
+        .sheet(isPresented: $ws.newChatOpen) { NewChat().environmentObject(ws) }
         .confirmationDialog("Delete \(ws.name)?", isPresented: $ws.confirmCloseSession) {
             Button("Delete Workspace", role: .destructive) { ws.closeSession() }
         } message: { Text("This closes every terminal in the workspace.") }
@@ -886,6 +887,7 @@ struct PaneView: View {
 
     var body: some View {
         let m = ws.meta(id), style = ws.style
+        let chat = m.hasChat && !ws.terminalPanes.contains(id)
         let focused = peek ? ws.peekFocused : ws.tab.focus == id && !(ws.peekFocused && ws.peek != nil)
         let shape = RoundedRectangle(cornerRadius: style.paneCornerRadius, style: .continuous)
         VStack(spacing: 0) {
@@ -902,6 +904,11 @@ struct PaneView: View {
                         .padding(.horizontal, 6).padding(.vertical, 1).background(Color.black.opacity(0.05), in: Capsule())
                 }
                 Spacer(minLength: 0)
+                // Shown even when the pane isn't focused: switching views is what you come to an agent pane for.
+                if m.hasChat {
+                    IconButton(symbol: chat ? "terminal" : "bubble.left.and.text.bubble.right",
+                               help: chat ? "Show Terminal (⌥⌘C)" : "Show Chat (⌥⌘C)") { ws.focus(id); ws.toggleChat(id) }
+                }
                 HStack(spacing: 4) {
                     if move == nil {
                         IconButton(symbol: "rectangle.split.2x1", help: "Split Right") { ws.focus(id); ws.split(.horizontal) }
@@ -923,8 +930,17 @@ struct PaneView: View {
             .onTapGesture { if peek { ws.peekFocused = true } else { ws.focus(id) } }
             // Dragging a header onto another pane of the tab swaps the two; a floating pane's header moves it.
             .modifier(HeaderDrag(id: id, title: m.title, move: move))
-            TerminalHost(id: id, program: m.program,
-                         focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
+            // The terminal stays underneath the chat, so its agent and screen live on unchanged.
+            ZStack {
+                TerminalHost(id: id, program: m.program,
+                             focused: focused && !chat && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
+                    .opacity(chat ? 0 : 1)
+                    .allowsHitTesting(!chat)
+                if chat {
+                    ChatView(pane: id, focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
+                        .background(Theme.paneTint)
+                }
+            }
                 .padding(.leading, style.panePadding ?? 14).padding(.trailing, style.panePadding ?? 8)
                 .padding(.bottom, style.panePadding ?? 10)
                 .opacity(focused ? 1 : style.unfocusedPaneOpacity)

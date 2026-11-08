@@ -28,6 +28,15 @@ struct PaneMeta {
     /// The pane that spawned this one, and when this one started.
     var parent: String?
     var started: Date?
+    /// The agent conversation running in the pane, as its agent reported it.
+    var thread: AgentThread?
+    /// A pane whose program reports its status is an agent the chat view can show: the full
+    /// conversation for agents zurafa-orch can read (Claude Code, Codex, Pi), its answers for any other.
+    var hasChat: Bool { thread != nil || !statuses.isEmpty }
+    var agentName: String {
+        switch thread?.agent { case "claude": "Claude"; case "codex": "Codex"; case "pi": "Pi"
+        default: record?.app.flatMap { $0.isEmpty ? nil : $0.capitalized } ?? "the agent" }
+    }
     /// Native subagents of the pane's agent, reported as "agent/<id>". They run inside it with no
     /// pane of their own, so they show in its agent card and never stand for the pane's own state.
     var subagents: [String: ProgramStatus] = [:]
@@ -262,6 +271,11 @@ enum EditorKind: String, Identifiable {
         m.program = Program.detect(block.foreground?.name, executable: block.foreground?.executable,
                                    argv: block.foreground?.argv, remote: session.remote != nil,
                                    remoteShell: session.remote?.shellProgram ?? .ssh)
+        // `resume` outlives the agent: once a plain shell is back in front, the pane no longer runs the thread.
+        // A shell still running `-c` is the one `zurafa-orch spawn` started the agent with (zurafa-orch's agent_left).
+        let fg = block.foreground
+        let shellBack = ["zsh", "bash", "fish", "sh", "dash", "ksh"].contains(fg?.name ?? "") && !(fg?.argv ?? []).contains("-c")
+        m.thread = block.running && !shellBack ? block.resume : nil
         return m
     }
 
@@ -398,6 +412,30 @@ enum EditorKind: String, Identifiable {
     func dock(_ id: String, beside target: String, axis: Axis = .horizontal) {
         command(["op": .string("dock"), "session": .string(sessionID), "block": .string(id), "target": .string(target), "axis": .string(axis.rawValue)])
     }
+    /// The New Chat composer over the window.
+    @Published var newChatOpen = false
+    /// Agent panes show their chat; these were switched back to their terminal.
+    @Published var terminalPanes: Set<String> = []
+    func toggleChat(_ id: String) {
+        if terminalPanes.remove(id) == nil { terminalPanes.insert(id) }
+    }
+    func toggleChatFocused() { if metas[tab.focus]?.hasChat == true { toggleChat(tab.focus) } }
+    /// Types `text` into the pane's agent the way `zurafa send` does: a paste (bracketed when the
+    /// program asks, so a multi-line message arrives whole), then Enter on its own.
+    func sendChat(_ pane: String, _ text: String) {
+        let clean = text.replacingOccurrences(of: "\u{1b}", with: "")
+        if TerminalStore.shared.existingView(pane) != nil {
+            TerminalStore.shared.paste(clean, into: pane)
+        } else {
+            // Never shown in this app (the Chats window, or another workspace): no terminal knows the
+            // program's paste mode, so bracket it as `zurafa send` does; every agent here takes that.
+            daemon.send(Msg(type: "input", terminal: pane, data: Data("\u{1b}[200~\(clean)\u{1b}[201~".utf8)))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [daemon] in
+            daemon.send(Msg(type: "input", terminal: pane, data: Data("\r".utf8)))
+        }
+    }
+
     func hide(_ id: String) { command(["op": .string("hide"), "session": .string(sessionID), "block": .string(id)]) }
     /// Floats the focused pane, or docks a floating one beside the tab's last docked pane.
     func toggleFloating() {
@@ -915,6 +953,8 @@ struct Command: Identifiable {
         Command(title: "Close Pane", key: "w") { $0.closeFocused() },
         Command(title: "Toggle Zoom", key: .return, mods: [.command, .shift]) { $0.toggleZoom() },
         Command(title: "Float or Dock Pane", key: "f", mods: [.command, .option]) { $0.toggleFloating() },
+        Command(title: "Chat or Terminal", key: "c", mods: [.command, .option]) { $0.toggleChatFocused() },
+        Command(title: "New Chat", key: "o", mods: [.command, .shift]) { $0.newChatOpen = true },
         Command(title: "Hide Pane", key: "h", mods: [.command, .control]) { $0.hideFocused() },
         Command(title: "Show Hidden Pane", key: "h", mods: [.command, .control, .shift]) { $0.showHidden() },
         Command(title: "Next Pane", key: "]") { $0.focusStep(1) },
