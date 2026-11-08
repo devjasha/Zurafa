@@ -1,0 +1,2 @@
+- **The iPhone no longer flickers on a pane that is also open on the Mac.** When a program asked the terminal a question, the Mac and the iPhone both answered, and each answer took over the terminal's size, so it resized hundreds of times a second. Now only typing or focusing a pane takes it over.
+- This update needs a server restart (**Restart Server to Finish Update…** in the menu bar); it closes open terminals, and their layout comes back afterwards.
