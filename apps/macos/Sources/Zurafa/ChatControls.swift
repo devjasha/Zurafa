@@ -116,7 +116,8 @@ struct AgentControls: View {
     let attach: ([URL]) -> Void
     @ObservedObject private var catalog = ModelCatalog.shared
     @State private var open: Pop?
-    @State private var panel: Panel = .model
+    /// The side panel the hovered row opens; none until one is.
+    @State private var panel: Panel?
     @State private var query = ""
 
     enum Pop: Hashable { case add, model, access }
@@ -155,7 +156,7 @@ struct AgentControls: View {
     }
 
     private func chip<Label: View>(_ pop: Pop, square: Bool = false, @ViewBuilder label: () -> Label) -> some View {
-        Button { open = open == pop ? nil : pop } label: {
+        Button { open = open == pop ? nil : pop; panel = nil } label: {
             HStack(spacing: 6) { label() }
                 .font(.system(size: 13))
                 .frame(minWidth: square ? 30 : nil, minHeight: 30)
@@ -188,7 +189,9 @@ struct AgentControls: View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 PopRow(title: "Reasoning", trailing: settings.effort?.capitalized ?? "Default", chevron: true, selected: panel == .effort) { panel = .effort }
+                    .onHover { if $0 { panel = .effort } }
                 PopRow(title: "Model", trailing: settings.model.map { catalog.name(agent, $0) } ?? "Default", chevron: true, selected: panel == .model) { panel = .model }
+                    .onHover { if $0 { panel = .model } }
                 if change == nil {
                     Text("\(program.title) takes these when it starts: pick them in a new chat (⇧⌘O).")
                         .font(.caption).foregroundStyle(.secondary).padding(8).fixedSize(horizontal: false, vertical: true)
@@ -198,7 +201,7 @@ struct AgentControls: View {
                 }
             }
             .padding(6).frame(width: 230)
-            Divider()
+            if panel != nil { Divider() }
             if panel == .effort {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(catalog.efforts(agent, model: settings.model), id: \.self) { e in
@@ -207,7 +210,7 @@ struct AgentControls: View {
                     }
                 }
                 .padding(6).frame(width: 200)
-            } else {
+            } else if panel == .model {
                 modelPanel
             }
         }
