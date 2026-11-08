@@ -2,6 +2,19 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.36
+
+**November 9, 2026**
+
+- **Agent panes are chats.** A pane running Claude Code, Codex or Pi shows the conversation: your messages, the agent's work folded into "Claude worked for 1m 56s" (tap to see each step), and its answers. Switch a pane back to its terminal from the pane's menu.
+- **The composer picks the model, reasoning effort and access.** Choose them per chat from the menus under the message; on a running Claude Code they change right away. **New Chat** (⇧⌘O) starts an agent in a folder you pick, with those settings.
+- **Chats on iPhone too.** Agent panes open as a chat on the phone, with the same menus and New Chat in the pane's ••• menu.
+- **File tree.** Show the focused pane's project beside your panes with ⌥⌘B; click a file to type its path at the prompt.
+- The iPhone's tab list counts the agents in each tab that need you, are working, or are done.
+- One download for Apple silicon and Intel Macs.
+- Chats need `zurafa-orch` in `~/.local/bin`.
+- This update needs a server restart (**Restart Server to Finish Update…** in the menu bar); it closes open terminals, and their layout comes back afterwards.
+
 ## 0.1.35
 
 **November 8, 2026**
