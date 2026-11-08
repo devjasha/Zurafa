@@ -291,6 +291,7 @@ struct RootView: View {
         .preferredColorScheme(ws.appearance.colorScheme)
         .onAppear { ws.syncTerminalAppearance(systemScheme) }
         .onChange(of: systemScheme) { _, newScheme in ws.syncTerminalAppearance(newScheme) }
+        .sheet(isPresented: $ws.newChatOpen) { NewChat().environmentObject(ws) }
         .confirmationDialog("Delete \(ws.name)?", isPresented: $ws.confirmCloseSession) {
             Button("Delete Workspace", role: .destructive) { ws.closeSession() }
         } message: { Text("This closes every terminal in the workspace.") }
@@ -881,7 +882,7 @@ struct PaneView: View {
 
     var body: some View {
         let m = ws.meta(id), style = ws.style
-        let chat = m.hasChat && ws.chatPanes.contains(id)
+        let chat = m.hasChat && !ws.terminalPanes.contains(id)
         let focused = peek ? ws.peekFocused : ws.tab.focus == id && !(ws.peekFocused && ws.peek != nil)
         let shape = RoundedRectangle(cornerRadius: style.paneCornerRadius, style: .continuous)
         VStack(spacing: 0) {

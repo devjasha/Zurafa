@@ -828,6 +828,7 @@ struct CommandPicker: View {
             .init(id: "Toggle Pane Zoom", detail: nil, shortcut: "⇧⌘↩") { ws.toggleZoom() },
             .init(id: "Float or Dock Pane", detail: nil, shortcut: "⌥⌘F") { ws.toggleFloating() },
             .init(id: "Chat or Terminal", detail: "For an agent pane", shortcut: "⌥⌘C") { ws.toggleChatFocused() },
+            .init(id: "New Chat", detail: "Start Claude, Codex or Pi in a new tab", shortcut: "⇧⌘O") { ws.newChatOpen = true },
             .init(id: "Hide Pane", detail: "It keeps running", shortcut: "⌃⌘H") { ws.hideFocused() },
             .init(id: "Move Pane Forward", detail: "Swap with the next pane", shortcut: "⌥⌘]") { ws.swapStep(1) },
             .init(id: "Move Pane Back", detail: "Swap with the previous pane", shortcut: "⌥⌘[") { ws.swapStep(-1) },

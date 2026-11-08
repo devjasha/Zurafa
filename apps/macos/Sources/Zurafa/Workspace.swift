@@ -405,16 +405,25 @@ enum EditorKind: String, Identifiable {
     func dock(_ id: String, beside target: String, axis: Axis = .horizontal) {
         command(["op": .string("dock"), "session": .string(sessionID), "block": .string(id), "target": .string(target), "axis": .string(axis.rawValue)])
     }
-    /// Agent panes showing their chat instead of their terminal.
-    @Published var chatPanes: Set<String> = []
+    /// The New Chat composer over the window.
+    @Published var newChatOpen = false
+    /// Agent panes show their chat; these were switched back to their terminal.
+    @Published var terminalPanes: Set<String> = []
     func toggleChat(_ id: String) {
-        if chatPanes.remove(id) == nil { chatPanes.insert(id) }
+        if terminalPanes.remove(id) == nil { terminalPanes.insert(id) }
     }
     func toggleChatFocused() { if metas[tab.focus]?.hasChat == true { toggleChat(tab.focus) } }
     /// Types `text` into the pane's agent the way `zurafa send` does: a paste (bracketed when the
     /// program asks, so a multi-line message arrives whole), then Enter on its own.
     func sendChat(_ pane: String, _ text: String) {
-        TerminalStore.shared.paste(text.replacingOccurrences(of: "\u{1b}", with: ""), into: pane)
+        let clean = text.replacingOccurrences(of: "\u{1b}", with: "")
+        if TerminalStore.shared.existingView(pane) != nil {
+            TerminalStore.shared.paste(clean, into: pane)
+        } else {
+            // Never shown in this app (the Chats window, or another workspace): no terminal knows the
+            // program's paste mode, so bracket it as `zurafa send` does; every agent here takes that.
+            daemon.send(Msg(type: "input", terminal: pane, data: Data("\u{1b}[200~\(clean)\u{1b}[201~".utf8)))
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [daemon] in
             daemon.send(Msg(type: "input", terminal: pane, data: Data("\r".utf8)))
         }
@@ -937,6 +946,7 @@ struct Command: Identifiable {
         Command(title: "Toggle Zoom", key: .return, mods: [.command, .shift]) { $0.toggleZoom() },
         Command(title: "Float or Dock Pane", key: "f", mods: [.command, .option]) { $0.toggleFloating() },
         Command(title: "Chat or Terminal", key: "c", mods: [.command, .option]) { $0.toggleChatFocused() },
+        Command(title: "New Chat", key: "o", mods: [.command, .shift]) { $0.newChatOpen = true },
         Command(title: "Hide Pane", key: "h", mods: [.command, .control]) { $0.hideFocused() },
         Command(title: "Show Hidden Pane", key: "h", mods: [.command, .control, .shift]) { $0.showHidden() },
         Command(title: "Next Pane", key: "]") { $0.focusStep(1) },

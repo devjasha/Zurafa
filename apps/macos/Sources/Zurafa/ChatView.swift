@@ -217,37 +217,9 @@ struct ChatView: View {
     }
 
     private func composer(_ m: PaneMeta) -> some View {
-        let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return VStack(alignment: .leading, spacing: 10) {
-            TextField("Ask \(m.agentName), or describe a change…", text: $draft, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .lineLimit(1...8)
-                .focused($composing)
-                .onSubmit(send)
-            HStack(spacing: 6) {
-                HStack(spacing: 5) {
-                    AgentGlyph(program: m.program).frame(width: 12, height: 12)
-                    Text(m.agentName)
-                }
-                .font(.system(size: 12))
-                .padding(.horizontal, 8).padding(.vertical, 4)
-                .background(Theme.ink.opacity(0.06), in: Capsule())
-                Spacer(minLength: 0)
-                Button(action: send) {
-                    Image(systemName: "arrow.up").font(.system(size: 12, weight: .semibold))
-                        .frame(width: 26, height: 26)
-                        .foregroundStyle(ready ? Theme.background : Theme.ink.opacity(0.45))
-                        .background(ready ? Theme.ink : Theme.ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .disabled(!ready)
-                .help("Send (Return; ⌥Return for a new line)")
-            }
+        Composer(draft: $draft, placeholder: "Ask \(m.agentName), or describe a change…", focus: $composing, send: send) {
+            AgentChip(program: m.program, name: m.agentName)
         }
-        .padding(12)
-        .background(Theme.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.ink.opacity(composing ? 0.22 : 0.1)))
     }
 
     private func send() {
@@ -260,7 +232,7 @@ struct ChatView: View {
 }
 
 /// The agent's brand mark in its brand color.
-private struct AgentGlyph: View {
+struct AgentGlyph: View {
     let program: Program
     var body: some View {
         ProgramGlyph(program: program)
@@ -460,5 +432,57 @@ private struct WorkRow: View {
             Text(input).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.ink.opacity(0.8))
                 .truncationMode(.tail).help(input)
         }
+    }
+}
+
+/// The chat's input, as in Monocode: the text on top, the agent's chips and the send button under it.
+struct Composer<Chips: View>: View {
+    @Binding var draft: String
+    let placeholder: String
+    var focus: FocusState<Bool>.Binding
+    let send: () -> Void
+    @ViewBuilder let chips: Chips
+
+    var body: some View {
+        let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        VStack(alignment: .leading, spacing: 10) {
+            TextField(placeholder, text: $draft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .lineLimit(1...8)
+                .focused(focus)
+                .onSubmit(send)
+            HStack(spacing: 6) {
+                chips
+                Spacer(minLength: 0)
+                Button(action: send) {
+                    Image(systemName: "arrow.up").font(.system(size: 12, weight: .semibold))
+                        .frame(width: 26, height: 26)
+                        .foregroundStyle(ready ? Theme.background : Theme.ink.opacity(0.45))
+                        .background(ready ? Theme.ink : Theme.ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(!ready)
+                .help("Send (Return; ⌥Return for a new line)")
+            }
+        }
+        .padding(12)
+        .background(Theme.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.ink.opacity(focus.wrappedValue ? 0.22 : 0.1)))
+    }
+}
+
+/// The agent a chat talks to, as a chip in the composer.
+struct AgentChip: View {
+    let program: Program
+    let name: String
+    var body: some View {
+        HStack(spacing: 5) {
+            AgentGlyph(program: program).frame(width: 12, height: 12)
+            Text(name)
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Theme.ink.opacity(0.06), in: Capsule())
     }
 }
