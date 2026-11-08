@@ -17,11 +17,21 @@ struct ChatItem: Identifiable, Equatable {
 struct ChatLog {
     private(set) var items: [ChatItem] = []
     private var index: [String: Int] = [:]
+    /// The agent has no transcript zurafa-orch can read: only its answers come in, so the view
+    /// keeps the messages it sends itself.
+    private(set) var statusOnly = false
+
+    /// A message typed in the chat, for an agent whose transcript can't show it.
+    mutating func sent(_ text: String) {
+        guard statusOnly else { return }
+        items.append(ChatItem(id: "sent-\(items.count)", kind: .user, text: text))
+    }
 
     mutating func add(_ line: Data) {
         guard let v = try? JSONDecoder().decode(JSONValue.self, from: line).object,
               let kind = v["kind"]?.string else { return }
         let s = { (k: String) in v[k]?.string ?? "" }
+        if kind == "mode" { statusOnly = s("mode") == "status"; return }
         if kind == "result" {
             guard let i = index[s("for")] else { return }
             items[i].result = s("text")
@@ -36,10 +46,9 @@ struct ChatLog {
 
 /// Runs `zurafa-orch follow` for a thread and publishes its chat as it grows.
 @MainActor final class ChatFeed: ObservableObject {
-    @Published private(set) var log = ChatLog()
+    @Published var log = ChatLog()
     @Published private(set) var problem: String?
     private var process: Process?
-    private var reader: Task<Void, Error>?
 
     /// zurafa-orch is installed beside the shell's tools, which an app launched from Finder doesn't have on PATH.
     // shortcut: a fixed list of install folders; bundle zurafa-orch with the app if it becomes part of Zurafa.
@@ -50,7 +59,7 @@ struct ChatLog {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    func start(_ thread: AgentThread, cwd: String?) {
+    func start(pane: String) {
         guard process == nil else { return }
         guard let orch = Self.orch() else {
             problem = "Chat needs zurafa-orch in ~/.local/bin (or set ZURAFA_ORCH)."
@@ -58,13 +67,21 @@ struct ChatLog {
         }
         let p = Process(), out = Pipe(), err = Pipe()
         p.executableURL = URL(fileURLWithPath: orch)
-        p.arguments = ["follow", thread.session]
-        if let cwd, FileManager.default.fileExists(atPath: cwd) { p.currentDirectoryURL = URL(fileURLWithPath: cwd) }
+        p.arguments = ["--socket", DaemonClient.socket, "follow", "--pane", pane]
         p.standardOutput = out
         p.standardError = err
-        reader = Task { [weak self] in
-            for try await line in out.fileHandleForReading.bytes.lines {
-                self?.log.add(Data(line.utf8))
+        // One update per chunk read, not per line: opening a long chat redraws once, not hundreds of times.
+        let lines = LineBuffer()
+        out.fileHandleForReading.readabilityHandler = { [weak self] h in
+            let chunk = h.availableData
+            if chunk.isEmpty { h.readabilityHandler = nil; return }
+            let batch = lines.take(chunk)
+            guard !batch.isEmpty else { return }
+            Task { @MainActor in
+                guard let self else { return }
+                var log = self.log
+                batch.forEach { log.add($0) }
+                self.log = log
             }
         }
         p.terminationHandler = { [weak self] p in
@@ -78,7 +95,18 @@ struct ChatLog {
     func stop() {
         process?.terminate()
         process = nil
-        reader?.cancel()
+    }
+}
+
+/// Splits a byte stream into lines; only the pipe's reader queue touches it.
+private final class LineBuffer: @unchecked Sendable {
+    private var pending = Data()
+    func take(_ chunk: Data) -> [Data] {
+        pending.append(chunk)
+        guard let end = pending.lastIndex(of: UInt8(ascii: "\n")) else { return [] }
+        let lines = pending[..<end].split(separator: UInt8(ascii: "\n")).map { Data($0) }
+        pending.removeSubrange(...end)
+        return lines
     }
 }
 
@@ -86,7 +114,6 @@ struct ChatLog {
 /// composer that types into the agent. The agent keeps running in its terminal underneath.
 struct ChatView: View {
     let pane: String
-    let thread: AgentThread
     let focused: Bool
     @EnvironmentObject var ws: Workspace
     @StateObject private var feed = ChatFeed()
@@ -126,7 +153,7 @@ struct ChatView: View {
             composer
         }
         .onAppear {
-            feed.start(thread, cwd: m.pwd)
+            feed.start(pane: pane)
             if focused { composing = true }
         }
         .onDisappear { feed.stop() }
@@ -153,7 +180,7 @@ struct ChatView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message \(thread.agent == "codex" ? "Codex" : "Claude")…", text: $draft, axis: .vertical)
+            TextField("Message \(ws.meta(pane).agentName)…", text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...8)
                 .focused($composing)
@@ -172,6 +199,7 @@ struct ChatView: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         ws.sendChat(pane, text)
+        feed.log.sent(text)
         draft = ""
     }
 }

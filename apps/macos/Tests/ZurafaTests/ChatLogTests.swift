@@ -19,6 +19,15 @@ final class ChatLogTests: XCTestCase {
         XCTAssertEqual(log.items[2].text, "**Fixed.**")
     }
 
+    func testAnAgentWithoutTranscriptKeepsWhatTheChatSent() {
+        var log = ChatLog()
+        log.sent("ignored: a transcript will show it")
+        log.add(Data(#"{"kind":"mode","mode":"status"}"#.utf8))
+        log.sent("hi gemini")
+        log.add(Data(#"{"kind":"assistant","id":"status-7","text":"Hello!"}"#.utf8))
+        XCTAssertEqual(log.items.map(\.text), ["hi gemini", "Hello!"])
+    }
+
     func testBlocksDecodeTheAgentSessionTheyRun() throws {
         let json = #"{"block_id":"t4","running":true,"statuses":{"records":{}},"resume":{"agent":"claude","session":"c0ef"}}"#
         let block = try JSONDecoder().decode(BlockSnapshot.self, from: Data(json.utf8))

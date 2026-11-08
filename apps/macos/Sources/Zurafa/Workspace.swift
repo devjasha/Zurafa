@@ -28,8 +28,15 @@ struct PaneMeta {
     /// The pane that spawned this one, and when this one started.
     var parent: String?
     var started: Date?
-    /// The agent conversation running in the pane, which the chat view shows.
+    /// The agent conversation running in the pane, as its agent reported it.
     var thread: AgentThread?
+    /// A pane whose program reports its status is an agent the chat view can show: the full
+    /// conversation for agents zurafa-orch can read (Claude Code, Codex, Pi), its answers for any other.
+    var hasChat: Bool { thread != nil || !statuses.isEmpty }
+    var agentName: String {
+        switch thread?.agent { case "claude": "Claude"; case "codex": "Codex"; case "pi": "Pi"
+        default: record?.app.flatMap { $0.isEmpty ? nil : $0.capitalized } ?? "the agent" }
+    }
     /// Native subagents of the pane's agent, reported as "agent/<id>". They run inside it with no
     /// pane of their own, so they show in its agent card and never stand for the pane's own state.
     var subagents: [String: ProgramStatus] = [:]
@@ -403,12 +410,11 @@ enum EditorKind: String, Identifiable {
     func toggleChat(_ id: String) {
         if chatPanes.remove(id) == nil { chatPanes.insert(id) }
     }
-    func toggleChatFocused() { if metas[tab.focus]?.thread != nil { toggleChat(tab.focus) } }
-    /// Types `text` into the pane's agent the way `zurafa send` does: a bracketed paste, then Enter
-    /// on its own, so a multi-line message arrives whole instead of submitting at its first line.
+    func toggleChatFocused() { if metas[tab.focus]?.hasChat == true { toggleChat(tab.focus) } }
+    /// Types `text` into the pane's agent the way `zurafa send` does: a paste (bracketed when the
+    /// program asks, so a multi-line message arrives whole), then Enter on its own.
     func sendChat(_ pane: String, _ text: String) {
-        let clean = text.replacingOccurrences(of: "\u{1b}", with: "")
-        daemon.send(Msg(type: "input", terminal: pane, data: Data("\u{1b}[200~\(clean)\u{1b}[201~".utf8)))
+        TerminalStore.shared.paste(text.replacingOccurrences(of: "\u{1b}", with: ""), into: pane)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [daemon] in
             daemon.send(Msg(type: "input", terminal: pane, data: Data("\r".utf8)))
         }
