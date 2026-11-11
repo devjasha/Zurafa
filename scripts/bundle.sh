@@ -33,6 +33,16 @@ mkdir -p "$root/build"
 for b in zurafa-daemon zurafa; do
   lipo -create -output "$root/build/$b" "$root/rust/target/"{aarch64,x86_64}"-apple-darwin/release/$b"
 done
+# zurafa-orch (chats, new agents) lives in its own repo; the app ships the commit pinned in
+# zurafa-orch.rev. ZURAFA_ORCH_SRC=<checkout> builds a local one instead, to try unpushed changes.
+if [ -n "${ZURAFA_ORCH_SRC:-}" ]; then orch_src=(--path "$ZURAFA_ORCH_SRC")
+else orch_src=(--git https://github.com/devjasha/zurafa-orch --rev "$(cat "$root/scripts/zurafa-orch.rev")"); fi
+for t in "${mac_targets[@]}"; do
+  # The CLI git fetch uses the machine's GitHub credentials; the repo is private.
+  CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --force "${orch_src[@]}" \
+    --target "$t" --target-dir "$root/build/orch-target" --root "$root/build/orch-$t" zurafa-orch
+done
+lipo -create -output "$root/build/zurafa-orch" "$root/build/orch-"{aarch64,x86_64}"-apple-darwin/bin/zurafa-orch"
 remote_targets=(x86_64-unknown-linux-musl aarch64-unknown-linux-musl)
 (cd "$root/rust" && rustup target add "${remote_targets[@]}" >/dev/null &&
   cargo build --release -p zurafa-daemon $(printf -- '--target %s ' "${remote_targets[@]}"))
@@ -76,6 +86,7 @@ cp "$root/build/zurafa-tailscale" "$app/Contents/MacOS/zurafa-tailscale"
 # Resources, not MacOS: a "zurafa" file there would collide with the "Zurafa" app
 # executable on the case-insensitive APFS volumes macOS ships by default.
 cp "$root/build/zurafa" "$app/Contents/Resources/zurafa"
+cp "$root/build/zurafa-orch" "$app/Contents/Resources/zurafa-orch"
 # Daemons uploaded to Linux hosts for remote sessions. Not executable here: the release
 # script signs every executable in Resources, and xattr signatures on ELF files break Sparkle deltas.
 for target in "${remote_targets[@]}"; do

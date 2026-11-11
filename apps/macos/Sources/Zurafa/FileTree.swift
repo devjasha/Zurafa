@@ -14,6 +14,45 @@ import SwiftUI
     @Published private(set) var root: URL?
     @Published private(set) var children: [URL: [Entry]] = [:]
     @Published private(set) var expanded: Set<URL> = []
+    /// Each changed file's git state against HEAD, by path.
+    @Published private(set) var changes: [String: Change] = [:]
+    /// Folders with a change somewhere inside, by path.
+    @Published private(set) var changedFolders: Set<String> = []
+
+    /// A file's git state, as the tree marks it; the letters are the ones editors use.
+    enum Change: String {
+        case modified = "M", added = "A", deleted = "D", renamed = "R", untracked = "U", conflicted = "!"
+
+        /// From a `git status --porcelain` XY code, the staged and unstaged sides together.
+        init(code: Substring) {
+            if code == "??" { self = .untracked }
+            else if code.contains("U") || code == "AA" || code == "DD" { self = .conflicted }
+            else if code.contains("A") { self = .added }
+            else if code.contains("D") { self = .deleted }
+            else if code.contains("R") { self = .renamed }
+            else { self = .modified }
+        }
+
+        var color: Color {
+            switch self {
+            case .added, .untracked: .green
+            case .deleted, .conflicted: .red
+            case .renamed: .blue
+            case .modified: .orange
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .modified: "Modified"
+            case .added: "Added"
+            case .deleted: "Deleted"
+            case .renamed: "Renamed"
+            case .untracked: "Untracked"
+            case .conflicted: "Conflicted"
+            }
+        }
+    }
 
     /// The expanded tree flattened into rows, so the list stays lazy and needs no recursive views.
     var rows: [(entry: Entry, depth: Int)] {
@@ -34,6 +73,8 @@ import SwiftUI
         self.root = root
         children = [:]
         expanded = []
+        changes = [:]
+        changedFolders = []
         load(root, ignored: false)
     }
 
@@ -51,6 +92,42 @@ import SwiftUI
         load(root, ignored: false)
         let ignored = Set(children.values.joined().filter(\.ignored).map(\.url))
         for dir in expanded { load(dir, ignored: ignored.contains(dir)) }
+        loadChanges()
+    }
+
+    func loadChanges() {
+        guard let root else { return }
+        Task {
+            let (files, folders) = await Task.detached { Self.status(root) }.value
+            // Unchanged status publishes nothing, so polling doesn't redraw the tree.
+            guard root == self.root, files != changes else { return }
+            changes = files
+            changedFolders = folders
+        }
+    }
+
+    /// The work tree's changes, and the folders that hold them; nothing outside a git work tree.
+    nonisolated static func status(_ root: URL) -> ([String: Change], Set<String>) {
+        let files = changes(GitStatus.git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], in: root.path) ?? "", root: root)
+        var folders = Set<String>()
+        for path in files.keys {
+            var dir = (path as NSString).deletingLastPathComponent
+            // A folder already marked has its parents marked too.
+            while dir.count > root.path.count, folders.insert(dir).inserted { dir = (dir as NSString).deletingLastPathComponent }
+        }
+        return (files, folders)
+    }
+
+    /// `git status --porcelain=v1 -z` output by path: "XY path", and after a rename or copy its old path.
+    nonisolated static func changes(_ porcelain: String, root: URL) -> [String: Change] {
+        var out: [String: Change] = [:]
+        var fields = porcelain.split(separator: "\0")[...]
+        while let field = fields.popFirst(), field.count > 3 {
+            let code = field.prefix(2)
+            out[root.appendingPathComponent(String(field.dropFirst(3))).path] = Change(code: code)
+            if code.contains("R") || code.contains("C") { _ = fields.popFirst() }
+        }
+        return out
     }
 
     private func load(_ dir: URL, ignored: Bool) {
@@ -77,7 +154,11 @@ import SwiftUI
 
     /// The enclosing git work tree (a worktree's `.git` file counts), or `pwd` itself outside one.
     nonisolated static func projectRoot(_ pwd: String) -> URL {
-        let start = URL(fileURLWithPath: pwd).standardizedFileURL
+        // As the disk spells it: a shell can be in ~/projects/zurafa while listings say Projects/Zurafa,
+        // and git's paths are matched against those listings.
+        // realpath, not resolvingSymlinksInPath, which turns the listings' /private/var back into /var.
+        let start = realpath(pwd, nil).map { p in defer { free(p) }; return URL(fileURLWithPath: String(cString: p)) }
+            ?? URL(fileURLWithPath: pwd).standardizedFileURL
         var dir = start
         while true {
             if FileManager.default.fileExists(atPath: dir.appendingPathComponent(".git").path) { return dir }
@@ -119,6 +200,8 @@ struct FileTreePane: View {
                 List(model.rows, id: \.entry.id) { row in
                     FileTreeRow(entry: row.entry, depth: row.depth,
                                 expanded: model.expanded.contains(row.entry.url),
+                                change: model.changes[row.entry.url.path],
+                                holdsChanges: row.entry.isDirectory && model.changedFolders.contains(row.entry.url.path),
                                 selected: ws.preview?.url == row.entry.url) {
                         if row.entry.isDirectory { model.toggle(row.entry) }
                         else { _ = ws.openPreview(row.entry.url.path, from: ws.tab.focus) }
@@ -143,6 +226,13 @@ struct FileTreePane: View {
         .onChange(of: pwd, initial: true) { _, pwd in
             if local, let pwd, pwd.hasPrefix("/") { model.show(FileTreeModel.projectRoot(pwd)) }
         }
+        // Agents change files all the time: keep the marks current while the tree is open.
+        .task(id: model.root) {
+            while !Task.isCancelled {
+                model.loadChanges()
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
     }
 }
 
@@ -150,6 +240,8 @@ private struct FileTreeRow: View {
     let entry: FileTreeModel.Entry
     let depth: Int
     let expanded: Bool
+    let change: FileTreeModel.Change?
+    let holdsChanges: Bool
     let selected: Bool
     let action: () -> Void
 
@@ -163,7 +255,16 @@ private struct FileTreeRow: View {
             Image(nsImage: NSWorkspace.shared.icon(forFile: entry.url.path))
                 .resizable().frame(width: 16, height: 16)
             Text(entry.url.lastPathComponent).lineLimit(1).truncationMode(.middle)
+                .foregroundStyle(selected ? Theme.onAccent : change?.color ?? Theme.ink)
             Spacer(minLength: 0)
+            if let change {
+                Text(change.rawValue).font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(selected ? Theme.onAccent : change.color)
+                    .padding(.trailing, 4)
+            } else if holdsChanges {
+                Circle().fill(selected ? Theme.onAccent : Color.orange.opacity(0.8)).frame(width: 5, height: 5)
+                    .padding(.trailing, 6)
+            }
         }
         .font(.system(size: 12))
         .foregroundStyle(selected ? Theme.onAccent : Theme.ink)
@@ -173,6 +274,6 @@ private struct FileTreeRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: action)
         .listRowBackground(selected ? RoundedRectangle(cornerRadius: 5).fill(Theme.accent).padding(.horizontal, 6) : nil)
-        .help(entry.url.path)
+        .help(change.map { "\(entry.url.path) — \($0.title)" } ?? (holdsChanges ? "\(entry.url.path) — has changes" : entry.url.path))
     }
 }

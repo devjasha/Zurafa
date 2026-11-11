@@ -380,6 +380,14 @@ private struct IntegrationsPane: View {
             } header: {
                 Text("Agent Control")
             }
+            Section {
+                Toggle(isOn: Binding(get: { ws.style.agentChat }, set: { ws.writeConfig("agent-chat", $0 ? "true" : "false") })) {
+                    Text("Show agents as chat")
+                    Text("Agent panes show their conversation as a chat instead of their terminal. ⌥⌘C switches one pane to the other view.")
+                }
+            } header: {
+                Text("Chat")
+            }
         }
         .task { if let source = CLIInstaller.bundledCLIPath() { await refresh(source) } }
     }

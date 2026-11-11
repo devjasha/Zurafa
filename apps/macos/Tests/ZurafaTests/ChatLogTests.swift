@@ -127,4 +127,34 @@ final class ChatLogTests: XCTestCase {
         ])
         XCTAssertEqual(MarkdownBlock.parse("#hashtag and 3 * 4"), [.paragraph("#hashtag and 3 * 4")])
     }
+
+    func testQuestionKeysMatchClaudeCodesPrompt() {
+        let one = AgentQuestion(header: "", question: "", multiple: false, options: [.init(label: "A", detail: ""), .init(label: "B", detail: "")])
+        let many = AgentQuestion(header: "", question: "", multiple: true, options: [.init(label: "A", detail: ""), .init(label: "B", detail: ""), .init(label: "C", detail: "")])
+        // A lone single choice submits on its number; a typed answer is the number after the options.
+        XCTAssertEqual(AgentQuestion.keys(for: [one], answers: [.picks([1])]), ["2"])
+        XCTAssertEqual(AgentQuestion.keys(for: [one], answers: [.other("Medium\nplease")]), ["3", "Medium please", "\r"])
+        // A multiple choice ticks, leaves with Tab, and ends on the review.
+        XCTAssertEqual(AgentQuestion.keys(for: [many], answers: [.picks([0, 2])]), ["1", "3", "\t", "1"])
+        XCTAssertEqual(AgentQuestion.keys(for: [one, many], answers: [.picks([0]), .picks([1])]), ["1", "2", "\t", "1"])
+    }
+
+    func testReadsQuestions() {
+        var log = ChatLog()
+        log.add(Data(#"{"kind":"tool","id":"t","tool":"AskUserQuestion","questions":[{"header":"H","question":"Q?","multiSelect":true,"options":[{"label":"A","description":"a"}]}]}"#.utf8))
+        XCTAssertEqual(log.items.first?.questions, [AgentQuestion(header: "H", question: "Q?", multiple: true, options: [.init(label: "A", detail: "a")])])
+    }
+
+    func testATurnListsTheFilesItChangedOnce() {
+        var log = ChatLog()
+        log.add(Data(#"{"kind":"user","id":"u","text":"go"}"#.utf8))
+        log.add(Data(#"{"kind":"tool","id":"e1","tool":"Edit","edits":[{"path":"/p/a.swift","old":"x\n","new":"y\nz\n"}]}"#.utf8))
+        log.add(Data(#"{"kind":"tool","id":"e2","tool":"Write","edits":[{"path":"/p/b.md","old":"","new":"hi\n"}]}"#.utf8))
+        log.add(Data(#"{"kind":"tool","id":"e3","tool":"Edit","edits":[{"path":"/p/a.swift","old":"z\n","new":""}]}"#.utf8))
+        log.add(Data(#"{"kind":"tool","id":"e4","tool":"Edit","edits":[{"path":"/p/c.swift","old":"a\n","new":"b\n"}]}"#.utf8))
+        log.add(Data(#"{"kind":"result","for":"e4","text":"no match","ok":false}"#.utf8))
+        XCTAssertEqual(log.turns(live: true).first?.changedFiles, [
+            .init(path: "/p/a.swift", added: 2, removed: 2), .init(path: "/p/b.md", added: 1, removed: 0),
+        ])
+    }
 }

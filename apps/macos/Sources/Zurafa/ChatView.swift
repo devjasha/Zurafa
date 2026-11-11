@@ -6,11 +6,11 @@ import SwiftUI
     @Published private(set) var problem: String?
     private var process: Process?
 
-    /// zurafa-orch is installed beside the shell's tools, which an app launched from Finder doesn't have on PATH.
-    // shortcut: a fixed list of install folders; bundle zurafa-orch with the app if it becomes part of Zurafa.
+    /// zurafa-orch: ZURAFA_ORCH, else the one the app ships, else one installed beside the shell's tools
+    /// (a `swift run` build has no bundle).
     static func orch() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let candidates = [ProcessInfo.processInfo.environment["ZURAFA_ORCH"]].compactMap { $0 }
+        let candidates = [ProcessInfo.processInfo.environment["ZURAFA_ORCH"], Bundle.main.url(forResource: "zurafa-orch", withExtension: nil)?.path].compactMap { $0 }
             + ["\(home)/.local/bin", "\(home)/.cargo/bin", "/opt/homebrew/bin", "/usr/local/bin"].map { "\($0)/zurafa-orch" }
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
@@ -18,7 +18,7 @@ import SwiftUI
     func start(pane: String) {
         guard process == nil else { return }
         guard let orch = Self.orch() else {
-            problem = "Chat needs zurafa-orch in ~/.local/bin (or set ZURAFA_ORCH)."
+            problem = "Chat needs zurafa-orch, which this build of Zurafa lacks (set ZURAFA_ORCH to one)."
             return
         }
         let p = Process(), out = Pipe(), err = Pipe()
@@ -78,6 +78,8 @@ struct ChatView: View {
     /// What the chips changed, shown until the transcript catches up.
     @State private var changed = AgentSettings()
     @State private var problem: String?
+    /// Questions answered here, hidden until the agent's transcript shows the answer.
+    @State private var answered: Set<String> = []
     @FocusState private var composing: Bool
 
     var body: some View {
@@ -92,7 +94,7 @@ struct ChatView: View {
                             Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary).font(.callout)
                         }
                         ForEach(Array(turns.enumerated()), id: \.element.id) { i, turn in
-                            TurnView(turn: turn, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1).equatable()
+                            TurnView(turn: turn, pane: pane, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1).equatable()
                         }
                         if live && turns.isEmpty {
                             FoldLine(meta: m, title: "\(m.agentName) working…", live: true, open: .constant(false), expandable: false)
@@ -107,7 +109,16 @@ struct ChatView: View {
                 .onAppear { proxy.scrollTo("end", anchor: .bottom) }
             }
             Group {
-                if m.record?.state == "blocked" { blocked(m) }
+                if live, let asked = feed.log.items.last(where: { !$0.questions.isEmpty && $0.result == nil }), !answered.contains(asked.id) {
+                    QuestionCard(questions: asked.questions) { answers in
+                        answered.insert(asked.id)
+                        ws.press(pane, AgentQuestion.keys(for: asked.questions, answers: answers))
+                    } skip: {
+                        answered.insert(asked.id)
+                        ws.press(pane, ["\u{1b}"])
+                    }
+                    .id(asked.id)
+                } else if m.record?.state == "blocked" { blocked(m) }
                 composer(m)
                 ComposerFooter(dir: m.pwd ?? NSHomeDirectory(), working: live) {
                     Label(m.pwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? m.cwd, systemImage: "folder").help(m.pwd ?? m.cwd)
@@ -187,6 +198,86 @@ struct ChatView: View {
     }
 }
 
+/// The agent's questions, one at a time, with its options to pick: answered in its terminal for you.
+private struct QuestionCard: View {
+    let questions: [AgentQuestion]
+    let answer: ([AgentQuestion.Answer]) -> Void
+    let skip: () -> Void
+    @State private var answers: [AgentQuestion.Answer] = []
+    @State private var picks: Set<Int> = []
+    @State private var typing = false
+    @State private var other = ""
+
+    var body: some View {
+        let q = questions[answers.count]
+        let last = answers.count == questions.count - 1
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Label(q.header.isEmpty ? "Question" : q.header, systemImage: "bubble.left.and.text.bubble.right")
+                if questions.count > 1 { Text("\(answers.count + 1) of \(questions.count)").foregroundStyle(.tertiary) }
+                Spacer(minLength: 0)
+                Button("Skip", action: skip).buttonStyle(.plain).help("Dismiss the question (Esc in the terminal)")
+            }
+            .font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(q.question).font(.system(size: 13, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+            ForEach(q.options.indices, id: \.self) { i in
+                option(q.options[i].label, detail: q.options[i].detail, on: picks.contains(i), multiple: q.multiple) {
+                    if q.multiple {
+                        if picks.remove(i) == nil { picks.insert(i) }
+                    } else {
+                        picks = [i]
+                        typing = false
+                    }
+                }
+            }
+            if !q.multiple {
+                option("Other", detail: "", on: typing, multiple: false) { typing = true; picks = [] }
+                if typing {
+                    TextField("Your answer", text: $other).textFieldStyle(.roundedBorder).onSubmit { next(q) }
+                }
+            }
+            HStack {
+                Spacer()
+                Button(last ? "Submit" : "Continue") { next(q) }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(typing ? other.trimmingCharacters(in: .whitespaces).isEmpty : picks.isEmpty)
+            }
+        }
+        .padding(12)
+        .background(Theme.paneStroke.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.bottom, 8)
+    }
+
+    private func option(_ title: String, detail: String, on: Bool, multiple: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: multiple ? (on ? "checkmark.square.fill" : "square") : (on ? "largecircle.fill.circle" : "circle"))
+                    .foregroundStyle(on ? Theme.accent : Theme.inkSoft)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundStyle(Theme.ink)
+                    if !detail.isEmpty { Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 13))
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .contentShape(Rectangle())
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(on ? Theme.accent : Theme.paneStroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func next(_ q: AgentQuestion) {
+        let given: AgentQuestion.Answer = typing ? .other(other) : .picks(picks.sorted())
+        // The last answer isn't kept: the card still draws until it goes, and reads questions[answers.count].
+        if answers.count + 1 == questions.count { return answer(answers + [given]) }
+        answers.append(given)
+        picks = []
+        typing = false
+        other = ""
+    }
+}
+
 /// The agent's brand mark in its brand color.
 struct AgentGlyph: View {
     let program: Program
@@ -199,6 +290,7 @@ struct AgentGlyph: View {
 /// Equatable so a new transcript line rebuilds only the turn it changed, not every turn on screen.
 private struct TurnView: View, Equatable {
     let turn: ChatTurn
+    let pane: String
     let meta: PaneMeta
     let live: Bool
     let last: Bool
@@ -209,7 +301,7 @@ private struct TurnView: View, Equatable {
 
     /// A finished turn shows only the agent's name and glyph from its pane; the live one also its status.
     static func == (a: Self, b: Self) -> Bool {
-        a.turn == b.turn && a.live == b.live && a.last == b.last && a.ink == b.ink
+        a.turn == b.turn && a.pane == b.pane && a.meta.pwd == b.meta.pwd && a.live == b.live && a.last == b.last && a.ink == b.ink
             && a.meta.program == b.meta.program && a.meta.agentName == b.meta.agentName
             && (!a.live || (a.meta.record?.state == b.meta.record?.state && a.meta.statusMessage == b.meta.statusMessage))
     }
@@ -248,6 +340,8 @@ private struct TurnView: View, Equatable {
                 .foregroundStyle(Theme.ink.opacity(0.4))
                 .opacity(hover || last ? 1 : 0)
             }
+            let changed = turn.changedFiles
+            if !changed.isEmpty { ChangedFiles(files: changed, pane: pane, dir: meta.pwd) }
         }
         .onHover { hover = $0 }
     }
@@ -307,6 +401,79 @@ private struct FoldLine: View {
         if meta.record?.state == "blocked" { return meta.statusMessage ?? "Waiting for you" }
         guard let start else { return "\(meta.agentName) working…" }
         return "\(meta.agentName) working for \(duration(now.timeIntervalSince(start)))"
+    }
+}
+
+/// The files a turn changed, with their line counts; a click opens one in the preview.
+private struct ChangedFiles: View {
+    let files: [ChatTurn.FileChange]
+    let pane: String
+    let dir: String?
+    @EnvironmentObject var ws: Workspace
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(files.count == 1 ? "1 file changed" : "\(files.count) files changed").foregroundStyle(.secondary)
+                Counts(added: files.map(\.added).reduce(0, +), removed: files.map(\.removed).reduce(0, +))
+            }
+            .font(.system(size: 12))
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            ForEach(files, id: \.path) { file in
+                Divider().opacity(0.5)
+                FileRow(file: file, shown: shown(file.path)) { _ = ws.openPreview(absolute(file.path), from: pane) }
+            }
+        }
+        .overlay(shape.strokeBorder(Theme.paneStroke, lineWidth: 1))
+        .clipShape(shape)
+    }
+
+    /// The path under the pane's folder, as the agent works in it. Case-blind: a shell can be in
+    /// ~/projects/zurafa while the agent writes ~/Projects/Zurafa, the same folder on macOS.
+    private func shown(_ path: String) -> String {
+        guard let dir, let under = path.range(of: dir + "/", options: [.anchored, .caseInsensitive]) else { return path }
+        return String(path[under.upperBound...])
+    }
+
+    private func absolute(_ path: String) -> String {
+        path.hasPrefix("/") || dir == nil ? path : dir! + "/" + path
+    }
+
+    private struct FileRow: View {
+        let file: ChatTurn.FileChange
+        let shown: String
+        let open: () -> Void
+        @State private var hover = false
+
+        var body: some View {
+            Button(action: open) {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc").foregroundStyle(.secondary)
+                    Text(shown).lineLimit(1).truncationMode(.head).foregroundStyle(Theme.ink)
+                    Spacer(minLength: 8)
+                    Counts(added: file.added, removed: file.removed)
+                }
+                .font(.system(size: 12))
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(Theme.ink.opacity(hover ? 0.06 : 0))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hover = $0 }
+            .help("Open \(file.path)")
+        }
+    }
+
+    private struct Counts: View {
+        let added: Int, removed: Int
+        var body: some View {
+            HStack(spacing: 4) {
+                Text("+\(added)").foregroundStyle(.green)
+                Text("−\(removed)").foregroundStyle(.red)
+            }
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+        }
     }
 }
 

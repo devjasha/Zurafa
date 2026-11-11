@@ -414,10 +414,10 @@ enum EditorKind: String, Identifiable {
     }
     /// The New Chat composer over the window.
     @Published var newChatOpen = false
-    /// Agent panes show their chat; these were switched back to their terminal.
-    @Published var terminalPanes: Set<String> = []
+    /// Agent panes show what the agent-chat setting says; these were switched (⌥⌘C) to the other view.
+    @Published var switchedPanes: Set<String> = []
     func toggleChat(_ id: String) {
-        if terminalPanes.remove(id) == nil { terminalPanes.insert(id) }
+        if switchedPanes.remove(id) == nil { switchedPanes.insert(id) }
     }
     func toggleChatFocused() { if metas[tab.focus]?.hasChat == true { toggleChat(tab.focus) } }
     /// Types `text` into the pane's agent the way `zurafa send` does: a paste (bracketed when the
@@ -521,6 +521,16 @@ enum EditorKind: String, Identifiable {
     }
 
     /// Answers a permission prompt from its notification, if the pane is still asking.
+    /// Presses `keys` in a pane one after another, a moment apart, so a full-screen prompt keeps up.
+    func press(_ pane: String, _ keys: [String]) {
+        Task {
+            for key in keys {
+                daemon.send(Msg(type: "input", terminal: pane, data: Data(key.utf8)))
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
     func answerPermission(_ pane: String, approve: Bool) {
         // The prompt may have been answered or replaced since the banner went out.
         guard metas[pane]?.waitingForPermission == true else { return jump(to: pane) }

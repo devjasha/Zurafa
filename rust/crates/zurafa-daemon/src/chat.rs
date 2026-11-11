@@ -18,18 +18,21 @@ fn follows() -> &'static Mutex<HashMap<String, Lines>> {
     FOLLOWS.get_or_init(Default::default)
 }
 
-/// zurafa-orch, where it is installed beside the shell's tools.
+/// zurafa-orch: ZURAFA_ORCH, else the one the app ships in Resources beside this daemon's MacOS
+/// folder, else one installed beside the shell's tools.
 fn orch() -> Option<PathBuf> {
     let home = env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    let bundled = env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("../Resources/zurafa-orch")));
     env::var_os("ZURAFA_ORCH")
         .map(PathBuf::from)
         .into_iter()
+        .chain(bundled)
         .chain([home.join(".local/bin"), home.join(".cargo/bin"), "/opt/homebrew/bin".into(), "/usr/local/bin".into()].map(|d| d.join("zurafa-orch")))
         .find(|p| p.is_file())
 }
 
 fn command(args: &[String]) -> Result<Command, String> {
-    let orch = orch().ok_or("zurafa-orch is not installed on this Mac (~/.local/bin)")?;
+    let orch = orch().ok_or("zurafa-orch is missing from this Zurafa install")?;
     let mut cmd = Command::new(orch);
     cmd.args(args).stdin(Stdio::null()).stderr(Stdio::null());
     // It runs `zurafa`, which the app ships in Resources beside this daemon's MacOS folder.

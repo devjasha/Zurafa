@@ -79,7 +79,7 @@ struct NewChat: View {
             let out = await runOrch(["spawn", agent, text, "--cwd", dir, "--no-parent", "-l", "\(agent): \(text.prefix(24))"] + (flags.isEmpty ? [] : ["--"] + flags))
             starting = false
             guard let pane = out.flatMap({ String(data: $0, encoding: .utf8) })?.trimmingCharacters(in: .whitespacesAndNewlines), !pane.isEmpty else {
-                problem = "Could not start \(agent). Is zurafa-orch in ~/.local/bin, and \(agent) on your PATH?"
+                problem = "Could not start \(agent). Is it installed and on your PATH?"
                 return
             }
             ws.jump(to: pane)

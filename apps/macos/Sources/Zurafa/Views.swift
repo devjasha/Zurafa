@@ -921,7 +921,7 @@ struct PaneView: View {
 
     var body: some View {
         let m = ws.meta(id), style = ws.style
-        let chat = m.hasChat && !ws.terminalPanes.contains(id)
+        let chat = m.hasChat && style.agentChat != ws.switchedPanes.contains(id)
         let focused = peek ? ws.peekFocused : ws.tab.focus == id && !(ws.peekFocused && ws.peek != nil)
         let shape = RoundedRectangle(cornerRadius: style.paneCornerRadius, style: .continuous)
         VStack(spacing: 0) {
@@ -938,11 +938,6 @@ struct PaneView: View {
                         .padding(.horizontal, 6).padding(.vertical, 1).background(Color.black.opacity(0.05), in: Capsule())
                 }
                 Spacer(minLength: 0)
-                // Shown even when the pane isn't focused: switching views is what you come to an agent pane for.
-                if m.hasChat {
-                    IconButton(symbol: chat ? "terminal" : "bubble.left.and.text.bubble.right",
-                               help: chat ? "Show Terminal (⌥⌘C)" : "Show Chat (⌥⌘C)") { ws.focus(id); ws.toggleChat(id) }
-                }
                 HStack(spacing: 4) {
                     if move == nil {
                         IconButton(symbol: "rectangle.split.2x1", help: "Split Right") { ws.focus(id); ws.split(.horizontal) }

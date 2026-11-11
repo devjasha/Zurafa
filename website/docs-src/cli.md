@@ -36,7 +36,7 @@ Run `zurafa help` for the full command list.
 
 Agents running in a Zurafa pane can use the CLI the way you would: type into another agent, wait for it and read its screen.
 
-Starting agents into panes of their own (spawn, worktrees, notes to the agent that started them) has moved out of Zurafa into a separate project, zurafa-orch, which isn't released yet. Zurafa still groups such agents under their parent's tab.
+Starting agents into panes of their own (spawn, worktrees, notes to the agent that started them) has moved out of Zurafa into a separate project, zurafa-orch. The app ships it at `Zurafa.app/Contents/Resources/zurafa-orch` for its chats and new agent conversations; it isn't put on your PATH. Zurafa still groups such agents under their parent's tab.
 
 ```sh
 zurafa send review "npm run migrate" --enter   # type text, then press Enter

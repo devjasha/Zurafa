@@ -18,6 +18,46 @@ struct ChatItem: Identifiable, Equatable {
     var end: Date?
     /// The file changes of an edit tool, shown as diffs.
     var edits: [FileEdit] = []
+    /// What the agent asks the user (Claude's AskUserQuestion), for a chat to answer.
+    var questions: [AgentQuestion] = []
+}
+
+/// A question an agent puts to the user, with the options it offers.
+struct AgentQuestion: Equatable {
+    struct Option: Equatable {
+        let label: String
+        let detail: String
+    }
+    let header: String
+    let question: String
+    let multiple: Bool
+    let options: [Option]
+
+    enum Answer: Equatable {
+        /// The options picked, from 0: one for a single choice.
+        case picks([Int])
+        /// A typed answer instead of an option (single choice only).
+        case other(String)
+    }
+
+    /// The keys Claude Code's question prompt takes for `answers`, one step each: an option's number
+    /// picks it (and moves on, for a single choice) or ticks it; Tab leaves a multiple choice; the
+    /// number after the options types an answer, ended by Return. Several questions, or a multiple
+    /// choice, end on a review whose first entry submits.
+    static func keys(for questions: [AgentQuestion], answers: [Answer]) -> [String] {
+        var keys: [String] = []
+        for (q, answer) in zip(questions, answers) {
+            switch answer {
+            case .picks(let picks):
+                keys += picks.map { "\($0 + 1)" }
+                if q.multiple { keys.append("\t") }
+            case .other(let text):
+                keys += ["\(q.options.count + 1)", text.replacingOccurrences(of: "\n", with: " "), "\r"]
+            }
+        }
+        if questions.count > 1 || questions.contains(where: \.multiple) { keys.append("1") }
+        return keys
+    }
 }
 
 /// One change a tool made to a file: the text it replaced and the text it wrote (empty for a new file).
@@ -67,6 +107,27 @@ struct ChatTurn: Identifiable, Equatable {
     var work: [ChatItem] = []
     var answer: ChatItem?
     var start: Date? { user?.at ?? work.first?.at }
+
+    /// A file the turn's work changed, with the lines its edits added and removed in all.
+    struct FileChange: Equatable {
+        let path: String
+        var added = 0
+        var removed = 0
+    }
+
+    /// The files this turn changed, in the order it first touched them; edits that failed changed nothing.
+    var changedFiles: [FileChange] {
+        var out: [FileChange] = []
+        for item in work where item.ok {
+            for edit in item.edits where !edit.path.isEmpty {
+                let lines = edit.lines
+                let i = out.firstIndex { $0.path == edit.path } ?? { out.append(FileChange(path: edit.path)); return out.count - 1 }()
+                out[i].added += lines.filter { $0.mark == .added }.count
+                out[i].removed += lines.filter { $0.mark == .removed }.count
+            }
+        }
+        return out
+    }
     var end: Date? { (work + [answer].compactMap { $0 }).compactMap { $0.end ?? $0.at }.max() }
 }
 
@@ -116,7 +177,14 @@ struct ChatLog {
         let edits = (v["edits"]?.array ?? []).compactMap(\.object).map {
             FileEdit(path: $0["path"]?.string ?? "", old: $0["old"]?.string ?? "", new: $0["new"]?.string ?? "")
         }
-        items.append(ChatItem(id: s("id"), kind: k, text: s("text"), tool: s("tool"), input: s("input"), at: at, edits: edits))
+        let questions = (v["questions"]?.array ?? []).compactMap(\.object).map { q in
+            AgentQuestion(header: q["header"]?.string ?? "", question: q["question"]?.string ?? "",
+                          multiple: q["multiSelect"] == .bool(true),
+                          options: (q["options"]?.array ?? []).compactMap(\.object).map {
+                              AgentQuestion.Option(label: $0["label"]?.string ?? "", detail: $0["description"]?.string ?? "")
+                          })
+        }
+        items.append(ChatItem(id: s("id"), kind: k, text: s("text"), tool: s("tool"), input: s("input"), at: at, edits: edits, questions: questions))
     }
     private static let iso = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 

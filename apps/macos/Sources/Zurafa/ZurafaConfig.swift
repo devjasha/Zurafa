@@ -37,6 +37,8 @@ struct ZurafaStyle: Equatable {
     var sidebarOnRight = false
     /// Where the other panes' icons peek out from behind a tab's icon: right, left, down or up.
     var tabIconStack = "right"
+    /// Agent panes show their conversation as a chat; false shows their terminal. ⌥⌘C flips one pane.
+    var agentChat = true
     var accent: UInt32?
     var backgroundImageOpacity = 0.24
 }
@@ -122,6 +124,7 @@ struct ZurafaConfigLoader {
             case "right": config.style.sidebarOnRight = true
             default: break
             }
+        case "agent-chat": bool(value).map { config.style.agentChat = $0 }
         case "tab-icon-stack":
             let direction = value.lowercased()
             if ["right", "left", "down", "up"].contains(direction) { config.style.tabIconStack = direction }
@@ -212,6 +215,8 @@ struct ZurafaConfigLoader {
     # sidebar-position = left
     # Where a tab's other pane icons peek out from behind its icon: right, left, down or up.
     # tab-icon-stack = right
+    # Agent panes show their conversation as a chat (true) or their terminal (false).
+    # agent-chat = true
 
     # Background image
     # background-image = ~/Pictures/wallpaper.png
