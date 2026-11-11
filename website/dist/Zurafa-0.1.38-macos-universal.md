@@ -1,0 +1,6 @@
+- **Answer agents' questions in the chat.** When Claude Code asks you something, the chat shows its question with the options to pick (one, several, or your own answer) and answers it in the terminal for you.
+- **See which files a turn changed.** Each turn lists the files the agent edited with lines added and removed; click one to open it in the preview.
+- **Git status in the file tree.** Changed files show their state (modified, added, untracked, deleted, renamed, conflicted) and folders with changes inside get a dot. It updates while agents work.
+- **Chat or terminal is a setting.** Settings → Integrations → Show agents as chat decides how agent panes open; ⌥⌘C still switches one pane.
+- **Chats work out of the box.** Zurafa now ships the zurafa-orch helper that chats use, so there's nothing extra to install.
+- **Fixes.** A new chat no longer shows another chat's conversation from the same folder, and slash commands like /memory and their output now show in the chat.

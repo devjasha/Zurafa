@@ -13,7 +13,7 @@
   <header class="site-header"><div class="shell nav-wrap">
     <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
     <nav id="site-nav" aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
-    <a class="nav-download" href="/releases/Zurafa-0.1.37-macos-universal.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <a class="nav-download" href="/releases/Zurafa-0.1.38-macos-universal.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
     <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
   </div></header>
   <div class="docs-layout shell">
@@ -94,7 +94,7 @@ zurafa preview README.md          # open a file in the preview beside the curren
 <p>Run <code>zurafa help</code> for the full command list.</p>
 <h2 id="driving-panes-from-agents">Driving panes from agents</h2>
 <p>Agents running in a Zurafa pane can use the CLI the way you would: type into another agent, wait for it and read its screen.</p>
-<p>Starting agents into panes of their own (spawn, worktrees, notes to the agent that started them) has moved out of Zurafa into a separate project, zurafa-orch, which isn&#x27;t released yet. Zurafa still groups such agents under their parent&#x27;s tab.</p>
+<p>Starting agents into panes of their own (spawn, worktrees, notes to the agent that started them) has moved out of Zurafa into a separate project, zurafa-orch. The app ships it at <code>Zurafa.app/Contents/Resources/zurafa-orch</code> for its chats and new agent conversations; it isn&#x27;t put on your PATH. Zurafa still groups such agents under their parent&#x27;s tab.</p>
 <pre><code>zurafa send review &quot;npm run migrate&quot; --enter   # type text, then press Enter
 zurafa send review -e &#x27;y\n&#x27;                     # interpret \n \r \t \e \xHH escapes
 zurafa key review ctrl+c                       # press keys: enter, tab, escape, up, ctrl+c…
