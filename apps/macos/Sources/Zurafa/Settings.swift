@@ -144,6 +144,11 @@ private struct AppearancePane: View {
             Section("Window") {
                 ConfigSlider(title: "Window opacity", key: "window-opacity", value: ws.style.windowOpacity, range: 0.3...1, step: 0.05)
                 ConfigSlider(title: "Unfocused pane opacity", key: "unfocused-pane-opacity", value: ws.style.unfocusedPaneOpacity, range: 0.2...1, step: 0.05)
+                Picker("Focused pane background", selection: Binding(get: { ws.style.focusedPaneSolid },
+                                                                     set: { ws.writeConfig("focused-pane-background", $0 ? "solid" : "transparent") })) {
+                    Text("Solid").tag(true)
+                    Text("Transparent").tag(false)
+                }
             }
             Section("Tabs") {
                 Picker("Layout", selection: Binding(get: { ws.tabStripLayout }, set: ws.setTabStripLayout)) {
@@ -172,6 +177,8 @@ private struct AppearancePane: View {
                                                     set: { ws.writeConfig("background-image-filter", $0.rawValue) })) {
                     ForEach(BackgroundFilter.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                ConfigSlider(title: "Opacity", key: "background-image-opacity", value: ws.style.backgroundImageOpacity,
+                             range: 0.05...0.65, step: 0.01)
             }
         }
     }

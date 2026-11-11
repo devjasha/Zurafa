@@ -208,15 +208,43 @@ struct HighlightrCode: CodeSyntaxHighlighter {
     private static let highlightr = Highlightr()
 
     func highlightCode(_ code: String, language: String?) -> Text {
+        Text(attributed(code, language: language))
+    }
+
+    /// The code colored, highlighted whole so a line inside a comment or string keeps its color.
+    func lines(_ code: String, language: String?) -> [AttributedString] {
+        let all = attributed(code, language: language)
+        var out: [AttributedString] = [], start = all.startIndex
+        for c in all.characters.indices where all.characters[c] == "\n" {
+            out.append(AttributedString(all[start..<c]))
+            start = all.characters.index(after: c)
+        }
+        if start < all.endIndex { out.append(AttributedString(all[start...])) }
+        return out
+    }
+
+    /// Highlighted code by theme, language and text: views redraw far more often than their code changes.
+    private static let cache: NSCache<NSString, Box> = { let c = NSCache<NSString, Box>(); c.countLimit = 500; return c }()
+    private final class Box { let value: AttributedString; init(_ v: AttributedString) { value = v } }
+
+    private func attributed(_ code: String, language: String?) -> AttributedString {
+        let key = "\(colorScheme == .dark)\u{0}\(language ?? "")\u{0}\(code)" as NSString
+        if let hit = Self.cache.object(forKey: key) { return hit.value }
+        let result = highlight(code, language: language)
+        Self.cache.setObject(Box(result), forKey: key)
+        return result
+    }
+
+    private func highlight(_ code: String, language: String?) -> AttributedString {
         // shortcut: huge files render unhighlighted; highlight.js gets slow past ~200KB.
-        guard code.utf8.count < 200_000, let highlightr = Self.highlightr else { return Text(code) }
+        guard code.utf8.count < 200_000, let highlightr = Self.highlightr else { return AttributedString(code) }
         _ = highlightr.setTheme(to: colorScheme == .dark ? "github-dark" : "github")
-        guard let language, !language.isEmpty, let highlighted = highlightr.highlight(code, as: language) else { return Text(code) }
+        guard let language, !language.isEmpty, let highlighted = highlightr.highlight(code, as: language) else { return AttributedString(code) }
         var result = AttributedString(highlighted.string)
         highlighted.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: highlighted.length)) { value, range, _ in
             guard let color = value as? NSColor, let range = Range(range, in: result) else { return }
             result[range].foregroundColor = Color(nsColor: color)
         }
-        return Text(result)
+        return result
     }
 }

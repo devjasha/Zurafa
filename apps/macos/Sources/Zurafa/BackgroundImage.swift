@@ -1,8 +1,11 @@
 import AppKit
+import CoreImage
 
 /// Dither looks for the background image, after ascii-magic.com's Dither style. `none` keeps the plain image.
 enum BackgroundFilter: String, CaseIterable {
     case none, floydSteinberg = "floyd-steinberg", atkinson, bayer, pico8 = "pico-8", c64
+    // monocode's effects: textures drawn over the artwork rather than palette dithers.
+    case dither, ascii, halftone, scanlines, haze
 
     var title: String {
         switch self {
@@ -12,7 +15,21 @@ enum BackgroundFilter: String, CaseIterable {
         case .bayer: "Bayer 8×8"
         case .pico8: "PICO-8"
         case .c64: "Commodore 64"
+        case .dither: "Dither"
+        case .ascii: "ASCII"
+        case .halftone: "Halftone"
+        case .scanlines: "Scanlines"
+        case .haze: "Haze"
         }
+    }
+
+    var isTexture: Bool { [.dither, .ascii, .halftone, .scanlines, .haze].contains(self) }
+
+    /// (location, opacity) from the top: the image fades toward the bottom, eased over the full
+    /// window height and never fully gone, so the focused pane's solid fill shows no hard edge.
+    var fadeStops: [(Double, Double)] {
+        self == .haze ? [(0, 1), (0.18, 1), (0.76, 0)]
+            : [(0, 1), (0.15, 1), (0.4, 0.75), (0.65, 0.42), (0.85, 0.2), (1, 0.1)]
     }
 
     /// Source pixels per dither pixel, so the pattern stays visible on Retina.
@@ -177,5 +194,98 @@ enum BackgroundImageStore {
         output.interpolationQuality = .none
         output.draw(image, in: CGRect(x: 0, y: 0, width: output.width, height: output.height))
         return output.makeImage()
+    }
+
+    /// monocode's texture effects, run at the artwork's resolution (at most 2048 px) on premultiplied RGBA.
+    static func textured(_ image: CGImage, effect: BackgroundFilter) -> CGImage? {
+        let scale = min(1, 2048 / Double(max(image.width, image.height)))
+        let width = max(1, Int(Double(image.width) * scale)), height = max(1, Int(Double(image.height) * scale))
+        guard let source = pixels(image, width, height) else { return nil }
+        var soft = source, strong = source
+        if effect == .haze {
+            // Haze blends toward two blurs further down the image.
+            guard let base = self.image(from: source, width: width, height: height),
+                  let s = blurred(base, sigma: 5), let t = blurred(base, sigma: 12) else { return nil }
+            soft = s; strong = t
+        }
+        var output = source
+        let sample = { (x: Int, y: Int) in (min(y, height - 1) * width + min(x, width - 1)) * 4 }
+        let luma = { (i: Int) in (Double(source[i]) * 0.2126 + Double(source[i + 1]) * 0.7152 + Double(source[i + 2]) * 0.0722).rounded() }
+        let byte = { (v: Double) in UInt8(min(255, max(0, v.rounded()))) }
+        for y in 0..<height {
+            let at = Double(y) / Double(height)
+            for x in 0..<width {
+                let o = (y * width + x) * 4
+                switch effect {
+                case .dither:
+                    let p = sample(x / 2 * 2 + 1, y / 2 * 2 + 1)
+                    let peak = Double(max(source[p], source[p + 1], source[p + 2])), alpha = Double(source[p + 3])
+                    let lit = alpha > 0 && peak / alpha > (monoBayer[y / 2 % 4][x / 2 % 4] + 0.5) / 16
+                    let gain = lit ? alpha / max(peak, 1) : 0.08
+                    for c in 0..<3 { output[o + c] = byte(Double(source[p + c]) * gain) }
+                    output[o + 3] = source[p + 3]
+                case .ascii:
+                    let p = sample(x / 6 * 6 + 3, y / 8 * 8 + 4)
+                    let glyph = glyphs[Int((luma(p) / 255).squareRoot() * 9)]
+                    let ink = x % 6 < 5 && y % 8 < 7 && glyph[y % 8] & (1 << (4 - x % 6)) != 0
+                    for c in 0..<3 { output[o + c] = byte(Double(source[o + c]) * 0.6 + (ink ? Double(source[p + c]) * 0.4 : 0)) }
+                case .halftone:
+                    let radius = 2 * (0.3 + 0.7 * (luma(sample(x / 4 * 4, y / 4 * 4)) / 255).squareRoot())
+                    let p = sample(x / 4 * 4 + 2, y / 4 * 4 + 2)
+                    let distance = hypot(Double(x % 4) - 1.5, Double(y % 4) - 1.5)
+                    let coverage = min(1, max(0, radius + 0.5 - distance)) * Double(source[p + 3]) / 255
+                    for c in 0..<3 { output[o + c] = byte(Double(source[o + c]) * 0.6 + Double(source[p + c]) * coverage * 0.4) }
+                case .scanlines:
+                    if y % 3 == 0 { for c in 0..<3 { output[o + c] = byte(Double(source[o + c]) * 0.52) } }
+                case .haze:
+                    let softMix = min(1, max(0, (at - 0.18) / 0.52)), strongMix = min(1, max(0, (at - 0.22) / 0.54))
+                    let darken = min(1, max(0, (at - 0.15) / 0.61)) * 0.70
+                    let mix = y % 3 == 0 ? 1 - (1 - darken) * 0.64 : darken
+                    let dark = 23 * Double(source[o + 3]) / 255
+                    for c in 0..<3 {
+                        let a = Double(source[o + c]) * (1 - softMix) + Double(soft[o + c]) * softMix
+                        let b = a * (1 - strongMix) + Double(strong[o + c]) * strongMix
+                        output[o + c] = byte(b * (1 - mix) + dark * mix)
+                    }
+                default: break
+                }
+            }
+        }
+        return self.image(from: output, width: width, height: height)
+    }
+
+    private static let monoBayer: [[Double]] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+    /// 5×7 glyphs from darkest to brightest, one row per byte, high bit on the left.
+    private static let glyphs: [[Int]] = [
+        [0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 4, 0], [0, 4, 0, 0, 4, 0, 0], [0, 0, 0, 14, 0, 0, 0],
+        [0, 0, 14, 0, 14, 0, 0], [0, 4, 4, 31, 4, 4, 0], [0, 21, 14, 31, 14, 21, 0],
+        [10, 10, 31, 10, 31, 10, 10], [17, 2, 4, 4, 8, 16, 17], [14, 17, 23, 21, 23, 16, 14],
+    ]
+
+    private static func pixels(_ image: CGImage, _ width: Int, _ height: Int) -> [UInt8]? {
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                          bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.interpolationQuality = .high
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        return drawn ? bytes : nil
+    }
+
+    static func image(from bytes: [UInt8], width: Int, height: Int) -> CGImage? {
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                       provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+    }
+
+    private static func blurred(_ image: CGImage, sigma: Double) -> [UInt8]? {
+        let input = CIImage(cgImage: image)
+        let output = input.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: input.extent)
+        guard let blurred = CIContext().createCGImage(output, from: input.extent) else { return nil }
+        return pixels(blurred, image.width, image.height)
     }
 }

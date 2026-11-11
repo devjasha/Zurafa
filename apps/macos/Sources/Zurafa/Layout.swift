@@ -43,3 +43,44 @@ indirect enum Layout: Equatable, Codable {
         }
     }
 }
+
+/// Where a pane sits in its tab, and the side it slides in from when new (a split's second half).
+struct PaneFrame: Equatable {
+    let id: String
+    let rect: CGRect
+    let from: Axis?
+}
+
+/// A split's divider: its path in the tree, for resizing, and the box the split divides.
+struct SplitHandle: Equatable {
+    let path: [Int]
+    let axis: Axis
+    let ratio: Double
+    let rect: CGRect
+}
+
+extension Layout {
+    /// Every pane's frame in `rect`, divided by the split ratios: one flat list, so a pane keeps its
+    /// identity (and animates) when splits form or close around it.
+    func frames(in rect: CGRect, from: Axis? = nil) -> [PaneFrame] {
+        switch self {
+        case .pane(let id): [PaneFrame(id: id, rect: rect, from: from)]
+        case .split(let axis, let ratio, let first, let second):
+            first.frames(in: rect.halves(axis, ratio).0) + second.frames(in: rect.halves(axis, ratio).1, from: second.isPane ? axis : nil)
+        }
+    }
+
+    func splits(in rect: CGRect, path: [Int] = []) -> [SplitHandle] {
+        guard case .split(let axis, let ratio, let first, let second) = self else { return [] }
+        let (a, b) = rect.halves(axis, ratio)
+        return [SplitHandle(path: path, axis: axis, ratio: ratio, rect: rect)] + first.splits(in: a, path: path + [0]) + second.splits(in: b, path: path + [1])
+    }
+
+    private var isPane: Bool { if case .pane = self { true } else { false } }
+}
+
+private extension CGRect {
+    func halves(_ axis: Axis, _ ratio: Double) -> (CGRect, CGRect) {
+        axis == .horizontal ? divided(atDistance: width * ratio, from: .minXEdge) : divided(atDistance: height * ratio, from: .minYEdge)
+    }
+}

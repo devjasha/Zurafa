@@ -150,7 +150,7 @@ struct PhoneChat: View {
     }
 
     private var composer: some View {
-        PhoneComposer(draft: $draft, focus: $composing, send: send) {
+        PhoneComposer(draft: $draft, focus: $composing, agent: agent, dir: block?.foreground?.cwd ?? block?.pwd, send: send) {
             AgentMenus(agent: agent, program: program, settings: settings, change: agent == "claude" ? apply : nil)
         }
     }
@@ -190,11 +190,23 @@ struct PhoneChat: View {
 struct PhoneComposer<Menus: View>: View {
     @Binding var draft: String
     var focus: FocusState<Bool>.Binding
+    /// The agent and Mac folder whose commands, skills and files the composer suggests.
+    var agent = ""
+    var dir: String?
     let send: () -> Void
     @ViewBuilder let menus: Menus
+    @ObservedObject private var catalog = CompletionCatalog.shared
+
+    private var suggestions: [Suggestion] {
+        guard let word = Completion.token(draft), let dir else { return [] }
+        let files = word.first == "@" ? catalog.files(in: dir) : []
+        let commands = word.first == "@" || agent.isEmpty ? [] : catalog.commands(agent, in: dir)
+        return Completion.suggestions(draft, commands: commands, files: files)
+    }
 
     var body: some View {
         let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let shown = suggestions
         VStack(alignment: .leading, spacing: 10) {
             TextField("Ask, build, / for commands, @ for references…", text: $draft, axis: .vertical)
                 .lineLimit(1...6)
@@ -214,6 +226,44 @@ struct PhoneComposer<Menus: View>: View {
         }
         .padding(12)
         .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        // Floats above the composer, so the text stays put while the list comes and goes.
+        .overlay(alignment: .top) {
+            if !shown.isEmpty {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(shown) { s in
+                            Button { draft = Completion.accept(s, in: draft) } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: s.icon).foregroundStyle(.secondary).frame(width: 18)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(s.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                                        if !s.detail.isEmpty { Text(s.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .scrollIndicators(.never)
+                .frame(height: min(CGFloat(shown.count) * 46 + 8, 260))
+                .glass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .alignmentGuide(.top) { $0[.bottom] + 8 }
+                .transition(.opacity.combined(with: .offset(y: 8)))
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: shown.isEmpty)
+        .zIndex(1)
+        // Loaded while the chat opens, so the first "/" or "@" lists at once.
+        .task(id: "\(agent) \(dir ?? "")") {
+            guard let dir else { return }
+            if !agent.isEmpty { _ = catalog.commands(agent, in: dir) }
+            _ = catalog.files(in: dir)
+        }
     }
 }
 
@@ -378,13 +428,22 @@ private struct PhoneWorkRow: View {
                         Text(item.tool).foregroundStyle(item.ok ? Color.secondary : .red)
                         Text(item.input.hasPrefix("/") && !item.input.contains(" ") ? URL(fileURLWithPath: item.input).lastPathComponent : item.input)
                             .font(.footnote.monospaced()).lineLimit(1)
+                        if !item.edits.isEmpty {
+                            let lines = item.edits.flatMap(\.lines)
+                            Text("+\(lines.filter { $0.mark == .added }.count)").foregroundStyle(.green).font(.caption.monospaced())
+                            Text("−\(lines.filter { $0.mark == .removed }.count)").foregroundStyle(.red).font(.caption.monospaced())
+                        }
                         if item.result == nil { ProgressView().controlSize(.mini) }
                         else if !item.ok { Image(systemName: "xmark").font(.caption2.weight(.bold)).foregroundStyle(.red) }
                     }
                     .font(.footnote)
                 }
                 .buttonStyle(.plain)
-                if open, let result = item.result, !result.isEmpty {
+                if open {
+                    ForEach(Array(item.edits.enumerated()), id: \.offset) { _, edit in PhoneEditDiff(edit: edit) }
+                }
+                // An edit's result only says it worked; its diff is the news, unless it failed.
+                if open, let result = item.result, !result.isEmpty, item.edits.isEmpty || !item.ok {
                     Text(result).font(.caption2.monospaced()).foregroundStyle(item.ok ? Color.secondary : .red)
                         .lineLimit(30).textSelection(.enabled)
                 }
@@ -392,6 +451,30 @@ private struct PhoneWorkRow: View {
         } else {
             Text(markdown(item.text)).font(.subheadline).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// An edit as a diff, as on the Mac: removed lines on red, added lines on green.
+// shortcut: no syntax colors (the Mac's Highlightr isn't in the phone app); add it if diffs get hard to read.
+private struct PhoneEditDiff: View {
+    let edit: FileEdit
+    var body: some View {
+        let lines = edit.lines
+        ScrollView(.horizontal) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.prefix(200).enumerated()), id: \.offset) { _, line in
+                    Text((line.mark == .added ? "+ " : line.mark == .removed ? "− " : "  ") + line.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 6)
+                        .background(line.mark == .added ? Color.green.opacity(0.15) : line.mark == .removed ? Color.red.opacity(0.15) : .clear)
+                }
+                if lines.count > 200 { Text("\(lines.count - 200) more lines").foregroundStyle(.secondary).padding(6) }
+            }
+            .font(.caption2.monospaced())
+            .textSelection(.enabled)
+            .padding(.vertical, 4)
+        }
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -418,7 +501,7 @@ struct PhoneNewChat: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                PhoneComposer(draft: $draft, focus: $composing, send: start) {
+                PhoneComposer(draft: $draft, focus: $composing, agent: agent, dir: folder, send: start) {
                     AgentMenus(agent: agent, program: ["claude": Program.claude, "codex": .codex, "pi": .pi][agent] ?? .shell, settings: settings, change: { settings.merge($0) },
                                pickAgent: { agent = $0; settings = AgentSettings() })
                 }
@@ -469,4 +552,9 @@ struct PhoneNewChat: View {
             }
         }
     }
+}
+
+extension CompletionCatalog {
+    /// Through the Mac's daemon, which runs zurafa-orch there.
+    static let shared = CompletionCatalog { args in (try? await MacOrch.run(args)).map { Data($0.utf8) } }
 }

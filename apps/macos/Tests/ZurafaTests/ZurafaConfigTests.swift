@@ -32,6 +32,8 @@ final class ZurafaConfigTests: XCTestCase {
         XCTAssertEqual(config.backgroundImageEnabled, false)
         XCTAssertEqual(config.backgroundImageFilter, .pico8)
         XCTAssertEqual(ZurafaConfigLoader.parse("background-image-filter = braille").backgroundImageFilter, BackgroundFilter.none)
+        XCTAssertEqual(ZurafaConfigLoader.parse("background-image-opacity = 0.4").style.backgroundImageOpacity, 0.4)
+        XCTAssertEqual(ZurafaConfigLoader.parse("background-image-opacity = 2").style.backgroundImageOpacity, 0.65)
     }
 
     func testParsesTabIconStack() {
@@ -80,6 +82,7 @@ final class ZurafaConfigTests: XCTestCase {
         unfocused-pane-opacity = 2
         sidebar-width = 10
         sidebar-position = Right
+        focused-pane-background = Transparent
         """)
 
         XCTAssertEqual(config.theme, "light:Day,dark:Night")
@@ -91,6 +94,8 @@ final class ZurafaConfigTests: XCTestCase {
         XCTAssertEqual(config.style.unfocusedPaneOpacity, ZurafaStyle().unfocusedPaneOpacity)
         XCTAssertEqual(config.style.sidebarWidth, ZurafaStyle().sidebarWidth)
         XCTAssertTrue(config.style.sidebarOnRight)
+        XCTAssertFalse(config.style.focusedPaneSolid)
+        XCTAssertTrue(ZurafaStyle().focusedPaneSolid, "the focused pane is solid unless asked otherwise")
         XCTAssertFalse(ZurafaConfigLoader.parse("sidebar-position = middle").style.sidebarOnRight)
     }
 
@@ -140,5 +145,15 @@ final class ZurafaConfigTests: XCTestCase {
         let themes = GhosttyConfigLoader(xdgConfigHome: root, bundledThemes: ghostty, zurafaThemes: zurafa).themes()
         XCTAssertEqual(themes, [.init(name: "Mine", source: .user), .init(name: "Nord", source: .user),
                                 .init(name: "Dracula", source: .zurafa), .init(name: "Abyss", source: .ghostty)])
+    }
+
+    func testTheFocusedPaneIsSolidUnlessChosenTransparent() {
+        var style = ZurafaStyle()
+        style.windowOpacity = 0.9
+        XCTAssertEqual(style.paneFill(focused: true, moving: false), 1)
+        XCTAssertEqual(style.paneFill(focused: false, moving: false), 0.35 * 0.9, accuracy: 0.0001)
+        style.focusedPaneSolid = false
+        XCTAssertEqual(style.paneFill(focused: true, moving: false), 0.9, accuracy: 0.0001)
+        XCTAssertEqual(style.paneFill(focused: false, moving: true), 1, "a pane being moved stays solid")
     }
 }

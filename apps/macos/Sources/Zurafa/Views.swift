@@ -70,26 +70,46 @@ extension View {
 /// System window material with a restrained tint keeps the workspace legible.
 struct Backdrop: View {
     var importedBackground: Color?
-    var backgroundImage: NSImage?
     var opacity = 1.0
     var body: some View {
         WindowMaterial(behindWindow: opacity < 1)
             .overlay(Theme.background.opacity(0.40))
             .overlay(importedBackground?.opacity(0.88))
-            .overlay {
-                if let backgroundImage {
-                    GeometryReader { geometry in
-                        Image(nsImage: backgroundImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipped()
-                            .opacity(0.24)
-                    }
-                    .allowsHitTesting(false)
-                }
-            }
             .opacity(opacity)
+    }
+}
+
+/// The background image laid out over the whole window; each pane shows only the part behind it,
+/// so all panes together reveal one image.
+struct PaneBackgroundImage: Equatable {
+    var image: NSImage
+    var opacity: Double
+    var filter: BackgroundFilter
+    var window: CGSize
+
+    static let space = "window"
+}
+
+extension EnvironmentValues {
+    @Entry var paneBackgroundImage: PaneBackgroundImage?
+}
+
+private struct PaneBackgroundSlice: View {
+    let background: PaneBackgroundImage
+    var body: some View {
+        GeometryReader { geometry in
+            let frame = geometry.frame(in: .named(PaneBackgroundImage.space))
+            Image(nsImage: background.image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: background.window.width, height: background.window.height)
+                .clipped()
+                .mask(LinearGradient(stops: background.filter.fadeStops.map { .init(color: .black.opacity($0.1), location: $0.0) },
+                                     startPoint: .top, endPoint: .bottom))
+                .opacity(background.opacity)
+                .offset(x: -frame.minX, y: -frame.minY)
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -252,12 +272,11 @@ struct WindowConfig: NSViewRepresentable {
 struct RootView: View {
     @EnvironmentObject var ws: Workspace
     @Environment(\.colorScheme) private var systemScheme
+    @State private var windowSize = CGSize.zero
 
     var body: some View {
         ZStack {
-            Backdrop(importedBackground: ws.workspaceBackground,
-                     backgroundImage: ws.backgroundImageEnabled ? ws.backgroundImage : nil,
-                     opacity: ws.style.windowOpacity)
+            Backdrop(importedBackground: ws.workspaceBackground, opacity: ws.style.windowOpacity)
             // Each pane pads itself by half the gap, so the outer edge gets the other half.
             let edge = ws.style.paneGap / 2
             if ws.tabStripLayout == .vertical {
@@ -285,6 +304,11 @@ struct RootView: View {
             if let kind = ws.editor { EditorSheet(kind: kind) }
         }
         .ignoresSafeArea()
+        .coordinateSpace(name: PaneBackgroundImage.space)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { windowSize = $0 }
+        .environment(\.paneBackgroundImage, ws.backgroundImageEnabled ? ws.backgroundImage.map {
+            PaneBackgroundImage(image: $0, opacity: ws.style.backgroundImageOpacity, filter: ws.backgroundFilter, window: windowSize)
+        } : nil)
         .background(WindowConfig(appearance: ws.appearance, translucent: ws.style.windowOpacity < 1) { controls in
             if ws.windowControls != controls { ws.windowControls = controls } // unguarded, every publish would re-run this
         })
@@ -815,41 +839,50 @@ struct IconButton: View {
     }
 }
 
+/// A tab's panes, side by side as its splits divide them. One flat list keyed by pane, so opening
+/// or closing a pane moves the others smoothly instead of rebuilding them in new places.
 struct LayoutView: View {
     let layout: Layout
     let window: String
-    var path: [Int] = []
-    /// Edge a new pane slides in from; the daemon puts a split's new pane in `second`.
-    var entrance: Edge?
     @EnvironmentObject var ws: Workspace
 
     var body: some View {
-        switch layout {
-        case .pane(let id): PaneView(id: id, entrance: entrance)
-        case .split(let axis, let ratio, let a, let b):
-            GeometryReader { g in
-                let h = axis == .horizontal
-                let total = h ? g.size.width : g.size.height
-                let first = total * ratio
-                ZStack(alignment: .topLeading) {
-                    LayoutView(layout: a, window: window, path: path + [0]).frame(width: h ? first : g.size.width, height: h ? g.size.height : first)
-                    LayoutView(layout: b, window: window, path: path + [1], entrance: h ? .trailing : .bottom).frame(width: h ? total - first : g.size.width, height: h ? g.size.height : total - first)
-                        .offset(x: h ? first : 0, y: h ? 0 : first)
+        GeometryReader { g in
+            let box = CGRect(origin: .zero, size: g.size)
+            ZStack(alignment: .topLeading) {
+                ForEach(layout.frames(in: box), id: \.id) { f in
+                    PaneView(id: f.id, entrance: f.from.map { $0 == .horizontal ? .trailing : .bottom })
+                        .frame(width: f.rect.width, height: f.rect.height)
+                        .offset(x: f.rect.minX, y: f.rect.minY)
+                        .transition(.asymmetric(insertion: .identity, removal: .opacity.combined(with: .scale(scale: 0.96))))
+                }
+                ForEach(layout.splits(in: box), id: \.path) { split in
+                    let h = split.axis == .horizontal
+                    let at = h ? split.rect.minX + split.rect.width * split.ratio : split.rect.minY + split.rect.height * split.ratio
                     Color.clear // wide invisible hit area over the gap between panes
-                        .frame(width: h ? 12 : g.size.width, height: h ? g.size.height : 12)
+                        .frame(width: h ? 12 : split.rect.width, height: h ? split.rect.height : 12)
                         .contentShape(Rectangle())
-                        .offset(x: h ? first - 6 : 0, y: h ? 0 : first - 6)
+                        .offset(x: h ? at - 6 : split.rect.minX, y: h ? split.rect.minY : at - 6)
                         .onHover { inside in
                             if inside { (h ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push() } else { NSCursor.pop() }
                         }
-                        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(window + path.map(String.init).joined())).onChanged {
-                            ws.resize(path, (h ? $0.location.x : $0.location.y) / total)
+                        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(window)).onChanged {
+                            ws.resize(split.path, h ? ($0.location.x - split.rect.minX) / split.rect.width : ($0.location.y - split.rect.minY) / split.rect.height)
                         })
                 }
-                .coordinateSpace(name: window + path.map(String.init).joined())
             }
+            .coordinateSpace(name: window)
+            // Panes coming and going animate; dragging a divider follows the pointer.
+            .animation(.pane, value: layout.panes)
         }
+        // Another tab is another set of panes: it replaces this one instead of morphing into it.
+        .id(window)
     }
+}
+
+extension Animation {
+    /// How panes open, close and make room: quick enough to feel direct, slow enough to follow.
+    static let pane = Animation.smooth(duration: 0.3)
 }
 
 /// A pane's header being dragged; its own type so terminal text drops never read as one.
@@ -874,6 +907,7 @@ struct PaneView: View {
     @EnvironmentObject var ws: Workspace
     @State private var shown: Bool
     @State private var dropTarget = false
+    @Environment(\.paneBackgroundImage) private var backgroundImage
     /// Pane ids already on screen, so tab switches and re-splits don't replay the entrance animation.
     private static var seen = Set<String>()
 
@@ -930,6 +964,9 @@ struct PaneView: View {
             .onTapGesture { if peek { ws.peekFocused = true } else { ws.focus(id) } }
             // Dragging a header onto another pane of the tab swaps the two; a floating pane's header moves it.
             .modifier(HeaderDrag(id: id, title: m.title, move: move))
+            // The terminal takes its final size at once while the pane animates around it (clipped),
+            // so its program gets one resize instead of one per frame.
+            GeometryReader { g in
             // The terminal stays underneath the chat, so its agent and screen live on unchanged.
             ZStack {
                 TerminalHost(id: id, program: m.program,
@@ -938,16 +975,25 @@ struct PaneView: View {
                     .allowsHitTesting(!chat)
                 if chat {
                     ChatView(pane: id, focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
-                        .background(Theme.paneTint)
+                        // Clear over a background image, so the chat shows the pane's part of it like the terminal does.
+                        .background(backgroundImage == nil ? Theme.paneTint : .clear)
+                        // A tab switch reuses this view for another pane; a new identity restarts its feed for that pane.
+                        .id(id)
                 }
             }
+            .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
+            .transaction(value: g.size) { $0.animation = nil }
+            }
+            .clipped()
                 .padding(.leading, style.panePadding ?? 14).padding(.trailing, style.panePadding ?? 8)
                 .padding(.bottom, style.panePadding ?? 10)
                 .opacity(focused ? 1 : style.unfocusedPaneOpacity)
         }
         // Inactive panes recede into the backdrop: faint fill, faint stroke, no lift.
         // The fill follows window-opacity so a translucent window stays see-through.
-        .background(Theme.paneTint.opacity(move != nil ? 1 : (focused ? 1 : 0.35) * style.windowOpacity), in: shape)
+        // Above the pane's fill, so a solid focused pane still shows its part of the image.
+        .background { if let backgroundImage { PaneBackgroundSlice(background: backgroundImage).clipShape(shape) } }
+        .background(Theme.paneTint.opacity(style.paneFill(focused: focused, moving: move != nil)), in: shape)
         .overlay(shape.strokeBorder(Theme.paneStroke.opacity(focused ? 1 : 0.5), lineWidth: 1))
         .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 2).opacity(dropTarget ? 1 : 0))
         .dropDestination(for: PaneDrag.self) { items, _ in
@@ -964,7 +1010,7 @@ struct PaneView: View {
         .scaleEffect(shown || entrance != nil ? 1 : 0.97)
         .onAppear {
             guard Self.seen.insert(id).inserted else { return }
-            withAnimation(.smooth(duration: 0.3)) { shown = true }
+            withAnimation(.pane) { shown = true }
         }
     }
 }

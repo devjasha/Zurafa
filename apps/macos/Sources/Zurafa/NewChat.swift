@@ -40,7 +40,7 @@ struct NewChat: View {
         let dir = folder ?? folders.first ?? NSHomeDirectory()
         VStack(alignment: .leading, spacing: 0) {
             Text("What should we work on?").font(.system(size: 20, weight: .semibold)).padding(.bottom, 14)
-            Composer(draft: $draft, focus: $composing, send: { start(in: dir) }) {
+            Composer(draft: $draft, focus: $composing, agent: agent, dir: dir, send: { start(in: dir) }) {
                 AgentControls(agent: agent, settings: settings, change: { settings.merge($0) },
                               pickAgent: { agent = $0; settings = AgentSettings() },
                               attach: { urls in draft += urls.map { "@" + $0.path }.joined(separator: " ") + " " })

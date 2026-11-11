@@ -222,8 +222,10 @@ struct AgentControls: View {
                     .padding(6)
                 }
             }
-            .frame(width: 280, height: 340)
+            // As tall as its models, up to a cap past which the list scrolls.
+            .frame(width: 280).frame(maxHeight: 340)
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var accessMenu: some View {

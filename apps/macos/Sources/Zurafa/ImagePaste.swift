@@ -9,6 +9,16 @@ enum ImagePaste {
         return "\(url.path) "
     }
 
+    /// The images on the pasteboard as files: image files copied in Finder, or a copied bitmap saved as a PNG.
+    static func imageFiles(from pasteboard: NSPasteboard = .general) -> [URL] {
+        let urls = (pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? [])
+            .filter { NSImage(contentsOf: $0) != nil }
+        if !urls.isEmpty { return urls }
+        // Text copied from a rich editor can carry a picture of itself; the text is what was meant.
+        guard pasteboard.string(forType: .string) == nil, let image = image(from: pasteboard), let url = try? save(image) else { return [] }
+        return [url]
+    }
+
     private static func image(from pasteboard: NSPasteboard) -> NSImage? {
         if let data = pasteboard.data(forType: .png), let image = NSImage(data: data) { return image }
         if let data = pasteboard.data(forType: .tiff), let image = NSImage(data: data) { return image }

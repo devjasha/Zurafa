@@ -1,4 +1,3 @@
-import MarkdownUI
 import SwiftUI
 
 /// Runs `zurafa-orch follow` for a thread and publishes its chat as it grows.
@@ -32,7 +31,7 @@ import SwiftUI
         out.fileHandleForReading.readabilityHandler = { [weak self] h in
             let chunk = h.availableData
             if chunk.isEmpty { h.readabilityHandler = nil; return }
-            let batch = lines.take(chunk)
+            let batch = lines.take(chunk).compactMap(ChatLog.decode)
             guard !batch.isEmpty else { return }
             Task { @MainActor in
                 guard let self else { return }
@@ -93,7 +92,7 @@ struct ChatView: View {
                             Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary).font(.callout)
                         }
                         ForEach(Array(turns.enumerated()), id: \.element.id) { i, turn in
-                            TurnView(turn: turn, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1)
+                            TurnView(turn: turn, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1).equatable()
                         }
                         if live && turns.isEmpty {
                             FoldLine(meta: m, title: "\(m.agentName) working…", live: true, open: .constant(false), expandable: false)
@@ -153,7 +152,7 @@ struct ChatView: View {
         var settings = feed.log.settings
         settings.merge(changed)
         let agent: String = m.thread?.agent ?? { switch m.program { case .claude: "claude"; case .codex: "codex"; case .pi: "pi"; default: "" } }()
-        return Composer(draft: $draft, focus: $composing, send: send) {
+        return Composer(draft: $draft, focus: $composing, agent: agent, dir: m.pwd ?? NSHomeDirectory(), send: send) {
             // Only Claude Code takes these while it runs; the others show what they started with.
             AgentControls(agent: agent, settings: settings, change: agent == "claude" ? apply : nil, attach: attach)
         }
@@ -197,13 +196,23 @@ struct AgentGlyph: View {
     }
 }
 
-private struct TurnView: View {
+/// Equatable so a new transcript line rebuilds only the turn it changed, not every turn on screen.
+private struct TurnView: View, Equatable {
     let turn: ChatTurn
     let meta: PaneMeta
     let live: Bool
     let last: Bool
+    /// The theme's ink when made, so a theme change still redraws turns that didn't change.
+    private let ink = Theme.ink
     @State private var open: Bool?
     @State private var hover = false
+
+    /// A finished turn shows only the agent's name and glyph from its pane; the live one also its status.
+    static func == (a: Self, b: Self) -> Bool {
+        a.turn == b.turn && a.live == b.live && a.last == b.last && a.ink == b.ink
+            && a.meta.program == b.meta.program && a.meta.agentName == b.meta.agentName
+            && (!a.live || (a.meta.record?.state == b.meta.record?.state && a.meta.statusMessage == b.meta.statusMessage))
+    }
 
     var body: some View {
         // The work shows while the agent is on it, and folds away once it answers.
@@ -216,7 +225,7 @@ private struct TurnView: View {
                 if shown {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(turn.work.enumerated()), id: \.element.id) { i, item in
-                            WorkRow(item: item)
+                            WorkRow(item: item).equatable()
                                 .padding(.leading, 20).padding(.bottom, 6)
                                 .background(alignment: .topLeading) { Rail(tail: i == turn.work.count - 1).stroke(Theme.ink.opacity(0.16)) }
                         }
@@ -224,8 +233,7 @@ private struct TurnView: View {
                 }
             }
             if let answer = turn.answer {
-                Markdown(answer.text)
-                    .markdownTheme(.gitHub.text { ForegroundColor(Theme.ink); FontSize(13.5) })
+                ChatMarkdown(text: answer.text, ink: Theme.ink, size: 13.5).equatable()
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 8) {
@@ -331,9 +339,12 @@ private struct UserBubble: View {
 
 /// One step of a turn's work: a tool call ("Read  main.rs") that opens on its output, or what the
 /// agent said between calls, quieter than its answer.
-private struct WorkRow: View {
+private struct WorkRow: View, Equatable {
     let item: ChatItem
+    private let ink = Theme.ink
     @State private var open = false
+
+    static func == (a: Self, b: Self) -> Bool { a.item == b.item && a.ink == b.ink }
 
     var body: some View {
         switch item.kind {
@@ -343,6 +354,7 @@ private struct WorkRow: View {
                     HStack(spacing: 6) {
                         Text(item.tool).font(.system(size: 13)).foregroundStyle(item.ok ? Theme.ink.opacity(0.5) : .red)
                         target
+                        if !item.edits.isEmpty { DiffCount(edits: item.edits) }
                         if item.result == nil {
                             ProgressView().controlSize(.mini)
                         } else if !item.ok {
@@ -354,7 +366,11 @@ private struct WorkRow: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                if open, let result = item.result, !result.isEmpty {
+                if open, !item.edits.isEmpty {
+                    ForEach(Array(item.edits.enumerated()), id: \.offset) { _, edit in EditDiff(edit: edit) }
+                }
+                // An edit's result only says it worked; its diff is the news, unless it failed.
+                if open, let result = item.result, !result.isEmpty, item.edits.isEmpty || !item.ok {
                     ScrollView {
                         Text(result).font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(item.ok ? Theme.ink.opacity(0.7) : .red.opacity(0.8))
@@ -364,8 +380,7 @@ private struct WorkRow: View {
                 }
             }
         default:
-            Markdown(item.text)
-                .markdownTheme(.gitHub.text { ForegroundColor(Theme.ink.opacity(0.65)); FontSize(13) })
+            ChatMarkdown(text: item.text, ink: Theme.ink.opacity(0.65), size: 13).equatable()
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -387,28 +402,229 @@ private struct WorkRow: View {
     }
 }
 
+/// "+12 −3": the lines an edit adds and removes.
+private struct DiffCount: View {
+    let edits: [FileEdit]
+    var body: some View {
+        let lines = edits.flatMap(\.lines)
+        HStack(spacing: 4) {
+            Text("+\(lines.filter { $0.mark == .added }.count)").foregroundStyle(.green)
+            Text("−\(lines.filter { $0.mark == .removed }.count)").foregroundStyle(.red)
+        }
+        .font(.system(size: 11, weight: .medium, design: .monospaced))
+    }
+}
+
+/// An edit as a diff in the file's syntax colors: removed lines on red, added lines on green.
+struct EditDiff: View {
+    let edit: FileEdit
+    /// Long writes show their start; the rest is in the file.
+    static let limit = 400
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var colored: (old: [AttributedString], new: [AttributedString])?
+
+    var body: some View {
+        let lines = edit.lines
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.prefix(Self.limit).enumerated()), id: \.offset) { _, line in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(line.mark == .added ? "+" : line.mark == .removed ? "−" : " ")
+                            .foregroundStyle(line.mark == .added ? .green : line.mark == .removed ? .red : .clear)
+                        Text(text(line)).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 0.5)
+                    .background(line.mark == .added ? Color.green.opacity(0.12) : line.mark == .removed ? Color.red.opacity(0.12) : .clear)
+                }
+                if lines.count > Self.limit {
+                    Text("\(lines.count - Self.limit) more lines").foregroundStyle(Theme.ink.opacity(0.45)).padding(8)
+                }
+            }
+            .font(.system(size: 11.5, design: .monospaced))
+            .textSelection(.enabled)
+            .padding(.vertical, 6)
+        }
+        .frame(maxHeight: 320)
+        .background(Theme.ink.opacity(0.03), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.ink.opacity(0.1)))
+        // Highlighted once per edit and theme, not on every redraw of the chat.
+        .task(id: colorScheme) {
+            let code = HighlightrCode(colorScheme: colorScheme), lang = URL(fileURLWithPath: edit.path).pathExtension.lowercased()
+            colored = (code.lines(edit.old, language: lang), code.lines(edit.new, language: lang))
+        }
+    }
+
+    private func text(_ line: FileEdit.Line) -> AttributedString {
+        let source = line.mark == .removed ? colored?.old : colored?.new
+        guard let source, source.indices.contains(line.at) else { return AttributedString(line.text) }
+        return source[line.at]
+    }
+}
+
+/// A chat message's Markdown as native text blocks (see `MarkdownBlock`), rendered again only when its
+/// text or colors change.
+struct ChatMarkdown: View, Equatable {
+    let text: String
+    let ink: Color
+    let size: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(MarkdownBlock.parse(text).enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .heading(let level, let t):
+                    inline(t).font(.system(size: size * [1.45, 1.25, 1.12, 1.0, 1.0, 1.0][level - 1], weight: .semibold))
+                        .padding(.top, level <= 2 ? 6 : 2)
+                case .paragraph(let t):
+                    inline(t)
+                case .list(let items):
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(item.marker).foregroundStyle(ink.opacity(0.7)).monospacedDigit()
+                                inline(item.text)
+                            }
+                            .padding(.leading, CGFloat(item.depth) * 18)
+                        }
+                    }
+                case .quote(let t):
+                    inline(t).foregroundStyle(ink.opacity(0.7))
+                        .padding(.leading, 12)
+                        .overlay(alignment: .leading) { Rectangle().fill(ink.opacity(0.2)).frame(width: 3) }
+                case .code(let language, let code):
+                    CodeCard(language: language, code: code, size: size)
+                case .table(let rows):
+                    TableCard(rows: rows, ink: ink, size: size)
+                case .rule:
+                    Divider()
+                }
+            }
+        }
+        .font(.system(size: size))
+        .foregroundStyle(ink)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func inline(_ t: String) -> Text {
+        Text((try? AttributedString(markdown: t, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(t))
+    }
+
+    static func == (a: Self, b: Self) -> Bool { a.text == b.text && a.ink == b.ink && a.size == b.size }
+}
+
+/// A fenced code block: its language, a copy button, and the code in its syntax colors.
+private struct CodeCard: View {
+    let language: String
+    let code: String
+    let size: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(language).font(.system(size: 11)).foregroundStyle(Theme.ink.opacity(0.5))
+                Spacer()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(code, forType: .string)
+                    copied = true
+                } label: { Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.system(size: 11)) }
+                    .buttonStyle(.plain).foregroundStyle(Theme.ink.opacity(0.5)).help("Copy the code")
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            Divider()
+            ScrollView(.horizontal) {
+                HighlightrCode(colorScheme: colorScheme).highlightCode(code, language: language.isEmpty ? nil : language)
+                    .font(.system(size: size * 0.88, design: .monospaced))
+                    .fixedSize()
+                    .padding(10)
+            }
+        }
+        .background(Theme.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.ink.opacity(0.1)))
+    }
+}
+
+/// A Markdown table: the first row as its header, the cells aligned in columns.
+private struct TableCard: View {
+    let rows: [[String]]
+    let ink: Color
+    let size: CGFloat
+
+    var body: some View {
+        let columns = rows.map(\.count).max() ?? 0
+        ScrollView(.horizontal) {
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { r, row in
+                    GridRow {
+                        ForEach(0..<columns, id: \.self) { c in
+                            let cell = c < row.count ? row[c] : ""
+                            Text((try? AttributedString(markdown: cell)) ?? AttributedString(cell))
+                                .fontWeight(r == 0 ? .semibold : .regular)
+                        }
+                    }
+                    if r == 0 { Divider().gridCellUnsizedAxes(.horizontal) }
+                }
+            }
+            .padding(10)
+        }
+        .background(ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(ink.opacity(0.1)))
+    }
+}
+
 /// The chat's input, as in Monocode: the text on top, the agent's chips and the send button under it.
 struct Composer<Chips: View>: View {
     @Binding var draft: String
     var placeholder = "Ask, build, / for commands, @ for references…"
     var focus: FocusState<Bool>.Binding
+    /// The agent and folder whose commands, skills and files the composer suggests.
+    var agent = ""
+    var dir: String?
     let send: () -> Void
     @ViewBuilder let chips: Chips
+    @ObservedObject private var catalog = CompletionCatalog.shared
+    @State private var selected = 0
+    /// The word the suggestions were closed for (Esc), so they stay closed until it changes.
+    @State private var closed: Substring?
+    /// Pasted or dropped images, shown above the text and sent ahead of it.
+    @State private var images: [URL] = []
+    @State private var pasteMonitor: Any?
+
+    private var suggestions: [Suggestion] {
+        guard let word = Completion.token(draft), word != closed, let dir else { return [] }
+        let files = word.first == "@" ? catalog.files(in: dir) : []
+        let commands = word.first == "@" || agent.isEmpty ? [] : catalog.commands(agent, in: dir)
+        return Completion.suggestions(draft, commands: commands, files: files)
+    }
 
     var body: some View {
-        let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty
+        let shown = suggestions
         VStack(alignment: .leading, spacing: 12) {
+            if !images.isEmpty { ImageStrip(images: $images) }
             TextField(placeholder, text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .lineLimit(1...10)
                 .frame(minHeight: 44, alignment: .topLeading)
                 .focused(focus)
-                .onSubmit(send)
+                .onSubmit(submit)
+                .onChange(of: draft) { selected = 0 }
+                .onKeyPress(.downArrow) { move(1, in: shown) }
+                .onKeyPress(.upArrow) { move(-1, in: shown) }
+                .onKeyPress(.tab) { pick(shown, sendingExact: false) }
+                .onKeyPress(.return) { pick(shown, sendingExact: true) }
+                .onKeyPress(.escape) {
+                    guard !shown.isEmpty else { return .ignored }
+                    closed = Completion.token(draft)
+                    return .handled
+                }
             HStack(spacing: 6) {
                 chips
                 Spacer(minLength: 0)
-                Button(action: send) {
+                Button(action: submit) {
                     Image(systemName: "chevron.up").font(.system(size: 13, weight: .semibold))
                         .frame(width: 32, height: 32)
                         .foregroundStyle(Theme.ink.opacity(ready ? 0.9 : 0.4))
@@ -422,5 +638,165 @@ struct Composer<Chips: View>: View {
         .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 10)
         .background(Theme.ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.ink.opacity(focus.wrappedValue ? 0.2 : 0.1)))
+        // Floats above the composer, so the text never moves while the list comes and goes.
+        .overlay(alignment: .top) {
+            if !shown.isEmpty {
+                SuggestionList(items: shown, selected: Binding(get: { min(selected, shown.count - 1) }, set: { selected = $0 }), pick: accept)
+                    .alignmentGuide(.top) { $0[.bottom] + 8 }
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
+        }
+        .animation(.snappy(duration: 0.16), value: shown.isEmpty)
+        .animation(.snappy(duration: 0.16), value: images)
+        .zIndex(1)
+        .dropDestination(for: URL.self) { urls, _ in
+            let dropped = urls.filter { NSImage(contentsOf: $0) != nil }
+            images += dropped
+            return !dropped.isEmpty
+        }
+        // The text field takes ⌘V itself and drops images, so an image paste is caught before it.
+        .onAppear {
+            pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [focus] event in
+                guard focus.wrappedValue, event.charactersIgnoringModifiers == "v",
+                      event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else { return event }
+                let pasted = ImagePaste.imageFiles()
+                guard !pasted.isEmpty else { return event }
+                images += pasted
+                return nil
+            }
+        }
+        .onDisappear { pasteMonitor.map(NSEvent.removeMonitor); pasteMonitor = nil }
+        // Loaded while the chat opens, so the first "/" or "@" lists at once.
+        .task(id: "\(agent) \(dir ?? "")") {
+            guard let dir else { return }
+            if !agent.isEmpty { _ = catalog.commands(agent, in: dir) }
+            _ = catalog.files(in: dir)
+        }
+    }
+
+    /// Sends the images as @-mentions ahead of the text, the way the attach button adds files.
+    private func submit() {
+        if !images.isEmpty {
+            draft = (images.map { "@" + $0.path } + [draft]).joined(separator: " ")
+            images = []
+        }
+        send()
+    }
+
+    private func move(_ by: Int, in shown: [Suggestion]) -> KeyPress.Result {
+        guard !shown.isEmpty else { return .ignored }
+        selected = (min(selected, shown.count - 1) + by + shown.count) % shown.count
+        return .handled
+    }
+
+    /// Return on a word that is already the whole command sends it instead of completing it again.
+    private func pick(_ shown: [Suggestion], sendingExact: Bool) -> KeyPress.Result {
+        guard !shown.isEmpty else { return .ignored }
+        let s = shown[min(selected, shown.count - 1)]
+        if sendingExact, Completion.token(draft).map(String.init) == s.insert { return .ignored }
+        accept(s)
+        return .handled
+    }
+
+    private func accept(_ s: Suggestion) {
+        draft = Completion.accept(s, in: draft)
+        focus.wrappedValue = true
+    }
+}
+
+/// The images going with the next message, as thumbnails above the composer's text.
+private struct ImageStrip: View {
+    @Binding var images: [URL]
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+                ForEach(images, id: \.self) { url in
+                    ImageThumb(url: url) { images.removeAll { $0 == url } }
+                }
+            }
+            .padding(.top, 6).padding(.trailing, 6) // room for the remove badge
+        }
+        .scrollIndicators(.never)
+    }
+}
+
+private struct ImageThumb: View {
+    let url: URL
+    let remove: () -> Void
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else {
+                Image(systemName: "photo").foregroundStyle(Theme.ink.opacity(0.4))
+            }
+        }
+        .frame(width: 64, height: 64)
+        .background(Theme.ink.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.ink.opacity(0.12)))
+        .overlay(alignment: .topTrailing) {
+            Button(action: remove) {
+                Image(systemName: "xmark.circle.fill").font(.system(size: 16))
+                    .symbolRenderingMode(.palette).foregroundStyle(.white, .black.opacity(0.65))
+            }
+            .buttonStyle(.plain).offset(x: 6, y: -6)
+            .help("Remove").accessibilityLabel("Remove \(url.lastPathComponent)")
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { NSWorkspace.shared.open(url) }
+        .help(url.lastPathComponent)
+        // Decoded once, not on every keystroke in the composer.
+        .task(id: url) { image = NSImage(contentsOf: url) }
+    }
+}
+
+extension CompletionCatalog {
+    static let shared = CompletionCatalog(run: runOrch)
+}
+
+/// The commands, skills or files matching what is typed, in a panel above the composer as in Monocode.
+private struct SuggestionList: View {
+    let items: [Suggestion]
+    @Binding var selected: Int
+    let pick: (Suggestion) -> Void
+    /// Where the pointer last was: rows scrolling under a resting pointer must not take the selection from the arrow keys.
+    @State private var pointer: CGPoint?
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 1) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
+                        HStack(spacing: 8) {
+                            Image(systemName: s.icon).frame(width: 16).foregroundStyle(Theme.ink.opacity(0.6))
+                            Text(s.title).font(.system(size: 13, weight: .medium)).lineLimit(1).layoutPriority(1)
+                            Text(s.detail).font(.system(size: 12)).foregroundStyle(Theme.ink.opacity(0.5)).lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 8).frame(height: 28)
+                        .background(i == selected ? Theme.ink.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .contentShape(Rectangle())
+                        .onTapGesture { pick(s) }
+                        .onContinuousHover(coordinateSpace: .global) { phase in
+                            guard case .active(let at) = phase, at != pointer else { return }
+                            pointer = at
+                            selected = i
+                        }
+                        .id(s.id)
+                    }
+                }
+                .padding(5)
+            }
+            .scrollIndicators(.never)
+            .frame(height: min(CGFloat(items.count) * 29 + 10, 242))
+            .onChange(of: selected) { if items.indices.contains(selected) { proxy.scrollTo(items[selected].id) } }
+            .onChange(of: items) { if let first = items.first { proxy.scrollTo(first.id, anchor: .top) } }
+        }
+        .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.ink.opacity(0.12)))
+        .shadow(color: .black.opacity(0.25), radius: 14, y: 4)
     }
 }

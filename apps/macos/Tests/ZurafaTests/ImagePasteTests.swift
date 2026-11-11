@@ -31,6 +31,21 @@ final class ImagePasteTests: XCTestCase {
         XCTAssertEqual(ImagePaste.promptText(from: pasteboard), "'\(file.path)' ")
     }
 
+    func testChatPasteTakesImagesButLeavesTextWithAPictureToTheTextField() throws {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name(UUID().uuidString))
+        pasteboard.clearContents()
+        pasteboard.setData(pngData(), forType: .png)
+        let files = ImagePaste.imageFiles(from: pasteboard)
+        defer { files.forEach { try? FileManager.default.removeItem(at: $0) } }
+        XCTAssertEqual(files.count, 1)
+        XCTAssertNotNil(NSImage(contentsOf: files[0]))
+
+        pasteboard.clearContents()
+        pasteboard.setString("some text", forType: .string)
+        pasteboard.setData(pngData(), forType: .png)
+        XCTAssertEqual(ImagePaste.imageFiles(from: pasteboard), [])
+    }
+
     private func pngData() -> Data {
         let image = NSImage(size: NSSize(width: 2, height: 2))
         image.lockFocus()

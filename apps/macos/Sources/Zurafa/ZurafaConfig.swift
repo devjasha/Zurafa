@@ -18,17 +18,27 @@ struct ZurafaConfig: Equatable {
 
 /// Window and pane look. Defaults match the built-in design.
 struct ZurafaStyle: Equatable {
+    /// How much a pane's fill covers the backdrop. Inactive panes recede into it; the focused one
+    /// is solid unless the user chose transparent, then it follows window-opacity; a moving one is solid.
+    func paneFill(focused: Bool, moving: Bool) -> Double {
+        if moving || (focused && focusedPaneSolid) { return 1 }
+        return (focused ? 1 : 0.35) * windowOpacity
+    }
+
     var windowOpacity = 1.0
     var paneGap: CGFloat = 8
     /// nil keeps the built-in uneven inset around the terminal text.
     var panePadding: CGFloat?
     var paneCornerRadius: CGFloat = 14
     var unfocusedPaneOpacity = 0.7
+    /// The focused pane covers the backdrop; false lets it follow window-opacity like the rest.
+    var focusedPaneSolid = true
     var sidebarWidth: CGFloat = 194
     var sidebarOnRight = false
     /// Where the other panes' icons peek out from behind a tab's icon: right, left, down or up.
     var tabIconStack = "right"
     var accent: UInt32?
+    var backgroundImageOpacity = 0.24
 }
 
 struct ZurafaConfigLoader {
@@ -93,8 +103,15 @@ struct ZurafaConfigLoader {
         case "background-image-filter": config.backgroundImageFilter = BackgroundFilter(rawValue: value.lowercased()) ?? BackgroundFilter.none
         case "theme": config.theme = value.isEmpty ? nil : value
         case "accent-color": config.style.accent = GhosttyConfigLoader.hex(value)
+        case "background-image-opacity": Double(value).map { config.style.backgroundImageOpacity = min(0.65, max(0.05, $0)) }
         case "window-opacity": number(value, in: 0...1).map { config.style.windowOpacity = $0 }
         case "unfocused-pane-opacity": number(value, in: 0...1).map { config.style.unfocusedPaneOpacity = $0 }
+        case "focused-pane-background":
+            switch value.lowercased() {
+            case "solid": config.style.focusedPaneSolid = true
+            case "transparent": config.style.focusedPaneSolid = false
+            default: break
+            }
         case "pane-gap": number(value, in: 0...64).map { config.style.paneGap = $0 }
         case "pane-padding": number(value, in: 0...64).map { config.style.panePadding = $0 }
         case "pane-corner-radius": number(value, in: 0...40).map { config.style.paneCornerRadius = $0 }
@@ -186,6 +203,8 @@ struct ZurafaConfigLoader {
     # pane-corner-radius = 14
     # Opacity of panes without focus, 0.0 to 1.0.
     # unfocused-pane-opacity = 0.7
+    # Background of the focused pane: solid, or transparent to follow window-opacity.
+    # focused-pane-background = solid
 
     # Width of the vertical tab sidebar, 140 to 480.
     # sidebar-width = 194
@@ -197,8 +216,11 @@ struct ZurafaConfigLoader {
     # Background image
     # background-image = ~/Pictures/wallpaper.png
     # background-image-enabled = true
-    # Dither filter: none, floyd-steinberg, atkinson, bayer, pico-8 or c64.
+    # Filter: none, floyd-steinberg, atkinson, bayer, pico-8, c64,
+    # dither, ascii, halftone, scanlines or haze.
     # background-image-filter = none
+    # Opacity, 0.05 to 0.65.
+    # background-image-opacity = 0.24
 
     """
 

@@ -31,7 +31,7 @@ final class BackgroundImageTests: XCTestCase {
             context.fill(CGRect(x: x, y: 0, width: 1, height: 48))
         }
         let source = try XCTUnwrap(context.makeImage())
-        for filter in BackgroundFilter.allCases where filter != .none {
+        for filter in BackgroundFilter.allCases where filter != .none && !filter.isTexture {
             let image = try XCTUnwrap(BackgroundImageStore.dithered(source, filter: filter))
             let bytes = try XCTUnwrap(image.dataProvider?.data as Data?)
             let color = { (x: Int, y: Int) -> UInt32 in
@@ -49,6 +49,28 @@ final class BackgroundImageTests: XCTestCase {
                 }
             }
             XCTAssertGreaterThan(used.count, 1, filter.rawValue)
+        }
+    }
+
+    func testTextureEffectsMatchMonocode() throws {
+        let flat = [UInt8](repeating: 0, count: 9 * 9 * 4).enumerated().map { [130, 180, 210, 255][$0.offset % 4] as UInt8 }
+        let source = try XCTUnwrap(BackgroundImageStore.image(from: flat, width: 9, height: 9))
+        let pixel = { (image: CGImage, x: Int, y: Int) -> [UInt8] in
+            let bytes = image.dataProvider!.data! as Data
+            return Array(bytes[(y * image.bytesPerRow + x * 4)..<(y * image.bytesPerRow + x * 4 + 4)])
+        }
+        // Dither: lit cells scale to full brightness, unlit ones keep 8%, on a 2-pixel Bayer 4×4 grid.
+        let dither = try XCTUnwrap(BackgroundImageStore.textured(source, effect: .dither))
+        let bayer = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+        for y in 0..<9 { for x in 0..<9 {
+            XCTAssertEqual(pixel(dither, x, y), bayer[y / 2 % 4][x / 2 % 4] <= 12 ? [158, 219, 255, 255] : [10, 14, 17, 255])
+        } }
+        let scan = try XCTUnwrap(BackgroundImageStore.textured(source, effect: .scanlines))
+        XCTAssertEqual(pixel(scan, 0, 0), [68, 94, 109, 255])
+        XCTAssertEqual(pixel(scan, 0, 1), [130, 180, 210, 255])
+        for effect in [BackgroundFilter.ascii, .halftone, .haze] {
+            let image = try XCTUnwrap(BackgroundImageStore.textured(source, effect: effect))
+            XCTAssertEqual([image.width, image.height], [9, 9], effect.rawValue)
         }
     }
 }

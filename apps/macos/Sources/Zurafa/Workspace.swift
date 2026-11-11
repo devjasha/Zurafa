@@ -751,7 +751,8 @@ enum EditorKind: String, Identifiable {
         guard filter != .none, let source = backgroundSource else { backgroundImage = backgroundPlain; return }
         backgroundRender = Task {
             let filtered = await Task.detached(priority: .userInitiated) {
-                BackgroundImageStore.dithered(source, filter: filter)
+                filter.isTexture ? BackgroundImageStore.textured(source, effect: filter)
+                    : BackgroundImageStore.dithered(source, filter: filter)
             }.value
             guard !Task.isCancelled else { return }
             backgroundImage = filtered.map { NSImage(cgImage: $0, size: .zero) } ?? backgroundPlain

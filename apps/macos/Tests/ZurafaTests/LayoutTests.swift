@@ -119,4 +119,17 @@ final class LayoutTests: XCTestCase {
         gap.sequence = 21
         XCTAssertTrue(cursor.accept(gap))
     }
+
+    func testPanesGetFlatFramesAndSplitsTheirHandles() {
+        let layout = Layout.split(axis: .horizontal, ratio: 0.5, first: .pane("a"),
+                                  second: .split(axis: .vertical, ratio: 0.25, first: .pane("b"), second: .pane("c")))
+        let box = CGRect(x: 0, y: 0, width: 800, height: 400)
+        XCTAssertEqual(layout.frames(in: box), [
+            PaneFrame(id: "a", rect: CGRect(x: 0, y: 0, width: 400, height: 400), from: nil),
+            PaneFrame(id: "b", rect: CGRect(x: 400, y: 0, width: 400, height: 100), from: nil),
+            PaneFrame(id: "c", rect: CGRect(x: 400, y: 100, width: 400, height: 300), from: .vertical),
+        ])
+        XCTAssertEqual(layout.splits(in: box).map(\.path), [[], [1]])
+        XCTAssertEqual(layout.splits(in: box)[1].rect, CGRect(x: 400, y: 0, width: 400, height: 400))
+    }
 }

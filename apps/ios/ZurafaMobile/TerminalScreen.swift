@@ -46,6 +46,7 @@ struct TerminalScreen: View {
         Group {
             if chat {
                 PhoneChat(pane: id, block: block, remote: session?.remote)
+                    .id(id) // Its feed follows one pane; another pane gets a fresh one.
             } else {
                 TerminalPane(id: id).padding(.horizontal, 6)
             }

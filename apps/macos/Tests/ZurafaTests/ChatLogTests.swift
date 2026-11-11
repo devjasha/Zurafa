@@ -63,4 +63,68 @@ final class ChatLogTests: XCTestCase {
         let block = try JSONDecoder().decode(BlockSnapshot.self, from: Data(json.utf8))
         XCTAssertEqual(block.resume, AgentThread(agent: "claude", session: "c0ef"))
     }
+
+    func testTheComposerCompletesCommandsSkillsAndFiles() {
+        let commands = [AgentCommand(name: "/compact", description: "Free context", kind: "builtin"),
+                        AgentCommand(name: "/code-review", description: "Review changes", kind: "skill"),
+                        AgentCommand(name: "$deploy", description: "Ship it", kind: "skill")]
+        let files = ["README.md", "src/", "src/main.rs", "src/chat/view.swift"]
+        let names = { (draft: String) in Completion.suggestions(draft, commands: commands, files: files).map(\.insert) }
+        XCTAssertEqual(names("/co"), ["/compact", "/code-review"])
+        XCTAssertEqual(names("/review"), ["/code-review"])
+        XCTAssertEqual(names("fix /co"), [], "a slash command only starts the message")
+        XCTAssertEqual(names("use $dep"), ["$deploy"])
+        XCTAssertEqual(names("look at @"), ["@src/", "@README.md"])
+        XCTAssertEqual(names("@view"), ["@src/chat/view.swift"])
+        XCTAssertEqual(names("hello"), [])
+        let s = Completion.suggestions("look at @mai", commands: [], files: files)[0]
+        XCTAssertEqual(Completion.accept(s, in: "look at @mai"), "look at @src/main.rs ")
+    }
+
+    func testEditToolsCarryTheirDiff() {
+        var log = ChatLog()
+        log.add(Data(#"{"kind":"tool","id":"t1","tool":"Edit","input":"/a.swift","edits":[{"path":"/a.swift","old":"a\nb\nc\n","new":"a\nB\nc\nd\n"}]}"#.utf8))
+        let edit = log.items[0].edits[0]
+        XCTAssertEqual(edit.path, "/a.swift")
+        XCTAssertEqual(edit.lines.map { "\($0.mark)\($0.text)" }, ["samea", "removedb", "addedB", "samec", "addedd"])
+        XCTAssertEqual(edit.lines.map(\.at), [0, 1, 1, 2, 3])
+        XCTAssertEqual(FileEdit(path: "n", old: "", new: "x\n").lines, [FileEdit.Line(mark: .added, text: "x", at: 0)])
+    }
+
+    func testMarkdownSplitsIntoBlocks() {
+        let md = """
+        # Title
+        Some **bold**
+        text.
+
+        - one
+          wrapped
+        - two
+          1. nested
+
+        > quoted
+        > more
+
+        | a | b |
+        |---|:-:|
+        | 1 | 2 |
+
+        ---
+        ```swift
+        let x = 1
+
+        print(x)
+        ```
+        """
+        XCTAssertEqual(MarkdownBlock.parse(md), [
+            .heading(level: 1, text: "Title"),
+            .paragraph("Some **bold** text."),
+            .list([.init(marker: "•", text: "one wrapped", depth: 0), .init(marker: "•", text: "two", depth: 0), .init(marker: "1.", text: "nested", depth: 1)]),
+            .quote("quoted more"),
+            .table([["a", "b"], ["1", "2"]]),
+            .rule,
+            .code(language: "swift", text: "let x = 1\n\nprint(x)"),
+        ])
+        XCTAssertEqual(MarkdownBlock.parse("#hashtag and 3 * 4"), [.paragraph("#hashtag and 3 * 4")])
+    }
 }
