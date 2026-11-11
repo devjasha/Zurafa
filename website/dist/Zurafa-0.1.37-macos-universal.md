@@ -1,0 +1,7 @@
+- **See what agents changed.** File edits in a chat show how many lines they add and remove; open one to see the diff in the file's syntax colors. Works for Claude Code, Codex and Pi, on Mac and iPhone.
+- **Better code in chats.** Code blocks show their language, syntax colors and a copy button.
+- **Paste images into a chat.** Paste or drop a screenshot or image and it shows as a thumbnail above your message; remove it with ×, or click it to open it in Preview.
+- **Smoother chats.** Long conversations open and scroll faster, and new output no longer redraws the whole chat.
+- **Panes animate.** Opening, closing and swapping panes now moves the others smoothly, and the terminal inside resizes only once.
+- **Background textures.** Dither, ASCII, halftone, scanlines and haze effects for the background image, an opacity slider, and a choice of a solid or transparent focused pane (Settings → Appearance).
+- **Fixes.** Switching tabs no longer shows another tab's chat, and the model menu is only as tall as its list.
