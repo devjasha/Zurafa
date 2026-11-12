@@ -30,14 +30,15 @@ struct NewChat: View {
     @State private var agent = "claude"
     @State private var settings = AgentSettings()
     @State private var folder: String?
-    /// Folders agents ran in, newest first (from zurafa-orch threads): where a new chat most likely goes.
-    @State private var folders: [String] = []
+    @State private var sessionID: String?
+    @State private var pickingSession = false
+    @State private var query = ""
     @State private var problem: String?
     @State private var starting = false
     @FocusState private var composing: Bool
 
     var body: some View {
-        let dir = folder ?? folders.first ?? NSHomeDirectory()
+        let dir = folder ?? sessionDirectory(selectedSession)
         VStack(alignment: .leading, spacing: 0) {
             Text("What should we work on?").font(.system(size: 20, weight: .semibold)).padding(.bottom, 14)
             Composer(draft: $draft, focus: $composing, agent: agent, dir: dir, send: { start(in: dir) }) {
@@ -46,43 +47,113 @@ struct NewChat: View {
                               attach: { urls in draft += urls.map { "@" + $0.path }.joined(separator: " ") + " " })
             }
             ComposerFooter(dir: dir, working: starting) {
-                Menu {
-                    ForEach(folders.prefix(10), id: \.self) { f in Button(abbreviate(f)) { folder = f } }
-                    if !folders.isEmpty { Divider() }
-                    Button("Choose Folder…") { choose() }
-                } label: { Label(URL(fileURLWithPath: dir).lastPathComponent, systemImage: "folder") }
-                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                    .help(dir)
+                Button { pickingSession.toggle() } label: {
+                    HStack(spacing: 6) {
+                        Label(selectedSession?.label ?? "Select session", systemImage: "rectangle.stack")
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Choose a Zurafa session")
+                .popover(isPresented: $pickingSession, arrowEdge: .bottom) { sessionPicker }
+                .disabled(starting)
             }
             if let problem { Text(problem).font(.callout).foregroundStyle(.red).padding(.top, 8) }
         }
         .padding(24)
         .frame(width: 680)
-        .onAppear { composing = true }
-        .onExitCommand { dismiss() }
-        .task {
-            struct Row: Decodable { let cwd: String }
-            guard let data = await runOrch(["threads", "--json", "--all", "-n", "60"]),
-                  let rows = try? JSONDecoder().decode([Row].self, from: data) else { return }
-            var seen = Set<String>()
-            folders = rows.map(\.cwd).filter { seen.insert($0).inserted && FileManager.default.fileExists(atPath: $0) }
+        .onAppear {
+            sessionID = ws.currentSession?.remote == nil ? ws.sessionID : ws.orderedSessions.first(where: { $0.remote == nil })?.sessionID
+            composing = true
         }
+        .onExitCommand { dismiss() }
+    }
+
+    private var selectedSession: SessionSnapshot? {
+        ws.sessions.first { $0.sessionID == sessionID }
+    }
+
+    private func sessionDirectory(_ session: SessionSnapshot?) -> String {
+        guard let session else { return NSHomeDirectory() }
+        let focused = session.windows.first { $0.windowID == session.activeWindow }?.selectedBlock
+        let blocks = focused.flatMap { session.blocks[$0] }.map { [$0] } ?? []
+        for block in blocks + session.blocks.values.sorted(by: { $0.blockID < $1.blockID }) {
+            guard let raw = block.pwd ?? block.foreground?.cwd else { continue }
+            let path = URL(string: raw)?.isFileURL == true ? URL(string: raw)!.path : (raw as NSString).expandingTildeInPath
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue { return path }
+        }
+        return NSHomeDirectory()
+    }
+
+    private var sessionPicker: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Work in a session").font(.headline)
+            TextField("Search sessions…", text: $query).textFieldStyle(.roundedBorder)
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(ws.orderedSessions.filter { query.isEmpty || $0.label.localizedCaseInsensitiveContains(query) }, id: \.sessionID) { session in
+                        Button {
+                            sessionID = session.sessionID
+                            folder = nil
+                            problem = nil
+                            pickingSession = false
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: session.remote == nil ? "rectangle.stack" : "network")
+                                    .font(.title3).foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(session.label).fontWeight(.medium)
+                                    Text(session.remote == nil ? abbreviate(sessionDirectory(session)) : "Remote chats unavailable")
+                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                }
+                                Spacer()
+                                Text("\(session.windows.count) tabs").font(.caption).foregroundStyle(.secondary)
+                                Image(systemName: "checkmark").opacity(session.sessionID == sessionID ? 1 : 0)
+                            }
+                            .padding(10)
+                            .contentShape(Rectangle())
+                            .background(session.sessionID == sessionID ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(session.remote != nil)
+                    }
+                }
+            }
+            .frame(maxHeight: 260)
+            if ws.orderedSessions.filter({ query.isEmpty || $0.label.localizedCaseInsensitiveContains(query) }).isEmpty {
+                Text("No sessions found").foregroundStyle(.secondary)
+            }
+            Divider()
+            HStack {
+                Label(abbreviate(folder ?? sessionDirectory(selectedSession)), systemImage: "folder")
+                    .lineLimit(1).truncationMode(.middle).font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Choose Folder…") { pickingSession = false; choose() }
+            }
+        }
+        .padding(16)
+        .frame(width: 420)
     }
 
     private func start(in dir: String) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !starting else { return }
+        guard let session = selectedSession, session.remote == nil else {
+            problem = "Choose a local Zurafa session to start a chat."
+            return
+        }
         starting = true
         problem = nil
         let flags = settings.startFlags(agent)
         Task {
-            let out = await runOrch(["spawn", agent, text, "--cwd", dir, "--no-parent", "-l", "\(agent): \(text.prefix(24))"] + (flags.isEmpty ? [] : ["--"] + flags))
+            let out = await runOrch(["spawn", agent, text, "--session", session.sessionID, "--cwd", dir, "--no-parent", "-l", "\(agent): \(text.prefix(24))"] + (flags.isEmpty ? [] : ["--"] + flags))
             starting = false
             guard let pane = out.flatMap({ String(data: $0, encoding: .utf8) })?.trimmingCharacters(in: .whitespacesAndNewlines), !pane.isEmpty else {
                 problem = "Could not start \(agent). Is it installed and on your PATH?"
                 return
             }
-            ws.jump(to: pane)
+            await ws.revealChat(pane)
             dismiss()
         }
     }

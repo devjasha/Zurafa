@@ -466,6 +466,14 @@ enum EditorKind: String, Identifiable {
         if hidden(in: snapshot?.sessions[owner]).contains(pane) { float(pane, in: owner) } else { focus(pane) }
     }
 
+    /// A newly spawned chat may arrive before its creation event updates the UI.
+    func revealChat(_ pane: String) async {
+        do {
+            apply(try await daemon.snapshot())
+            jump(to: pane)
+        } catch { commandError = error.localizedDescription }
+    }
+
     /// Panes waiting on you, or else finished ones, in workspace, tab and pane order.
     var panesNeedingYou: [String] {
         let all = orderedSessions.flatMap { tabs(in: $0).flatMap(\.panes) + hidden(in: $0) }
