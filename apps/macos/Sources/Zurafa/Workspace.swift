@@ -17,7 +17,7 @@ enum TabStripLayout: String {
     case horizontal, vertical
 }
 
-struct PaneMeta {
+struct PaneMeta: Equatable {
     var program: Program = .shell
     var title = "Shell"
     var cwd = "~"
@@ -288,22 +288,23 @@ enum EditorKind: String, Identifiable {
             refresh()
         case "session_created", "session_destroyed", "window_created", "window_closed", "active_window_changed": refresh()
         case "terminal.title_changed":
-            if let id = event.blockID, let title = event.payload.object?["title"]?.string { metas[id]?.title = title }
+            if let title = event.payload.object?["title"]?.string { edit(event.blockID) { $0.title = title } }
         case "terminal.pwd_changed":
-            if let id = event.blockID, let pwd = event.payload.object?["pwd"]?.string {
-                metas[id]?.cwd = displayPath(pwd)
-                metas[id]?.pwd = URL(string: pwd)?.isFileURL == true ? URL(string: pwd)!.path : pwd
+            if let pwd = event.payload.object?["pwd"]?.string {
+                let cwd = displayPath(pwd), path = URL(string: pwd)?.isFileURL == true ? URL(string: pwd)!.path : pwd
+                edit(event.blockID) { $0.cwd = cwd; $0.pwd = path }
             }
         case "terminal.process_changed":
-            if let id = event.blockID {
+            if event.blockID != nil {
                 let remote = event.sessionID.flatMap { snapshot?.sessions[$0]?.remote }
                 let name = event.payload.object?["foreground"]?.object?["name"]?.string
                 let executable = event.payload.object?["foreground"]?.object?["executable"]?.string
                 let argv = event.payload.object?["foreground"]?.object?["argv"]?.array?.compactMap(\.string)
-                metas[id]?.program = Program.detect(name, executable: executable, argv: argv, remote: remote != nil, remoteShell: remote?.shellProgram ?? .ssh)
-                if metas[id]?.pwd == nil, let cwd = event.payload.object?["foreground"]?.object?["cwd"]?.string {
-                    metas[id]?.cwd = displayPath(cwd)
-                    metas[id]?.pwd = cwd
+                let program = Program.detect(name, executable: executable, argv: argv, remote: remote != nil, remoteShell: remote?.shellProgram ?? .ssh)
+                let cwd = event.payload.object?["foreground"]?.object?["cwd"]?.string
+                edit(event.blockID) {
+                    $0.program = program
+                    if $0.pwd == nil, let cwd { $0.cwd = self.displayPath(cwd); $0.pwd = cwd }
                 }
             }
         case "terminal.child_exited":
@@ -314,8 +315,8 @@ enum EditorKind: String, Identifiable {
                let data = try? JSONEncoder().encode(value),
                let record = try? JSONDecoder().decode(ProgramStatus.self, from: data) {
                 let before = metas[id]?.status
-                metas[id]?.setStatus(key, record)
-                metas[id]?.shown = event.payload.object?["shown"]?.string
+                let shown = event.payload.object?["shown"]?.string
+                edit(id) { $0.setStatus(key, record); $0.shown = shown }
                 if let after = metas[id]?.status, after != before, after == "blocked" || after == "completed" { notify(id) }
             }
         case "terminal.program_status_removed":
@@ -334,6 +335,13 @@ enum EditorKind: String, Identifiable {
             }
         default: break // Future event names are intentionally ignored.
         }
+    }
+
+    /// Changes one pane's meta, publishing only when something differs: agents resend the same title and status constantly.
+    private func edit(_ id: String?, _ change: (inout PaneMeta) -> Void) {
+        guard let id, var meta = metas[id] else { return }
+        change(&meta)
+        if meta != metas[id] { metas[id] = meta }
     }
 
     private func refresh() {
@@ -457,6 +465,8 @@ enum EditorKind: String, Identifiable {
     func focus(_ id: String) {
         peekFocused = false
         let owner = snapshot?.sessions.first(where: { $0.value.blocks[id] != nil })?.key ?? sessionID
+        // Show the switch now; the daemon's snapshot confirms or corrects it.
+        if owner == sessionID, let i = tabs.firstIndex(where: { $0.panes.contains(id) }) { selected = i; tabs[i].focus = id }
         command(["op": .string("focus"), "session": .string(owner), "block": .string(id)])
     }
     /// Shows a pane in whichever workspace holds it; a hidden one comes back floating.
@@ -549,6 +559,7 @@ enum EditorKind: String, Identifiable {
     func selectTab(_ i: Int) { if tabs.indices.contains(i) { focus(tabs[i].focus) } }
     func resize(_ path: [Int], _ ratio: Double) {
         guard !tab.id.isEmpty else { return }
+        tabs[selected].layout = tabs[selected].layout.setting(ratio: min(0.95, max(0.05, ratio)), at: path)
         command(["op": .string("resize"), "session": .string(sessionID), "window": .string(tab.id), "path": .array(path.map { .number(Double($0)) }), "ratio": .number(min(0.95, max(0.05, ratio)))])
     }
     /// Cycles the tab's panes, then the agent pane beside them when one is open.

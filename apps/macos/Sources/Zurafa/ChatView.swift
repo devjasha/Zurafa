@@ -2,8 +2,17 @@ import SwiftUI
 
 /// Runs `zurafa-orch follow` for a thread and publishes its chat as it grows.
 @MainActor final class ChatFeed: ObservableObject {
-    @Published var log = ChatLog()
+    @Published var log = ChatLog() { didSet { cached = nil } }
     @Published private(set) var problem: String?
+    /// The chat redraws on every workspace change; rebuild its turns only when the log changes.
+    private var cached: (live: Bool, turns: [ChatTurn])?
+
+    func turns(live: Bool) -> [ChatTurn] {
+        if let cached, cached.live == live { return cached.turns }
+        let turns = log.turns(live: live)
+        cached = (live, turns)
+        return turns
+    }
     private var process: Process?
 
     /// zurafa-orch: ZURAFA_ORCH, else the one the app ships, else one installed beside the shell's tools
@@ -85,7 +94,7 @@ struct ChatView: View {
     var body: some View {
         let m = ws.meta(pane)
         let live = m.record?.state == "working" || m.record?.state == "blocked"
-        let turns = feed.log.turns(live: live)
+        let turns = feed.turns(live: live)
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -617,7 +626,8 @@ struct EditDiff: View {
         // Highlighted once per edit and theme, not on every redraw of the chat.
         .task(id: colorScheme) {
             let code = HighlightrCode(colorScheme: colorScheme), lang = URL(fileURLWithPath: edit.path).pathExtension.lowercased()
-            colored = (code.lines(edit.old, language: lang), code.lines(edit.new, language: lang))
+            let edit = edit
+            colored = await Task.detached(priority: .userInitiated) { (code.lines(edit.old, language: lang), code.lines(edit.new, language: lang)) }.value
         }
     }
 

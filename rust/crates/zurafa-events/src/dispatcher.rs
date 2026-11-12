@@ -848,6 +848,12 @@ impl Dispatcher {
         if !b.running {
             return;
         }
+        // Programs resend their title and folder constantly; only a change is an event.
+        match &event {
+            TerminalEvent::TitleChanged { title, .. } if b.title.as_ref() == Some(title) => return,
+            TerminalEvent::PwdChanged { pwd, .. } if b.pwd.as_ref() == Some(pwd) => return,
+            _ => (),
+        }
         match &event {
             TerminalEvent::TitleChanged { title, .. } => b.title = Some(title.clone()),
             TerminalEvent::PwdChanged { pwd, .. } => b.pwd = Some(pwd.clone()),

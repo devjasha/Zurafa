@@ -444,7 +444,7 @@ fn real_pty_slow_subscriber_reports_gap_without_stalling_output() {
     slow.request(json!({"id":2,"type":"events.subscribe_all","subscription":"slow"}));
     let mut producer = d.connect();
     producer.hello();
-    producer.send(json!({"id":2,"type":"spawn","cols":80,"rows":24,"command":["/bin/sh","-c",r"i=0; while [ $i -lt 6000 ]; do printf '\033]7501;state=working:id=job\007'; i=$((i+1)); done; printf finished"]}));
+    producer.send(json!({"id":2,"type":"spawn","cols":80,"rows":24,"command":["/bin/sh","-c",r"i=0; while [ $i -lt 3001 ]; do printf '\033]7501;state=working:id=job\007\033]7501;state=blocked:id=job\007'; i=$((i+1)); done; printf finished"]}));
     // Deliberately do not drain `slow` while the child runs and emits reports.
     let messages = producer.collect(|m| {
         String::from_utf8_lossy(&output(m)).contains("finished") && m.iter().any(|v| v["id"] == 2)

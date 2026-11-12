@@ -284,6 +284,12 @@ impl Records {
                 if let Some(old) = self.records.get(&id).filter(|o| o.state == record.state) {
                     record.msg = record.msg.or_else(|| old.msg.clone());
                 }
+                // Hooks report `working` on every tool call; an unchanged record is not news.
+                if self.records.get(&id) == Some(&record) {
+                    self.clock += 1;
+                    self.order.insert(id, self.clock);
+                    return self.end_turn(was_working, vec![]);
+                }
                 let mut events = vec![];
                 if !self.records.contains_key(&id) && self.records.len() >= 256 {
                     // Deserialized snapshots omit update order; treat their untouched
@@ -335,6 +341,13 @@ mod tests {
         assert_eq!(r.records.len(), 2);
         r.apply(parse("state=clear").unwrap());
         assert!(r.records.is_empty());
+    }
+    #[test]
+    fn a_repeated_report_is_not_an_event() {
+        let mut r = Records::default();
+        assert_eq!(r.apply(parse("state=working:id=a").unwrap()).len(), 1);
+        assert!(r.apply(parse("state=working:id=a").unwrap()).is_empty());
+        assert_eq!(r.apply(parse("state=done:id=a").unwrap()).len(), 1);
     }
     #[test]
     fn the_record_most_needing_you_is_shown_and_subagents_never_are() {

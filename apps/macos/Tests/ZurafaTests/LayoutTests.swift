@@ -132,4 +132,12 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(layout.splits(in: box).map(\.path), [[], [1]])
         XCTAssertEqual(layout.splits(in: box)[1].rect, CGRect(x: 400, y: 0, width: 400, height: 400))
     }
+
+    func testSettingRatioChangesOnlyTheSplitAtPath() {
+        let inner = Layout.split(axis: .vertical, ratio: 0.5, first: .pane("b"), second: .pane("c"))
+        let tree = Layout.split(axis: .horizontal, ratio: 0.5, first: .pane("a"), second: inner)
+        XCTAssertEqual(tree.setting(ratio: 0.3, at: [1]),
+                       .split(axis: .horizontal, ratio: 0.5, first: .pane("a"), second: .split(axis: .vertical, ratio: 0.3, first: .pane("b"), second: .pane("c"))))
+        XCTAssertEqual(tree.setting(ratio: 0.7, at: []), .split(axis: .horizontal, ratio: 0.7, first: .pane("a"), second: inner))
+    }
 }

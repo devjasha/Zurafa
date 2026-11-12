@@ -38,7 +38,19 @@ enum ZurafaResources {
         return nil
     }
 
+    // Views ask for the same logos on every redraw; finding and parsing them each time is slow.
+    nonisolated(unsafe) private static var images: [String: NSImage?] = [:]
+    private static let lock = NSLock()
+
     static func image(named name: String, subdirectory: String? = nil) -> NSImage? {
+        let key = "\(subdirectory ?? "")/\(name)"
+        if let hit = lock.withLock({ images[key] }) { return hit }
+        let image = load(named: name, subdirectory: subdirectory)
+        lock.withLock { images[key] = image }
+        return image
+    }
+
+    private static func load(named name: String, subdirectory: String?) -> NSImage? {
         if subdirectory == nil, let image = Bundle.main.image(forResource: name) { return image }
         return url(forResource: name, withExtension: "png", subdirectory: subdirectory).flatMap { NSImage(contentsOf: $0) }
             ?? url(forResource: name, withExtension: "icns", subdirectory: subdirectory).flatMap { NSImage(contentsOf: $0) }

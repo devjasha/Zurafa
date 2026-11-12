@@ -62,9 +62,16 @@ struct AgentQuestion: Equatable {
 
 /// One change a tool made to a file: the text it replaced and the text it wrote (empty for a new file).
 struct FileEdit: Equatable {
-    var path = ""
-    var old = ""
-    var new = ""
+    let path: String
+    let old: String
+    let new: String
+    /// Worked out once: views read it several times per redraw.
+    let lines: [Line]
+
+    init(path: String = "", old: String = "", new: String = "") {
+        (self.path, self.old, self.new) = (path, old, new)
+        lines = Self.diff(old, new)
+    }
 
     enum Mark { case same, removed, added }
     struct Line: Equatable {
@@ -75,7 +82,7 @@ struct FileEdit: Equatable {
     }
 
     /// The change line by line, in reading order: removed lines before the added ones that replace them.
-    var lines: [Line] {
+    private static func diff(_ old: String, _ new: String) -> [Line] {
         let split = { (s: String) -> [String] in
             var l = s.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
             if l.last == "" { l.removeLast() }

@@ -76,6 +76,15 @@ extension Layout {
         return [SplitHandle(path: path, axis: axis, ratio: ratio, rect: rect)] + first.splits(in: a, path: path + [0]) + second.splits(in: b, path: path + [1])
     }
 
+    /// The same tree with the split at `path` set to `ratio`.
+    func setting(ratio new: Double, at path: [Int]) -> Layout {
+        guard case .split(let axis, let ratio, let first, let second) = self else { return self }
+        guard let step = path.first else { return .split(axis: axis, ratio: new, first: first, second: second) }
+        let rest = Array(path.dropFirst())
+        return step == 0 ? .split(axis: axis, ratio: ratio, first: first.setting(ratio: new, at: rest), second: second)
+                         : .split(axis: axis, ratio: ratio, first: first, second: second.setting(ratio: new, at: rest))
+    }
+
     private var isPane: Bool { if case .pane = self { true } else { false } }
 }
 

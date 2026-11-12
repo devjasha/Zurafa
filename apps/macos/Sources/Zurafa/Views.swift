@@ -378,8 +378,8 @@ struct TopBar: View {
                     .transition(tabTransition)
                 }
             }
-            .animation(shownSession == ws.sessionID ? .snappy(duration: 0.28) : nil, value: ws.tabs.map(\.id))
-            .animation(shownSession == ws.sessionID ? .snappy(duration: 0.28) : nil, value: ws.selected)
+            .animation(shownSession == ws.sessionID ? .snappy(duration: 0.15) : nil, value: ws.tabs.map(\.id))
+            .animation(shownSession == ws.sessionID ? .snappy(duration: 0.15) : nil, value: ws.selected)
             .onChange(of: ws.sessionID, initial: true) { _, id in shownSession = id }
             .padding(1)
             .zurafaGlass(in: Capsule())
@@ -510,8 +510,8 @@ struct VerticalTabSidebar: View {
                 }
                 .padding(.horizontal, 8)
                 // Every workspace's tabs are listed, so switching workspaces changes none of these ids.
-                .animation(.snappy(duration: 0.28), value: ws.orderedSessions.flatMap { ws.tabs(in: $0).map(\.id) })
-                .animation(.snappy(duration: 0.28), value: ws.tab.id)
+                .animation(.snappy(duration: 0.15), value: ws.orderedSessions.flatMap { ws.tabs(in: $0).map(\.id) })
+                .animation(.snappy(duration: 0.15), value: ws.tab.id)
             }
             HStack(spacing: 6) {
                 BarStatus()
@@ -882,7 +882,7 @@ struct LayoutView: View {
 
 extension Animation {
     /// How panes open, close and make room: quick enough to feel direct, slow enough to follow.
-    static let pane = Animation.smooth(duration: 0.3)
+    static let pane = Animation.smooth(duration: 0.18)
 }
 
 /// A pane's header being dragged; its own type so terminal text drops never read as one.
@@ -997,7 +997,7 @@ struct PaneView: View {
             return true
         } isTargeted: { dropTarget = $0 && !peek }
         .shadow(color: .black.opacity(move != nil ? 0.25 : focused ? 0.10 : 0), radius: 12, y: 3)
-        .animation(.easeInOut(duration: 0.2), value: focused)
+        .animation(.easeInOut(duration: 0.1), value: focused)
         .padding(style.paneGap / 2)
         .opacity(shown ? 1 : 0)
         // A split's new pane slides in from its side; a pane with no split (a new tab) just settles in.

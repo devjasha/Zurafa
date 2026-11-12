@@ -28,7 +28,6 @@ import Network
 
     private var conn: NWConnection?
     private var live = false // hello_ok received on `conn`
-    private var decoder = FrameDecoder()
     private var nextID = 1
     private var pending: [Int: CheckedContinuation<Msg, Error>] = [:]
     private var ready: Task<Void, Error>?
@@ -83,14 +82,14 @@ import Network
         let c = NWConnection(to: .unix(path: Self.socket), using: .tcp)
         conn = c
         c.stateUpdateHandler = { [weak self] s in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async { MainActor.assumeIsolated {
                 switch s {
                 case .waiting, .failed, .cancelled: self?.drop(c)
                 default: break
                 }
-            }
+            } }
         }
-        c.start(queue: .main)
+        c.start(queue: Self.io)
         receive(c)
         let hello = try await call(Msg(type: "hello", protocol: 2), on: c)
         guard hello.type == "hello_ok", hello.protocol == 2 else { throw DaemonError("daemon requires protocol 2") }
@@ -125,17 +124,25 @@ import Network
         c.send(content: FrameDecoder.frame(try! JSONEncoder().encode(m)), completion: .idempotent)
     }
 
-    private func receive(_ c: NWConnection) {
+    /// The socket's own queue: frames are split and decoded there, so the main thread only applies them.
+    nonisolated private static let io = DispatchQueue(label: "dev.zurafa.daemon", qos: .userInteractive)
+
+    private final class Reader: @unchecked Sendable {
+        var frames = FrameDecoder()
+        let json = JSONDecoder()
+    }
+
+    nonisolated private func receive(_ c: NWConnection, _ reader: Reader = Reader()) {
         c.receive(minimumIncompleteLength: 1, maximumLength: 1 << 16) { [weak self] data, _, done, err in
-            MainActor.assumeIsolated {
+            let messages = Result { try reader.frames.push(data ?? Data()).map { try reader.json.decode(Msg.self, from: $0) } }
+            let ok = (try? messages.get()) != nil && !done && err == nil
+            if ok { self?.receive(c, reader) }
+            DispatchQueue.main.async { MainActor.assumeIsolated {
                 guard let self, self.conn === c else { return }
-                do {
-                    for f in try self.decoder.push(data ?? Data()) { self.dispatch(try JSONDecoder().decode(Msg.self, from: f)) }
-                } catch {
-                    return self.drop(c)
-                }
-                if done || err != nil { self.drop(c) } else { self.receive(c) }
-            }
+                guard let messages = try? messages.get() else { return self.drop(c) }
+                messages.forEach(self.dispatch)
+                if !ok { self.drop(c) }
+            } }
         }
     }
 
@@ -178,7 +185,7 @@ import Network
     private func drop(_ c: NWConnection) {
         guard conn === c else { return }
         let wasLive = live
-        (conn, live, decoder) = (nil, false, FrameDecoder())
+        (conn, live) = (nil, false)
         c.cancel()
         let p = pending
         pending = [:]

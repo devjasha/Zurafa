@@ -206,6 +206,8 @@ private struct GitBadge: View {
 struct HighlightrCode: CodeSyntaxHighlighter {
     let colorScheme: ColorScheme
     private static let highlightr = Highlightr()
+    /// highlight.js runs in one JSContext with a mutable theme; chat diffs highlight it off the main thread.
+    private static let lock = NSLock()
 
     func highlightCode(_ code: String, language: String?) -> Text {
         Text(attributed(code, language: language))
@@ -238,8 +240,11 @@ struct HighlightrCode: CodeSyntaxHighlighter {
     private func highlight(_ code: String, language: String?) -> AttributedString {
         // shortcut: huge files render unhighlighted; highlight.js gets slow past ~200KB.
         guard code.utf8.count < 200_000, let highlightr = Self.highlightr else { return AttributedString(code) }
-        _ = highlightr.setTheme(to: colorScheme == .dark ? "github-dark" : "github")
-        guard let language, !language.isEmpty, let highlighted = highlightr.highlight(code, as: language) else { return AttributedString(code) }
+        let highlighted = Self.lock.withLock {
+            _ = highlightr.setTheme(to: colorScheme == .dark ? "github-dark" : "github")
+            return language.flatMap { $0.isEmpty ? nil : highlightr.highlight(code, as: $0) }
+        }
+        guard let highlighted else { return AttributedString(code) }
         var result = AttributedString(highlighted.string)
         highlighted.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: highlighted.length)) { value, range, _ in
             guard let color = value as? NSColor, let range = Range(range, in: result) else { return }

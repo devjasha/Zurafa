@@ -102,8 +102,19 @@ struct AgentList: View {
 
 /// "repo/branch" for a local folder, read from its .git without running git.
 enum GitHead {
+    // View bodies ask on every redraw; a few seconds' staleness is fine for a branch label.
+    nonisolated(unsafe) private static var cache: [String: (at: Date, head: String?)] = [:]
+    private static let lock = NSLock()
+
     static func describe(_ path: String?) -> String? {
         guard let path, path.hasPrefix("/") else { return nil }
+        if let hit = lock.withLock({ cache[path] }), Date().timeIntervalSince(hit.at) < 3 { return hit.head }
+        let head = read(path)
+        lock.withLock { cache[path] = (Date(), head) }
+        return head
+    }
+
+    private static func read(_ path: String) -> String? {
         let fm = FileManager.default
         var dir = URL(fileURLWithPath: path)
         while true {
