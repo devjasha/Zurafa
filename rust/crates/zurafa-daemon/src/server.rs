@@ -212,9 +212,15 @@ enum Request {
     /// One zurafa-orch command run on this machine (set, spawn, threads) and its output.
     #[serde(rename = "ui.orch")]
     UiOrch { id: u64, args: Vec<String> },
-    /// A phone's pasted image, saved on the Mac so the pane's agent can read it by path.
+    /// A phone's pasted image or attached file, saved on the Mac so the pane's agent can read it by path.
     #[serde(rename = "ui.paste_image")]
-    UiPasteImage { id: u64, data: String },
+    UiPasteImage {
+        id: u64,
+        data: String,
+        /// The file's name on the phone; without one the bytes say png or jpg.
+        #[serde(default)]
+        name: Option<String>,
+    },
     /// The Mac app's UI actions, sent on connect and whenever "Allow agents to control Zurafa"
     /// changes; an empty list means control is off.
     #[serde(rename = "ui.actions.register")]
@@ -331,11 +337,15 @@ enum Request {
         body: String,
     },
 }
-/// Named like the Mac app's own pastes, so agents treat both alike.
-fn save_image(bytes: &[u8]) -> std::io::Result<String> {
-    let ext = if bytes.starts_with(b"\x89PNG") { "png" } else { "jpg" };
+/// Named like the Mac app's own pastes, so agents treat both alike; a phone file keeps its name,
+/// reduced to characters that need no shell quoting.
+fn save_image(bytes: &[u8], name: Option<&str>) -> std::io::Result<String> {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
-    let path = std::env::temp_dir().join(format!("zurafa-paste-{nanos}.{ext}"));
+    let file = match name.map(|n| n.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '_' }).collect::<String>()) {
+        Some(n) if !n.trim_start_matches('.').is_empty() => format!("zurafa-paste-{nanos}-{}", n.trim_start_matches('.')),
+        _ => format!("zurafa-paste-{nanos}.{}", if bytes.starts_with(b"\x89PNG") { "png" } else { "jpg" }),
+    };
+    let path = std::env::temp_dir().join(file);
     std::io::Write::write_all(&mut std::fs::OpenOptions::new().write(true).create_new(true).open(&path)?, bytes)?;
     Ok(path.to_string_lossy().into_owned())
 }
@@ -534,7 +544,7 @@ async fn request(
             Ok(Err(e)) => error(id, e),
             Err(e) => error(id, e),
         },
-        Request::UiPasteImage { id, data } => match B64.decode(data).map_err(|e| e.to_string()).and_then(|b| save_image(&b).map_err(|e| e.to_string())) {
+        Request::UiPasteImage { id, data, name } => match B64.decode(data).map_err(|e| e.to_string()).and_then(|b| save_image(&b, name.as_deref()).map_err(|e| e.to_string())) {
             Ok(path) => json!({"id":id,"type":"ui.paste_image","path":path}),
             Err(e) => error(id, e),
         },
@@ -824,6 +834,8 @@ where
     let mut generation = 0;
     // A remote helper only wants its own terminal's bytes, not every terminal on the host.
     let mut own: HashSet<String> = HashSet::new();
+    // A waiter (`events.subscribe`, nothing attached) never reads terminal output.
+    let mut waiter = false;
     loop {
         let frame = tokio::select! {
             v=incoming.recv()=>match v {
@@ -833,6 +845,7 @@ where
                         Some(error(v.get("id"),"requires protocol 2").to_string())
                     }else{
                         let narrows = v["type"]=="attach" || (v["type"]=="spawn" && v["raw"]==true);
+                        waiter |= v["type"]=="events.subscribe";
                         let r = request(v,&connected.id,&terms,&mut subs,&tx,&mut generation,&late).await;
                         if let Some(t) = r.as_ref().filter(|_|narrows).and_then(|r|r["terminal"].as_str()) {
                             own.insert(t.to_owned());
@@ -846,6 +859,8 @@ where
                 Some(d) if subs.get(&d.subscription).is_some_and(|s:&Subscription|s.generation==d.generation)=>Some(d.message.to_string()),_=>None,
             },
             event=output.recv()=>match event {
+                // Skip parsing every terminal's bytes for waiters and supervisors (zurafa-orch notes, wait, follow).
+                Ok(frame) if version==2 && waiter && own.is_empty() && !frame.contains("\"appearance\"") => None,
                 Ok(frame)=>{
                     let mut v = serde_json::from_str::<Value>(&frame).unwrap_or_default();
                     let mine = own.is_empty() || v["terminal"].as_str().is_some_and(|t|own.contains(t));
@@ -875,10 +890,17 @@ mod tests {
     use super::*;
     #[test]
     fn pasted_image_is_saved_with_its_type() {
-        let png = save_image(b"\x89PNG rest").unwrap();
+        let png = save_image(b"\x89PNG rest", None).unwrap();
         assert!(png.ends_with(".png"));
         assert_eq!(std::fs::read(&png).unwrap(), b"\x89PNG rest");
-        assert!(save_image(b"\xff\xd8\xff").unwrap().ends_with(".jpg"));
+        assert!(save_image(b"\xff\xd8\xff", None).unwrap().ends_with(".jpg"));
+    }
+    #[test]
+    fn attached_file_keeps_a_shell_safe_name() {
+        let pdf = save_image(b"%PDF", Some("Q3 report (final).pdf")).unwrap();
+        assert!(pdf.ends_with("-Q3_report__final_.pdf"), "{pdf}");
+        let sneaky = save_image(b"x", Some("../../x")).unwrap();
+        assert_eq!(std::path::Path::new(&sneaky).parent(), Some(std::env::temp_dir().as_path()));
     }
     #[test]
     fn only_the_owner_sizes_a_terminal() {

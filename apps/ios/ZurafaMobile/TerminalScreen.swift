@@ -55,22 +55,21 @@ struct TerminalScreen: View {
             // The pill animates a pane switch; the terminal swaps at once instead of crossfading two live grids.
             .transaction { $0.animation = nil }
             .background((mac.appearance.map { Color(hex: $0.colors(scheme).background) } ?? Color(white: 0.08)).ignoresSafeArea())
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 10) {
-                    panes
-                    if !chat { KeyBar(view: view) }
-                }
-                .glassGroup()
-                .padding(.bottom, 8)
+            // The pane bar runs down the right edge, clear of the composer and the key bar.
+            .safeAreaInset(edge: .trailing, spacing: 0) {
+                panes.glassGroup().padding(.trailing, 4)
             }
-            .overlay(alignment: .topTrailing) {
+            .safeAreaInset(edge: .bottom) {
+                if !chat { KeyBar(view: view).glassGroup().padding(.bottom, 8) }
+            }
+            .overlay(alignment: .topLeading) {
                 if mapShown, let layout = window?.layout, layout.panes.count > 1 {
                     PaneMap(layout: layout, current: id)
                         .frame(width: 36, height: 24)
                         .padding(6)
                         .glass(in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .padding(.trailing, 12).padding(.top, 6)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topTrailing)))
+                        .padding(.leading, 12).padding(.top, 6)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topLeading)))
                         .accessibilityHidden(true) // the pane bar says the same
                 }
             }
@@ -117,33 +116,33 @@ struct TerminalScreen: View {
             .task(id: "\(id) \(mac.generation)") { if mac.state == .connected { Terminals.shared.attach(id) } }
     }
 
-    /// The panes of this tab, as the tools running in them, then New Pane. One scroll view that
+    /// The panes of this tab, top to bottom, as the tools running in them, then New Pane. One scroll view that
     /// centers its content when it fits, so the bar never swaps views (and flickers) as it grows.
     private var panes: some View {
         GeometryReader { g in
             ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    paneRow.padding(.horizontal, 8).frame(minWidth: g.size.width)
+                ScrollView(.vertical, showsIndicators: false) {
+                    paneRow.padding(.vertical, 8).frame(minHeight: g.size.height)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .onAppear { proxy.scrollTo(id) }
                 .onChange(of: id) { _, pane in withAnimation(.snappy) { proxy.scrollTo(pane) } }
             }
         }
-        .frame(height: 32)
+        .frame(width: 40)
     }
 
     private var paneRow: some View {
         let ids = window?.panes ?? [id]
-        return HStack(spacing: 8) {
-            HStack(spacing: 2) {
+        return VStack(spacing: 8) {
+            VStack(spacing: 2) {
                 ForEach(ids, id: \.self) { pane in
                     let block = session?.blocks[pane]
                     Button { withAnimation(.snappy) { id = pane } } label: {
                         ProgramGlyph(program: block?.program(remote: session?.remote) ?? .shell)
                             .frame(width: 18, height: 18)
                             .opacity(block?.running == false ? 0.4 : 1) // exited
-                            .frame(width: 44, height: 28)
+                            .frame(width: 36, height: 44)
                             .background {
                                 if pane == id {
                                     Capsule().fill(Color.primary.opacity(0.14)).matchedGeometryEffect(id: "current", in: paneBar)
@@ -166,7 +165,7 @@ struct TerminalScreen: View {
                     .sequenced(before: DragGesture(minimumDistance: 0))
                     .onChanged { value in
                         guard case .second(true, let drag?) = value else { return }
-                        let slot = Int(((drag.location.x - 2) / 46).rounded(.down)) // 44 pt chips, 2 pt apart, 2 pt inset
+                        let slot = Int(((drag.location.y - 2) / 46).rounded(.down)) // 44 pt chips, 2 pt apart, 2 pt inset
                         let pane = ids[min(max(slot, 0), ids.count - 1)]
                         if pane != id { withAnimation(.snappy) { id = pane } }
                     }
@@ -174,12 +173,12 @@ struct TerminalScreen: View {
             .sensoryFeedback(.selection, trigger: id)
             Button("New Pane", systemImage: "plus", action: newPane)
                 .labelStyle(.iconOnly)
-                .frame(width: 44, height: 32)
+                .frame(width: 40, height: 40)
                 .foregroundStyle(.primary)
                 .glass(in: Capsule())
         }
         // Only the bar's panes animate here; the pill slides on taps (withAnimation above), and a
-        // new pane is selected without animation, so the pill arrives with it from the right.
+        // new pane is selected without animation, so the pill arrives with it from below.
         .animation(.snappy, value: ids)
     }
 
@@ -268,14 +267,14 @@ struct PaneStack: View {
     }
 }
 
-/// A new pane's glyph slides in from the right within its own slot while the slot opens, clipped
+/// A new pane's glyph slides up from below within its own slot while the slot opens, clipped
 /// to it so it never crosses its neighbours; the clip relaxes as it lands, so the selection pill
 /// can travel freely afterwards.
 struct SlideInSlot: ViewModifier {
     let progress: Double
     func body(content: Content) -> some View {
         content
-            .offset(x: (1 - progress) * 24)
+            .offset(y: (1 - progress) * 24)
             .opacity(progress)
             .clipShape(Rectangle().inset(by: -60 * progress))
     }
@@ -318,11 +317,17 @@ struct KeyBar: View {
     @State private var alt = false
     @State private var shift = false
     @State private var keyboardUp = false
+    @State private var photos = false
+    @State private var files = false
 
     var body: some View {
         HStack(spacing: 10) {
             Menu {
                 Button("Paste", systemImage: "doc.on.clipboard") { view.paste(nil) }
+                Section("Attach") {
+                    Button("Photo Library", systemImage: "photo.on.rectangle") { photos = true }
+                    Button("Files", systemImage: "folder") { files = true }
+                }
                 Section {
                     Button("Interrupt  ⌃C") { key([0x03]) }
                     Button("End of Input  ⌃D") { key([0x04]) }
@@ -362,6 +367,7 @@ struct KeyBar: View {
         }
         .font(.title3)
         .foregroundStyle(.primary)
+        .attachments(photos: $photos, files: $files) { view.pasteText($0) }
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewControlModifierReset, object: view)) { _ in ctrl = false }
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewMetaModifierReset, object: view)) { _ in alt = false }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }

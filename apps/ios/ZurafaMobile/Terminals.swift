@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftTerm
 import SwiftUI
 import UIKit
@@ -162,14 +163,95 @@ import UIKit
 /// Pastes an image as the path of a copy saved on the Mac, as the Mac app does with its own pastes.
 final class PhoneTerminal: TerminalView {
     override func paste(_ sender: Any?) {
-        guard let image = UIPasteboard.general.image else { return super.paste(sender) }
-        // PNG keeps screenshots sharp; photos go as JPEG so they fit the daemon's 16 MiB frame.
-        guard let png = image.pngData(), let data = png.count < 8 << 20 ? png : image.jpegData(compressionQuality: 0.8) else { return }
+        guard let image = UIPasteboard.general.image, let data = Upload.data(image) else { return super.paste(sender) }
         Task {
             // An older Mac without ui.paste_image: paste whatever text there is.
-            guard let path = try? await MacClient.shared.request(["type": .string("ui.paste_image"), "data": .string(data.base64EncodedString())]).path else { return super.paste(sender) }
+            guard let path = try? await Upload.save(data) else { return super.paste(sender) }
             pasteText(path + " ")
         }
+    }
+}
+
+/// Phone images and files, copied to the Mac (`ui.paste_image`) so the pane's agent reads them by path.
+@MainActor enum Upload {
+    /// Base64 must fit the daemon's 16 MiB frame.
+    static let limit = 11 << 20
+
+    /// PNG keeps screenshots sharp; photos go as JPEG so they fit.
+    static func data(_ image: UIImage) -> Data? {
+        guard let png = image.pngData() else { return nil }
+        return png.count < 8 << 20 ? png : image.jpegData(compressionQuality: 0.8)
+    }
+
+    static func save(_ data: Data, name: String? = nil) async throws -> String {
+        guard data.count <= limit else { throw Failure("\(name ?? "That file") is over 11 MB, too large to send to the Mac.") }
+        var request: [String: JSONValue] = ["type": .string("ui.paste_image"), "data": .string(data.base64EncodedString())]
+        if let name { request["name"] = .string(name) }
+        guard let path = try await MacClient.shared.request(request).path else { throw Failure("The Mac did not save \(name ?? "the image").") }
+        return path
+    }
+
+    struct Failure: LocalizedError {
+        let errorDescription: String?
+        init(_ message: String) { errorDescription = message }
+    }
+}
+
+/// Photo and file pickers whose picks arrive as Mac paths, space-separated with a trailing space.
+struct Attachments: ViewModifier {
+    @Binding var photos: Bool
+    @Binding var files: Bool
+    let attach: (String) -> Void
+    @State private var picked: [PhotosPickerItem] = []
+    @State private var error: String?
+
+    func body(content: Content) -> some View {
+        content
+            .photosPicker(isPresented: $photos, selection: $picked, matching: .images)
+            .onChange(of: picked) { _, items in
+                guard !items.isEmpty else { return }
+                picked = []
+                send(items.map { item in
+                    {
+                        // HEIC and friends become PNG or JPEG, which every agent reads.
+                        guard let raw = try await item.loadTransferable(type: Data.self), let image = UIImage(data: raw), let data = Upload.data(image) else {
+                            throw Upload.Failure("Could not read that photo.")
+                        }
+                        return try await Upload.save(data)
+                    }
+                })
+            }
+            .fileImporter(isPresented: $files, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                switch result {
+                case .failure(let e): error = e.localizedDescription
+                case .success(let urls):
+                    send(urls.map { url in
+                        {
+                            let scoped = url.startAccessingSecurityScopedResource()
+                            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                            return try await Upload.save(Data(contentsOf: url), name: url.lastPathComponent)
+                        }
+                    })
+                }
+            }
+            .alert("Zurafa", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {} message: { Text(error ?? "") }
+    }
+
+    /// One at a time, in the order picked; the paths that made it are attached even if one fails.
+    private func send(_ uploads: [() async throws -> String]) {
+        Task {
+            var paths: [String] = []
+            for upload in uploads {
+                do { paths.append(try await upload()) } catch { self.error = error.localizedDescription }
+            }
+            if !paths.isEmpty { attach(paths.joined(separator: " ") + " ") }
+        }
+    }
+}
+
+extension View {
+    func attachments(photos: Binding<Bool>, files: Binding<Bool>, attach: @escaping (String) -> Void) -> some View {
+        modifier(Attachments(photos: photos, files: files, attach: attach))
     }
 }
 

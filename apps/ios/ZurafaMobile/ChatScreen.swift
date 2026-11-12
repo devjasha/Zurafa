@@ -89,6 +89,8 @@ struct PhoneChat: View {
     @State private var draft = ""
     @State private var changed = AgentSettings()
     @State private var problem: String?
+    /// Questions answered here, hidden until the agent's transcript shows the answer.
+    @State private var answered: Set<String> = []
     @FocusState private var composing: Bool
 
     private var program: Program { block?.program(remote: remote) ?? .shell }
@@ -106,7 +108,8 @@ struct PhoneChat: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     ForEach(Array(turns.enumerated()), id: \.element.id) { i, turn in
-                        PhoneTurn(turn: turn, name: name, program: program, live: live && i == turns.count - 1, record: record)
+                        PhoneTurn(turn: turn, name: name, program: program, live: live && i == turns.count - 1, record: record,
+                                  dir: block?.foreground?.cwd ?? block?.pwd)
                     }
                     if live && turns.isEmpty {
                         Label("\(name) working…", systemImage: "circle.dotted").foregroundStyle(.secondary).font(.subheadline)
@@ -122,7 +125,16 @@ struct PhoneChat: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
-                if record?.state == "blocked" {
+                if live, let asked = feed.log.items.last(where: { !$0.questions.isEmpty && $0.result == nil }), !answered.contains(asked.id) {
+                    PhoneQuestionCard(questions: asked.questions) { answers in
+                        answered.insert(asked.id)
+                        press(AgentQuestion.keys(for: asked.questions, answers: answers))
+                    } skip: {
+                        answered.insert(asked.id)
+                        press(["\u{1b}"])
+                    }
+                    .id(asked.id)
+                } else if record?.state == "blocked" {
                     Label(record?.msg ?? "Waiting for you — answer in the terminal", systemImage: "hand.raised.fill")
                         .font(.footnote).padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -168,6 +180,16 @@ struct PhoneChat: View {
         draft = ""
     }
 
+    /// Keys for the agent's prompt, spaced as the Mac's Workspace.press spaces them so each step lands.
+    private func press(_ keys: [String]) {
+        Task {
+            for key in keys {
+                MacClient.shared.send(Msg(type: "input", terminal: pane, data: Data(key.utf8)))
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
     /// Only a running Claude Code changes these; zurafa-orch types its commands on the Mac.
     private func apply(_ s: AgentSettings) {
         let before = changed
@@ -196,6 +218,8 @@ struct PhoneComposer<Menus: View>: View {
     let send: () -> Void
     @ViewBuilder let menus: Menus
     @ObservedObject private var catalog = CompletionCatalog.shared
+    @State private var photos = false
+    @State private var files = false
 
     private var suggestions: [Suggestion] {
         guard let word = Completion.token(draft), let dir else { return [] }
@@ -212,6 +236,16 @@ struct PhoneComposer<Menus: View>: View {
                 .lineLimit(1...6)
                 .focused(focus)
             HStack(spacing: 6) {
+                Menu {
+                    Button("Photo Library", systemImage: "photo.on.rectangle") { photos = true }
+                    Button("Files", systemImage: "folder") { files = true }
+                } label: {
+                    Image(systemName: "paperclip").font(.system(size: 15, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Attach")
                 ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { menus } }
                 Button(action: send) {
                     Image(systemName: "chevron.up").font(.system(size: 15, weight: .semibold))
@@ -226,6 +260,9 @@ struct PhoneComposer<Menus: View>: View {
         }
         .padding(12)
         .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .attachments(photos: $photos, files: $files) { paths in
+            draft += draft.isEmpty || draft.hasSuffix(" ") || draft.hasSuffix("\n") ? paths : " " + paths
+        }
         // Floats above the composer, so the text stays put while the list comes and goes.
         .overlay(alignment: .top) {
             if !shown.isEmpty {
@@ -352,6 +389,8 @@ private struct PhoneTurn: View {
     let program: Program
     let live: Bool
     let record: ProgramStatus?
+    /// The pane's folder, which the changed files are shown under.
+    let dir: String?
     @State private var open: Bool?
 
     var body: some View {
@@ -399,6 +438,8 @@ private struct PhoneTurn: View {
                 }
                 .font(.caption).foregroundStyle(.tertiary)
             }
+            let changed = turn.changedFiles
+            if !changed.isEmpty { PhoneChangedFiles(files: changed, edits: turn.work.filter(\.ok).flatMap(\.edits), dir: dir) }
         }
     }
 
@@ -451,6 +492,146 @@ private struct PhoneWorkRow: View {
         } else {
             Text(markdown(item.text)).font(.subheadline).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// The agent's questions, one at a time, with its options to pick: answered in its terminal for you, as on the Mac.
+private struct PhoneQuestionCard: View {
+    let questions: [AgentQuestion]
+    let answer: ([AgentQuestion.Answer]) -> Void
+    let skip: () -> Void
+    @State private var answers: [AgentQuestion.Answer] = []
+    @State private var picks: Set<Int> = []
+    @State private var typing = false
+    @State private var other = ""
+
+    var body: some View {
+        let q = questions[answers.count]
+        let last = answers.count == questions.count - 1
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Label(q.header.isEmpty ? "Question" : q.header, systemImage: "bubble.left.and.text.bubble.right")
+                if questions.count > 1 { Text("\(answers.count + 1) of \(questions.count)").foregroundStyle(.tertiary) }
+                Spacer(minLength: 0)
+                Button("Skip", action: skip).accessibilityHint("Dismisses the question, as Escape does in the terminal")
+            }
+            .font(.footnote).foregroundStyle(.secondary)
+            Text(q.question).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(q.options.indices, id: \.self) { i in
+                        option(q.options[i].label, detail: q.options[i].detail, on: picks.contains(i), multiple: q.multiple) {
+                            if q.multiple {
+                                if picks.remove(i) == nil { picks.insert(i) }
+                            } else {
+                                picks = [i]
+                                typing = false
+                            }
+                        }
+                    }
+                    if !q.multiple {
+                        option("Other", detail: "", on: typing, multiple: false) { typing = true; picks = [] }
+                        if typing { TextField("Your answer", text: $other).textFieldStyle(.roundedBorder).onSubmit { next(q) } }
+                    }
+                }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: 300)
+            HStack {
+                Spacer()
+                Button(last ? "Submit" : "Continue") { next(q) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(typing ? other.trimmingCharacters(in: .whitespaces).isEmpty : picks.isEmpty)
+            }
+        }
+        .padding(12)
+        .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func option(_ title: String, detail: String, on: Bool, multiple: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: multiple ? (on ? "checkmark.square.fill" : "square") : (on ? "largecircle.fill.circle" : "circle"))
+                    .foregroundStyle(on ? Color.accentColor : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    if !detail.isEmpty { Text(detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(on ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func next(_ q: AgentQuestion) {
+        let given: AgentQuestion.Answer = typing ? .other(other) : .picks(picks.sorted())
+        // The last answer isn't kept: the card still draws until it goes, and reads questions[answers.count].
+        if answers.count + 1 == questions.count { return answer(answers + [given]) }
+        answers.append(given)
+        picks = []
+        typing = false
+        other = ""
+    }
+}
+
+/// The files a turn changed, with their line counts; a tap shows that file's diffs (the Mac opens its preview).
+private struct PhoneChangedFiles: View {
+    let files: [ChatTurn.FileChange]
+    let edits: [FileEdit]
+    let dir: String?
+    @State private var open: String?
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(files.count == 1 ? "1 file changed" : "\(files.count) files changed").foregroundStyle(.secondary)
+                counts(files.map(\.added).reduce(0, +), files.map(\.removed).reduce(0, +))
+            }
+            .font(.footnote)
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            ForEach(files, id: \.path) { file in
+                Divider()
+                Button { withAnimation(.snappy) { open = open == file.path ? nil : file.path } } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "doc").foregroundStyle(.secondary)
+                        Text(shown(file.path)).lineLimit(1).truncationMode(.head)
+                        Spacer(minLength: 8)
+                        counts(file.added, file.removed)
+                    }
+                    .font(.footnote)
+                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if open == file.path {
+                    ForEach(Array(edits.filter { $0.path == file.path }.enumerated()), id: \.offset) { _, edit in
+                        PhoneEditDiff(edit: edit).padding(.horizontal, 6).padding(.bottom, 6)
+                    }
+                }
+            }
+        }
+        .overlay(shape.strokeBorder(Color.primary.opacity(0.15), lineWidth: 1))
+        .clipShape(shape)
+    }
+
+    /// The path under the pane's folder, case-blind as on the Mac (macOS folders are).
+    private func shown(_ path: String) -> String {
+        guard let dir, let under = path.range(of: dir + "/", options: [.anchored, .caseInsensitive]) else { return path }
+        return String(path[under.upperBound...])
+    }
+
+    private func counts(_ added: Int, _ removed: Int) -> some View {
+        HStack(spacing: 4) {
+            Text("+\(added)").foregroundStyle(.green)
+            Text("−\(removed)").foregroundStyle(.red)
+        }
+        .font(.caption.monospaced().weight(.medium))
     }
 }
 
