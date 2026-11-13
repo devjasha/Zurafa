@@ -2,6 +2,13 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.41
+
+**November 13, 2026**
+
+- **Ghostty draws every terminal.** libghostty now runs and draws all terminal panes on the GPU, with input methods, clickable OSC 8 links, kitty images, ⌘A and selecting past the edge to scroll. The old engine and the `terminal-engine` setting are gone; a leftover `terminal-engine` line in config.zurafa is ignored.
+- **Faster chats.** Switching to a long chat lays out only the messages on screen, because each message's height is measured once and kept. New messages scroll in smoothly, and a long chat opens with its newest turns and a "Show earlier messages" link.
+
 ## 0.1.40
 
 **November 13, 2026**
