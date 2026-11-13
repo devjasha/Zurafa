@@ -56,6 +56,13 @@ pub fn install() -> Result<String, String> {
     if !cfg!(target_os = "linux") {
         return Err("direct connections need a Linux host with systemd".into());
     }
+    // The login server already listens on the tailnet port; a personal service beside it fails to bind.
+    if PathBuf::from("/etc/systemd/system").join(LOGIN_UNIT).exists() {
+        return Err(format!(
+            "this host runs the Zurafa login server, which already gives direct connections; update it with `sudo {} install-login-server` on the host",
+            env::current_exe().map(|e| e.display().to_string()).unwrap_or_else(|_| "zurafa-daemon".into())
+        ));
+    }
     let dir = home()?.join(".zurafa/service");
     DirBuilder::new().recursive(true).mode(0o700).create(&dir).map_err(|e| e.to_string())?;
     let exe = env::current_exe().map_err(|e| e.to_string())?;
