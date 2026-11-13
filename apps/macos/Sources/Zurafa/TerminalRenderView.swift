@@ -26,6 +26,11 @@ final class TerminalRenderView: NSView {
         return nerd.fallbackFont(forPointSize: size)
     }
 
+    /// One cell in device pixels, what the engine's `resize` takes so image offsets come back in device pixels.
+    var cellPixelSize: (width: Int, height: Int) { (Int(cellPx.x), Int(cellPx.y)) }
+    /// Device pixels per point.
+    var pixelScale: CGFloat { scale }
+
     func gridSize(for size: NSSize) -> (cols: Int, rows: Int) {
         (max(1, Int(size.width / cellSize.width)), max(1, Int(size.height / cellSize.height)))
     }
@@ -489,7 +494,7 @@ final class TerminalRenderView: NSView {
         let cw = cellPx.x, ch = cellPx.y
         for image in frame.images {
             guard let texture = imageTexture(image, device: device) else { continue }
-            let rect = SIMD4(Float(image.col) * cw + Float(image.offset.x * scale), Float(image.row) * ch + Float(image.offset.y * scale),
+            let rect = SIMD4(Float(image.col) * cw + Float(image.offset.x), Float(image.row) * ch + Float(image.offset.y),
                              Float(image.cols) * cw, Float(image.rows) * ch)
             imageQuads.append((image.z < 0, Quad(rect: rect, uv: SIMD4(0, 0, 1, 1), color: SIMD4(1, 1, 1, 1), kind: 3), texture))
         }

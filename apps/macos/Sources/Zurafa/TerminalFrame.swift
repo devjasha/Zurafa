@@ -42,7 +42,8 @@ struct TerminalFrame: Equatable {
         /// RGBA, 8 bits per channel, row-major.
         var pixels: [UInt8]
         var pixelWidth: Int, pixelHeight: Int
-        /// The cell its top-left corner sits in, and the cell-relative offset in pixels.
+        /// The cell its top-left corner sits in, and the cell-relative offset in device pixels
+        /// (the engine is resized with device-pixel cells, see `TerminalRenderView.cellPixelSize`).
         var col: Int, row: Int
         var offset: CGPoint
         /// The cells it covers when drawn.

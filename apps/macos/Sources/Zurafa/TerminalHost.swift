@@ -59,6 +59,26 @@ final class PaneTerminal: TerminalView {
     }
 }
 
+extension PaneTerminal: TerminalPaneView {
+    var gridSize: (cols: Int, rows: Int) { (terminalDimensions.cols, terminalDimensions.rows) }
+
+    func apply(colors: MacAppearance.Colors, selectedText: UInt32?) {
+        installColors(colors.palette.map { SwiftTerm.Color(red8: UInt16($0 >> 16 & 255), green8: UInt16($0 >> 8 & 255), blue8: UInt16($0 & 255)) })
+        // The imported background belongs to the whole workspace surface.
+        // A per-terminal fill leaves a visible rectangle inside each pane.
+        nativeBackgroundColor = .clear
+        nativeForegroundColor = TerminalStore.ns(colors.foreground)
+        caretColor = TerminalStore.ns(colors.cursor)
+        selectedTextBackgroundColor = colors.selection.map { TerminalStore.ns($0).withAlphaComponent(0.35) }
+            ?? NSColor(srgbRed: 0.45, green: 0.6, blue: 0.9, alpha: 0.3)
+        selectedTextForegroundColor = selectedText.map(TerminalStore.ns) ?? .black
+        needsDisplay = true
+    }
+
+    // shortcut: a program that resets its cursor (DECSCUSR 0) gets SwiftTerm's blinking block back; SwiftTerm fixes that default at creation.
+    func apply(cursor settings: GhosttyTerminalSettings) { setCursorStyle(settings.swiftTermCursor) }
+}
+
 /// Keeps the persistent terminal view attached when SwiftUI collapses a split.
 @MainActor final class TerminalContainer: NSView {
     var terminalID: String?
@@ -103,7 +123,11 @@ final class PaneTerminal: TerminalView {
     static let shared = TerminalStore()
     var onFocus: (String) -> Void = { _ in }
     var onOpenLink: (String, String) -> Bool = { _, _ in false }
-    private var views: [String: PaneTerminal] = [:]
+    private var views: [String: any TerminalPaneView] = [:]
+    /// The engine new panes get; `setEngine` swaps open ones.
+    private(set) var engine = TerminalEngine.swiftterm
+    /// The daemon's buffered output for a terminal; replaced in tests.
+    var requestAttach: (String) async throws -> Msg = { try await DaemonClient.shared.request(Msg(type: "attach", terminal: $0)) }
     private var pendingOutput: [String: Data] = [:]
     /// Output end offset already shown from a replay; live chunks up to it are duplicates.
     private var replayed: [String: UInt64] = [:]
@@ -174,7 +198,7 @@ final class PaneTerminal: TerminalView {
         let fontChanged = before.fontFamily != after.fontFamily || before.fontSize != after.fontSize
         for view in views.values {
             fontChanged ? configure(view) : configureColors(view)
-            view.setCursorStyle(after.swiftTermCursor)
+            view.apply(cursor: after)
         }
     }
 
@@ -200,32 +224,19 @@ final class PaneTerminal: TerminalView {
                      cursor: imported.cursor ?? foreground, selection: imported.selectionBackground, palette: palette)
     }
 
-    private func configure(_ view: PaneTerminal) {
+    private func configure(_ view: any TerminalPaneView) {
         let settings = effectiveSettings
         let family = settings.fontFamily
         let size = CGFloat(settings.fontSize ?? 13)
         view.font = family.flatMap { NSFontManager.shared.font(withFamily: $0, traits: [], weight: 5, size: size) }
             ?? .monospacedSystemFont(ofSize: size, weight: .regular)
-        // shortcut: a program that resets its cursor (DECSCUSR 0) gets SwiftTerm's blinking block back; SwiftTerm fixes that default at creation.
-        view.setCursorStyle(settings.swiftTermCursor)
+        view.apply(cursor: settings)
         configureColors(view)
     }
 
-    private func configureColors(_ view: PaneTerminal) {
-        let settings = effectiveSettings
-        let imported = isDark ? settings.dark : settings.light
-        var colors = isDark ? Self.darkANSI : Self.ansi
-        for (index, color) in imported.palette where colors.indices.contains(index) { colors[index] = color }
-        view.installColors(colors.map { SwiftTerm.Color(red8: UInt16($0 >> 16 & 255), green8: UInt16($0 >> 8 & 255), blue8: UInt16($0 & 255)) })
-        // The imported background belongs to the whole workspace surface.
-        // A per-terminal fill leaves a visible rectangle inside each pane.
-        view.nativeBackgroundColor = .clear
-        view.nativeForegroundColor = Self.ns(imported.foreground ?? (isDark ? 0xd7dce2 : 0x2a2d35))
-        view.caretColor = imported.cursor.map(Self.ns) ?? view.nativeForegroundColor
-        view.selectedTextBackgroundColor = imported.selectionBackground.map { Self.ns($0).withAlphaComponent(0.35) }
-            ?? NSColor(srgbRed: 0.45, green: 0.6, blue: 0.9, alpha: 0.3)
-        view.selectedTextForegroundColor = imported.selectionForeground.map(Self.ns) ?? .black
-        view.needsDisplay = true
+    private func configureColors(_ view: any TerminalPaneView) {
+        let imported = isDark ? effectiveSettings.dark : effectiveSettings.light
+        view.apply(colors: resolvedColors(dark: isDark, accent: nil), selectedText: imported.selectionForeground)
     }
 
     private func receive(_ id: String, _ data: Data, _ end: UInt64?) {
@@ -245,20 +256,55 @@ final class PaneTerminal: TerminalView {
     func paste(_ text: String, into id: String) { views[id]?.pasteText(text) }
 
     /// The terminal already on screen for `id`, without creating one.
-    func existingView(_ id: String) -> PaneTerminal? { views[id] }
+    func existingView(_ id: String) -> (any TerminalPaneView)? { views[id] }
 
-    func view(for id: String, program: Program) -> PaneTerminal {
+    /// Swaps every open pane to `engine`: each container attaches a new view on its next layout,
+    /// which replays the terminal's output from the daemon. Exited panes come back empty.
+    func setEngine(_ engine: TerminalEngine) {
+        guard engine != self.engine else { return }
+        self.engine = engine
+        for (id, view) in views {
+            let box = view.superview
+            views[id] = nil  // first, so leaving the window does not release the terminal's size
+            view.removeFromSuperview()
+            replayed[id] = nil
+            attaching[id] = nil
+            box?.needsLayout = true
+            (box as? TerminalContainer)?.claimFocus()
+        }
+    }
+
+    func view(for id: String, program: Program) -> any TerminalPaneView {
         if let view = views[id] { return view }
-        let view = PaneTerminal(frame: .zero)
-        view.glyphFallbackProvider = NerdFontFallback.shared
+        let view: any TerminalPaneView
+        switch engine {
+        case .swiftterm:
+            let pane = PaneTerminal(frame: .zero)
+            pane.glyphFallbackProvider = NerdFontFallback.shared
+            pane.linkHighlightMode = .hover
+            pane.terminalDelegate = self
+            view = pane
+        case .ghostty:
+            let pane = GhosttyPaneView(frame: .zero)
+            pane.onInput = { [weak self, weak pane] data in
+                if let id = pane?.terminal { self?.daemon.send(Msg(type: "input", terminal: id, data: data)) }
+            }
+            pane.onResize = { [weak self, weak pane] cols, rows in
+                // Showing another device's grid is not this app's own size.
+                if let self, let id = pane?.terminal, grids[id] == nil { daemon.send(Msg(type: "resize", cols: cols, rows: rows, terminal: id)) }
+            }
+            pane.onOpenLink = { [weak self, weak pane] word in
+                guard let self, let id = pane?.terminal else { return false }
+                return onOpenLink(id, word)
+            }
+            view = pane
+        }
         view.terminal = runningBlocks.contains(id) ? id : nil
         configure(view)
-        view.linkHighlightMode = .hover
-        view.terminalDelegate = self
         view.onFocus = { [weak self] in self?.claim(id); self?.onFocus(id) }
         view.onSized = { [weak self, weak view] in
             guard let self, let view, grids[id] == nil else { return }
-            let size = view.terminalDimensions
+            let size = view.gridSize
             // A size change makes full-screen programs redraw; the same size alone would not signal them.
             self.daemon.send(Msg(type: "resize", cols: size.cols, rows: max(size.rows - 1, 1), terminal: id))
             self.daemon.send(Msg(type: "resize", cols: size.cols, rows: size.rows, terminal: id))
@@ -271,14 +317,15 @@ final class PaneTerminal: TerminalView {
     }
 
     /// A pane reopened after a restart or update starts empty, so it is filled from the daemon's output buffer.
-    private func replay(_ id: String, into view: PaneTerminal) {
+    private func replay(_ id: String, into view: any TerminalPaneView) {
         attaching[id] = []
         let buffered = pendingOutput.removeValue(forKey: id)
+        let request = requestAttach
         Task { [weak self] in
-            let reply = try? await self?.daemon.request(Msg(type: "attach", terminal: id))
-            guard let self else { return }
+            let reply = try? await request(id)
+            // A newer view (engine switch) owns the queue now.
+            guard let self, views[id] === view else { return }
             let queued = attaching.removeValue(forKey: id) ?? []
-            guard views[id] === view else { return }
             if let reply, let data = reply.data, let end = reply.end {
                 view.feed(byteArray: ArraySlice(data))
                 replayed[id] = end
@@ -289,7 +336,7 @@ final class PaneTerminal: TerminalView {
         }
     }
 
-    @discardableResult func attach(_ id: String, program: Program, to box: NSView) -> PaneTerminal {
+    @discardableResult func attach(_ id: String, program: Program, to box: NSView) -> any TerminalPaneView {
         let view = view(for: id, program: program)
         // SwiftUI can reuse a representable's container when switching tabs.
         // Its old terminal must leave the container before the new one is attached.
@@ -317,14 +364,14 @@ final class PaneTerminal: TerminalView {
         guard let view = views[id], view.terminal != nil else { return }
         grids[id] = nil
         place(id)
-        let size = view.terminalDimensions
+        let size = view.gridSize
         daemon.send(Msg(type: "claim", cols: size.cols, rows: size.rows, terminal: id))
     }
 
     func shown(_ id: String, _ visible: Bool) {
         guard let view = views[id] else { return }
         if !visible { return daemon.send(Msg(type: "release", terminal: id)) }
-        let size = view.terminalDimensions
+        let size = view.gridSize
         if grids[id] == nil, size.cols > 0 { daemon.send(Msg(type: "resize", cols: size.cols, rows: size.rows, terminal: id)) }
     }
 
@@ -335,7 +382,7 @@ final class PaneTerminal: TerminalView {
     }
 
     func sync(blocks: Set<String>, running: Set<String>) {
-        for id in Array(views.keys) where !blocks.contains(id) { views.removeValue(forKey: id)?.removeFromSuperview() }
+        for id in Array(views.keys) where !blocks.contains(id) { views.removeValue(forKey: id)?.removeFromSuperview(); attaching[id] = nil }
         for id in knownBlocks.subtracting(blocks) { pendingOutput[id] = nil; replayed[id] = nil; grids[id] = nil }
         knownBlocks = blocks
         runningBlocks = running

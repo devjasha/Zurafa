@@ -721,6 +721,7 @@ enum EditorKind: String, Identifiable {
             // A missing file resets to defaults, so deleting a setting undoes it.
             config = try loader.load() ?? ZurafaConfig()
             themeName = config.theme
+            TerminalStore.shared.setEngine(config.terminalEngine)
             applyTerminalConfig()
             style = config.style
             Theme.customAccent = config.style.accent

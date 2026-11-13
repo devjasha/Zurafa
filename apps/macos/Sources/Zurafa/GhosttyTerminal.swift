@@ -115,6 +115,25 @@ final class GhosttyTerminal {
     var bracketedPaste: Bool { mode(2004) }
     var mouseTracking: Bool { value(GHOSTTY_TERMINAL_DATA_MOUSE_TRACKING, false) }
 
+    /// The alternate screen (full-screen programs) is showing; it has no scrollback.
+    var alternateScreen: Bool { value(GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, GHOSTTY_TERMINAL_SCREEN_PRIMARY) == GHOSTTY_TERMINAL_SCREEN_ALTERNATE }
+    /// Mode 1007: the wheel sends arrow keys on the alternate screen.
+    var alternateScroll: Bool { mode(1007) }
+
+    /// The cursor a program gets back when it resets it (DECSCUSR 0); applied now too.
+    func setDefaultCursor(_ shape: TerminalFrame.CursorShape, blinking: Bool) {
+        var style: GhosttyCursorStyle = switch shape {
+        case .bar: GHOSTTY_CURSOR_STYLE_BAR
+        case .underline: GHOSTTY_CURSOR_STYLE_UNDERLINE
+        case .hollowBlock: GHOSTTY_CURSOR_STYLE_BLOCK_HOLLOW
+        case .block: GHOSTTY_CURSOR_STYLE_BLOCK
+        }
+        var blink = blinking
+        ghostty_terminal_set(term, GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_STYLE, &style)
+        ghostty_terminal_set(term, GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_BLINK, &blink)
+        feed(Array("\u{1b}[0 q".utf8))
+    }
+
     func scroll(by rows: Int) {
         var s = GhosttyTerminalScrollViewport()
         s.tag = GHOSTTY_TERMINAL_SCROLL_VIEWPORT_DELTA
@@ -146,6 +165,65 @@ final class GhosttyTerminal {
 
     /// One viewport row, a string per cell, for `PaneTerminal.word(in:at:)`.
     func line(row: Int) -> [String] { (0..<cols).map { text(row: row, col: $0) ?? "" } }
+
+    // MARK: Selection
+
+    /// Selects from one viewport cell to another, both included; the terminal keeps it as output scrolls.
+    func select(from start: (col: Int, row: Int), to end: (col: Int, row: Int)) {
+        guard let a = ref(start), let b = ref(end) else { return }
+        var selection = GhosttySelection(start: a, end: b, rectangle: false)
+        ghostty_terminal_set(term, GHOSTTY_TERMINAL_OPT_SELECTION, &selection)
+    }
+
+    /// Selects the word (`line` false) or line under a viewport cell; false when there is nothing to select.
+    @discardableResult func select(around cell: (col: Int, row: Int), line: Bool) -> Bool {
+        guard let at = ref(cell) else { return false }
+        var selection = GhosttySelection()
+        let result: GhosttyResult
+        if line {
+            var options = GhosttyTerminalSelectLineOptions()
+            options.size = MemoryLayout<GhosttyTerminalSelectLineOptions>.size
+            options.ref = at
+            result = ghostty_terminal_select_line(term, &options, &selection)
+        } else {
+            var options = GhosttyTerminalSelectWordOptions()
+            options.size = MemoryLayout<GhosttyTerminalSelectWordOptions>.size
+            options.ref = at
+            result = ghostty_terminal_select_word(term, &options, &selection)
+        }
+        guard result == GHOSTTY_SUCCESS else { return false }
+        ghostty_terminal_set(term, GHOSTTY_TERMINAL_OPT_SELECTION, &selection)
+        return true
+    }
+
+    func clearSelection() { ghostty_terminal_set(term, GHOSTTY_TERMINAL_OPT_SELECTION, nil) }
+
+    /// The selected text as Ghostty copies it (wrapped lines joined, trailing spaces trimmed); nil with no selection.
+    func selectionText() -> String? {
+        var selection = GhosttySelection()
+        guard ghostty_terminal_get(term, GHOSTTY_TERMINAL_DATA_SELECTION, &selection) == GHOSTTY_SUCCESS else { return nil }
+        var formatter: GhosttyFormatter?
+        guard ghostty_formatter_terminal_new(nil, &formatter, term) == GHOSTTY_SUCCESS else { return nil }
+        defer { ghostty_formatter_free(formatter) }
+        var on = true
+        ghostty_formatter_set(formatter, GHOSTTY_FORMATTER_OPT_UNWRAP, &on)
+        ghostty_formatter_set(formatter, GHOSTTY_FORMATTER_OPT_TRIM, &on)
+        ghostty_formatter_set(formatter, GHOSTTY_FORMATTER_OPT_SELECTION, &selection)
+        var ptr: UnsafeMutablePointer<UInt8>?
+        var len = 0
+        guard ghostty_formatter_format_alloc(formatter, nil, &ptr, &len) == GHOSTTY_SUCCESS, let ptr else { return nil }
+        defer { ghostty_free(nil, ptr, len) }
+        return String(decoding: UnsafeBufferPointer(start: ptr, count: len), as: UTF8.self)
+    }
+
+    private func ref(_ cell: (col: Int, row: Int)) -> GhosttyGridRef? {
+        guard (0..<rows).contains(cell.row), (0..<cols).contains(cell.col) else { return nil }
+        var point = GhosttyPoint()
+        point.tag = GHOSTTY_POINT_TAG_VIEWPORT
+        point.value.coordinate = GhosttyPointCoordinate(x: UInt16(cell.col), y: UInt32(cell.row))
+        var ref = GhosttyGridRef()
+        return ghostty_terminal_grid_ref(term, point, &ref) == GHOSTTY_SUCCESS ? ref : nil
+    }
 
     // MARK: Frame
 
@@ -324,7 +402,8 @@ final class GhosttyTerminal {
 
     // MARK: Input
 
-    func encodeKey(_ event: NSEvent) -> Data? {
+    /// `optionAsAlt`: Option is Meta (ESC prefix) instead of typing the layout's Option characters.
+    func encodeKey(_ event: NSEvent, optionAsAlt: Bool = false) -> Data? {
         let action: KeyAction
         switch event.type {
         case .keyDown: action = event.isARepeat ? .repeat : .press
@@ -332,21 +411,24 @@ final class GhosttyTerminal {
         default: return nil  // shortcut: modifier-only presses (flagsChanged) are not reported; needed only for kitty "report all keys".
         }
         let mods = event.modifierFlags
-        var text = event.characters
+        let alt = optionAsAlt && mods.contains(.option)
+        var text = alt ? event.characters(byApplyingModifiers: mods.subtracting(.option)) : event.characters
         // Ctrl turns letters into control characters; the encoder wants the plain text and the mods.
         if let scalar = text?.unicodeScalars.first, text?.unicodeScalars.count == 1, scalar.value < 0x20 {
-            text = event.characters(byApplyingModifiers: mods.subtracting(.control))
+            text = event.characters(byApplyingModifiers: mods.subtracting(alt ? [.control, .option] : .control))
         }
         // AppKit's function-key characters (arrows, F-keys) are private-use codepoints, not text.
         if let scalar = text?.unicodeScalars.first, (0xF700...0xF8FF).contains(scalar.value) { text = nil }
         let unshifted = event.characters(byApplyingModifiers: [])?.unicodeScalars.first
-        return encodeKey(keyCode: event.keyCode, mods: mods, text: text, unshifted: unshifted, action: action)
+        return encodeKey(keyCode: event.keyCode, mods: mods, text: text, unshifted: unshifted, action: action, optionAsAlt: alt)
     }
 
     /// `keyCode` is the macOS virtual key code (NSEvent.keyCode); `text` is what the key types, if anything.
     func encodeKey(keyCode: UInt16, mods: NSEvent.ModifierFlags, text: String?, unshifted: Unicode.Scalar?,
-                   action: KeyAction = .press) -> Data? {
-        ghostty_key_encoder_set_from_terminal(keyEncoder, term)
+                   action: KeyAction = .press, optionAsAlt: Bool = false) -> Data? {
+        ghostty_key_encoder_set_from_terminal(keyEncoder, term)  // resets option-as-alt to false
+        var asAlt = optionAsAlt ? GHOSTTY_OPTION_AS_ALT_TRUE : GHOSTTY_OPTION_AS_ALT_FALSE
+        ghostty_key_encoder_set(keyEncoder, GHOSTTY_KEY_ENCODER_OPT_MACOS_OPTION_AS_ALT, &asAlt)
         let keyAction: GhosttyKeyAction = switch action {
         case .press: GHOSTTY_KEY_ACTION_PRESS
         case .repeat: GHOSTTY_KEY_ACTION_REPEAT
@@ -356,8 +438,10 @@ final class GhosttyTerminal {
         ghostty_key_event_set_key(keyEvent, Self.keys[keyCode] ?? GHOSTTY_KEY_UNIDENTIFIED)
         let ghosttyMods = Self.mods(mods)
         ghostty_key_event_set_mods(keyEvent, ghosttyMods)
-        // Shift and Option went into producing the text, so the encoder should not report them again.
-        let consumed = text?.isEmpty == false ? ghosttyMods & GhosttyMods(GHOSTTY_MODS_SHIFT | GHOSTTY_MODS_ALT) : 0
+        // Shift and Option went into producing the text, so the encoder should not report them again
+        // (unless Option is Alt: then the text is the plain key and Alt is reported).
+        let typed = GhosttyMods(GHOSTTY_MODS_SHIFT | (optionAsAlt ? 0 : GHOSTTY_MODS_ALT))
+        let consumed = text?.isEmpty == false ? ghosttyMods & typed : 0
         ghostty_key_event_set_consumed_mods(keyEvent, consumed)
         ghostty_key_event_set_unshifted_codepoint(keyEvent, unshifted?.value ?? 0)
         let utf8 = Array((text ?? "").utf8)
@@ -424,7 +508,7 @@ final class GhosttyTerminal {
         return Data(out.prefix(written))
     }
 
-    private func mode(_ number: UInt16) -> Bool {
+    func mode(_ number: UInt16) -> Bool {
         var config = GhosttyTerminalModeConfig(mode: ghostty_mode_new(number, false), value: false)
         ghostty_terminal_get(term, GHOSTTY_TERMINAL_DATA_MODE, &config)
         return config.value

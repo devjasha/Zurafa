@@ -15,7 +15,7 @@ import XCTest
         XCTAssertEqual(box.subviews.count, 1)
         XCTAssertTrue(box.subviews.first === second)
         XCTAssertNil(first.superview)
-        XCTAssertNotNil(second.glyphFallbackProvider)
+        XCTAssertNotNil((second as? PaneTerminal)?.glyphFallbackProvider)
     }
 
     func testSurvivingTerminalReattachesAfterSplitContainerChanges() {

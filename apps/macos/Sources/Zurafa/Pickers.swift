@@ -526,7 +526,7 @@ struct EditorSheet: View {
     }
 
     /// The bottom-left of the terminal's cursor cell in SwiftUI's top-left window coordinates.
-    private static func cursorAnchor(_ terminal: PaneTerminal) -> CGPoint? {
+    private static func cursorAnchor(_ terminal: any TerminalPaneView) -> CGPoint? {
         guard let window = terminal.window, let content = window.contentView else { return nil }
         let screen = terminal.firstRect(forCharacterRange: NSRange(location: 0, length: 0), actualRange: nil)
         guard screen != .zero else { return nil }

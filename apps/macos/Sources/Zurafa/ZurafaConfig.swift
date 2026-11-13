@@ -9,6 +9,7 @@ struct ZurafaConfig: Equatable {
     var backgroundImage: String?
     var backgroundImageEnabled: Bool?
     var backgroundImageFilter: BackgroundFilter?
+    var terminalEngine = TerminalEngine.swiftterm
 
     var count: Int {
         terminal.count + (backgroundImage == nil ? 0 : 1) + (backgroundImageEnabled == nil ? 0 : 1)
@@ -103,6 +104,7 @@ struct ZurafaConfigLoader {
         case "background-image-enabled": config.backgroundImageEnabled = bool(value)
         // Unknown values, like the earlier ASCII filters, fall back to no filter.
         case "background-image-filter": config.backgroundImageFilter = BackgroundFilter(rawValue: value.lowercased()) ?? BackgroundFilter.none
+        case "terminal-engine": TerminalEngine(rawValue: value.lowercased()).map { config.terminalEngine = $0 }
         case "theme": config.theme = value.isEmpty ? nil : value
         case "accent-color": config.style.accent = GhosttyConfigLoader.hex(value)
         case "background-image-opacity": Double(value).map { config.style.backgroundImageOpacity = min(0.65, max(0.05, $0)) }
@@ -196,6 +198,10 @@ struct ZurafaConfigLoader {
     # Terminal font
     # font-family = JetBrains Mono
     # font-size = 13
+
+    # What draws terminal panes: swiftterm, or ghostty (experimental: Ghostty's engine with a Metal renderer).
+    # Open panes switch on save and reload their output; panes whose program exited come back empty.
+    # terminal-engine = swiftterm
 
     # Window opacity, 0.0 to 1.0. Below 1 the desktop shows through, blurred.
     # window-opacity = 1.0

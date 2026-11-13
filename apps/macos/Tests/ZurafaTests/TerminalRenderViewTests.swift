@@ -108,6 +108,23 @@ final class TerminalRenderViewTests: XCTestCase {
         XCTAssertTrue(cellPixels(pixels, width: width, view: view, col: 2, row: 0, cells: 2).allSatisfy { $0 == (10, 20, 30) })
     }
 
+    /// The engine is resized with device-pixel cells, so an image's cell offset is in device pixels, not points.
+    func testImageOffsetIsInDevicePixels() throws {
+        let view = TerminalRenderView(frame: .zero)
+        var f = frame(cols: 3, rows: 1) { _, _ in self.blankCell() }
+        let red: [UInt8] = Array([[UInt8]](repeating: [255, 0, 0, 255], count: 4).joined())
+        f.images = [.init(id: 1, pixels: red, pixelWidth: 2, pixelHeight: 2, col: 0, row: 0, offset: CGPoint(x: 6, y: 0),
+                          cols: 1, rows: 1, z: 1)]
+        view.show(f)
+        let cw = view.cellPixelSize.width, width = cw * 3, height = view.cellPixelSize.height
+        let pixels = try snapshot(view, width: width, height: height)
+        func r(_ x: Int) -> UInt8 { pixels[(height / 2 * width + x) * 4 + 2] }
+        XCTAssertEqual(r(3), 10, "left of the offset is background")
+        XCTAssertEqual(r(8), 255)
+        XCTAssertEqual(r(cw + 4), 255, "the image reaches past its cell by the offset")
+        XCTAssertEqual(r(cw + 8), 10)
+    }
+
     func testDemoFrameRenders() throws {
         let view = TerminalRenderView(frame: .zero)
         let demo = TerminalRenderView.demoFrame()
