@@ -45,8 +45,6 @@ final class ZurafaConfigTests: XCTestCase {
         let config = ZurafaConfigLoader.parse("cursor-style = bar\ncursor-style-blink = false")
         XCTAssertEqual(config.terminal.cursorStyle, "bar")
         XCTAssertEqual(config.terminal.cursorBlink, false)
-        XCTAssertEqual(config.terminal.swiftTermCursor, .steadyBar)
-        XCTAssertEqual(ZurafaConfigLoader.parse("cursor-style = block_hollow").terminal.swiftTermCursor, .blinkBlock)
     }
 
     func testTerminalSettingsOverrideOnlyConfiguredFields() {

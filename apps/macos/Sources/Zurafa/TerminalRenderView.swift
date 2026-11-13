@@ -24,7 +24,7 @@ final class TerminalRenderView: NSView {
     var symbolFallback: ((Unicode.Scalar, CGFloat) -> CTFont?)? = TerminalRenderView.nerdFontFallback { didSet { rebuildFonts() } }
 
     static let nerdFontFallback: (Unicode.Scalar, CGFloat) -> CTFont? = { scalar, size in
-        guard let nerd = NerdFontFallback.shared, nerd.placementPolicy(for: scalar) != nil else { return nil }
+        guard let nerd = NerdFontFallback.shared, nerd.covers(scalar) else { return nil }
         return nerd.fallbackFont(forPointSize: size)
     }
 

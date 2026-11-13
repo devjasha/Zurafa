@@ -5,7 +5,6 @@ let package = Package(
     name: "Zurafa",
     platforms: [.macOS(.v14)],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.99.0"),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
         .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.1"),
         .package(url: "https://github.com/raspu/Highlightr", from: "2.2.1"),
@@ -15,7 +14,6 @@ let package = Package(
         .executableTarget(
             name: "Zurafa",
             dependencies: [
-                .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "Sparkle", package: "Sparkle"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
                 .product(name: "Highlightr", package: "Highlightr"),

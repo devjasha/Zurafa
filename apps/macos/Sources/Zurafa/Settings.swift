@@ -291,18 +291,6 @@ private struct TerminalPane: View {
             } footer: {
                 Text("Programs such as editors can still change the cursor while they run.").font(.caption).foregroundStyle(.secondary)
             }
-            Section {
-                Picker("Engine", selection: Binding(get: { ws.config.terminalEngine },
-                                                    set: { ws.writeConfig("terminal-engine", $0.rawValue) })) {
-                    Text("SwiftTerm").tag(TerminalEngine.swiftterm)
-                    Text("Ghostty (experimental)").tag(TerminalEngine.ghostty)
-                }
-            } header: {
-                Text("Engine")
-            } footer: {
-                Text("Open panes switch right away and reload their output. Panes whose program exited come back empty.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
             Section("Panes") {
                 ConfigSlider(title: "Gap", key: "pane-gap", value: ws.style.paneGap, range: 0...64, step: 1)
                 ConfigSlider(title: "Padding", key: "pane-padding", value: ws.style.panePadding ?? 12, range: 0...64, step: 1)

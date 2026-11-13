@@ -29,7 +29,7 @@ final class GhosttyTerminalTests: XCTestCase {
         XCTAssertEqual(row[10].width, 0)
         XCTAssertEqual(row[10].text, "")
         XCTAssertEqual(t.line(row: 0).prefix(3).joined(), "hi ")
-        XCTAssertEqual(PaneTerminal.word(in: t.line(row: 0), at: 4), "red")
+        XCTAssertEqual(GhosttyPaneView.word(in: t.line(row: 0), at: 4), "red")
         XCTAssertTrue(f.rows.allSatisfy(\.dirty))
 
         // Nothing changed: no row is dirty. Typing on row 1 dirties it and row 0, which the cursor left.

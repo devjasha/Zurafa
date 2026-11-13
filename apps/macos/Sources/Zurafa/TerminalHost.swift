@@ -1,83 +1,5 @@
 import AppKit
-import SwiftTerm
 import SwiftUI
-
-final class PaneTerminal: TerminalView {
-    var onFocus: (() -> Void)?
-    var onSized: (() -> Void)?
-    var terminal: String?
-    var openedLink = false
-    override func mouseDown(with event: NSEvent) { onFocus?(); super.mouseDown(with: event) }
-    // SwiftTerm only links text containing "/" or a URL scheme, so ⌘-click on a bare name like README.md falls through.
-    override func mouseUp(with event: NSEvent) {
-        openedLink = false
-        super.mouseUp(with: event)
-        guard event.modifierFlags.contains(.command), !openedLink, !selectionActive, let terminal,
-              let word = word(at: event) else { return }
-        _ = TerminalStore.shared.onOpenLink(terminal, word)
-    }
-    private func word(at event: NSEvent) -> String? {
-        // shortcut: SwiftTerm keeps its Terminal internal, so read it by reflection; returns nil if SwiftTerm renames it.
-        guard let t = Mirror(reflecting: self).superclassMirror?.descendant("terminal") as? Terminal else { return nil }
-        let index = characterIndex(for: event.locationInWindow)
-        return t.terminalLock.withLock {
-            guard t.cols > 0 else { return nil }
-            let cells = (0..<t.cols).map { t.getText(col: $0, row: index / t.cols) ?? " " }
-            return Self.word(in: cells, at: index % t.cols)
-        }
-    }
-    /// The run of non-blank cells around `col`; empty cells read as NUL.
-    static func word(in cells: [String], at col: Int) -> String? {
-        let blank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: "\0"))).isEmpty }
-        guard cells.indices.contains(col), !blank(cells[col]) else { return nil }
-        var (lo, hi) = (col, col)
-        while lo > 0, !blank(cells[lo - 1]) { lo -= 1 }
-        while hi + 1 < cells.count, !blank(cells[hi + 1]) { hi += 1 }
-        return cells[lo...hi].joined()
-    }
-    override func paste(_ sender: Any) {
-        if let text = ImagePaste.promptText() { pasteText(text); return }
-        super.paste(sender)
-    }
-    override func setFrameSize(_ size: NSSize) {
-        super.setFrameSize(size)
-        if size.width > 0, size.height > 0, let callback = onSized { onSized = nil; callback() }
-    }
-    /// A hidden pane stops counting for the terminal's size; shown again, it says its size again.
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if let terminal { TerminalStore.shared.shown(terminal, window != nil) }
-    }
-    /// The frame that holds exactly `cols`×`rows` cells, so another device's grid draws unchanged.
-    func frameSize(cols: Int, rows: Int) -> NSSize? {
-        // shortcut: SwiftTerm keeps its cell size internal, so read it by reflection; nil (the pane fills) if SwiftTerm renames it.
-        guard let cell = Mirror(reflecting: self).superclassMirror?.descendant("cellDimension") as? CGSize else { return nil }
-        let now = terminalDimensions
-        let scroller = getOptimalFrameSize().width - cell.width * CGFloat(now.cols)
-        // Half a point over, so rounding never loses a cell.
-        return NSSize(width: cell.width * CGFloat(cols) + scroller + 0.5, height: cell.height * CGFloat(rows) + 0.5)
-    }
-}
-
-extension PaneTerminal: TerminalPaneView {
-    var gridSize: (cols: Int, rows: Int) { (terminalDimensions.cols, terminalDimensions.rows) }
-
-    func apply(colors: MacAppearance.Colors, selectedText: UInt32?) {
-        installColors(colors.palette.map { SwiftTerm.Color(red8: UInt16($0 >> 16 & 255), green8: UInt16($0 >> 8 & 255), blue8: UInt16($0 & 255)) })
-        // The imported background belongs to the whole workspace surface.
-        // A per-terminal fill leaves a visible rectangle inside each pane.
-        nativeBackgroundColor = .clear
-        nativeForegroundColor = TerminalStore.ns(colors.foreground)
-        caretColor = TerminalStore.ns(colors.cursor)
-        selectedTextBackgroundColor = colors.selection.map { TerminalStore.ns($0).withAlphaComponent(0.35) }
-            ?? NSColor(srgbRed: 0.45, green: 0.6, blue: 0.9, alpha: 0.3)
-        selectedTextForegroundColor = selectedText.map(TerminalStore.ns) ?? .black
-        needsDisplay = true
-    }
-
-    // shortcut: a program that resets its cursor (DECSCUSR 0) gets SwiftTerm's blinking block back; SwiftTerm fixes that default at creation.
-    func apply(cursor settings: GhosttyTerminalSettings) { setCursorStyle(settings.swiftTermCursor) }
-}
 
 /// Keeps the persistent terminal view attached when SwiftUI collapses a split.
 @MainActor final class TerminalContainer: NSView {
@@ -119,13 +41,11 @@ extension PaneTerminal: TerminalPaneView {
 }
 
 /// Terminal views render PTY bytes. Rust alone owns processes, status and layout.
-@MainActor final class TerminalStore: NSObject, TerminalViewDelegate {
+@MainActor final class TerminalStore: NSObject {
     static let shared = TerminalStore()
     var onFocus: (String) -> Void = { _ in }
     var onOpenLink: (String, String) -> Bool = { _, _ in false }
-    private var views: [String: any TerminalPaneView] = [:]
-    /// The engine new panes get; `setEngine` swaps open ones.
-    private(set) var engine = TerminalEngine.swiftterm
+    private var views: [String: GhosttyPaneView] = [:]
     /// The daemon's buffered output for a terminal; replaced in tests.
     var requestAttach: (String) async throws -> Msg = { try await DaemonClient.shared.request(Msg(type: "attach", terminal: $0)) }
     private var pendingOutput: [String: Data] = [:]
@@ -224,7 +144,7 @@ extension PaneTerminal: TerminalPaneView {
                      cursor: imported.cursor ?? foreground, selection: imported.selectionBackground, palette: palette)
     }
 
-    private func configure(_ view: any TerminalPaneView) {
+    private func configure(_ view: GhosttyPaneView) {
         let settings = effectiveSettings
         let family = settings.fontFamily
         let size = CGFloat(settings.fontSize ?? 13)
@@ -234,7 +154,7 @@ extension PaneTerminal: TerminalPaneView {
         configureColors(view)
     }
 
-    private func configureColors(_ view: any TerminalPaneView) {
+    private func configureColors(_ view: GhosttyPaneView) {
         let imported = isDark ? effectiveSettings.dark : effectiveSettings.light
         view.apply(colors: resolvedColors(dark: isDark, accent: nil), selectedText: imported.selectionForeground)
     }
@@ -256,48 +176,21 @@ extension PaneTerminal: TerminalPaneView {
     func paste(_ text: String, into id: String) { views[id]?.pasteText(text) }
 
     /// The terminal already on screen for `id`, without creating one.
-    func existingView(_ id: String) -> (any TerminalPaneView)? { views[id] }
+    func existingView(_ id: String) -> (GhosttyPaneView)? { views[id] }
 
-    /// Swaps every open pane to `engine`: each container attaches a new view on its next layout,
-    /// which replays the terminal's output from the daemon. Exited panes come back empty.
-    func setEngine(_ engine: TerminalEngine) {
-        guard engine != self.engine else { return }
-        self.engine = engine
-        for (id, view) in views {
-            let box = view.superview
-            views[id] = nil  // first, so leaving the window does not release the terminal's size
-            view.removeFromSuperview()
-            replayed[id] = nil
-            attaching[id] = nil
-            box?.needsLayout = true
-            (box as? TerminalContainer)?.claimFocus()
-        }
-    }
-
-    func view(for id: String, program: Program) -> any TerminalPaneView {
+    func view(for id: String, program: Program) -> GhosttyPaneView {
         if let view = views[id] { return view }
-        let view: any TerminalPaneView
-        switch engine {
-        case .swiftterm:
-            let pane = PaneTerminal(frame: .zero)
-            pane.glyphFallbackProvider = NerdFontFallback.shared
-            pane.linkHighlightMode = .hover
-            pane.terminalDelegate = self
-            view = pane
-        case .ghostty:
-            let pane = GhosttyPaneView(frame: .zero)
-            pane.onInput = { [weak self, weak pane] data in
-                if let id = pane?.terminal { self?.daemon.send(Msg(type: "input", terminal: id, data: data)) }
-            }
-            pane.onResize = { [weak self, weak pane] cols, rows in
-                // Showing another device's grid is not this app's own size.
-                if let self, let id = pane?.terminal, grids[id] == nil { daemon.send(Msg(type: "resize", cols: cols, rows: rows, terminal: id)) }
-            }
-            pane.onOpenLink = { [weak self, weak pane] word in
-                guard let self, let id = pane?.terminal else { return false }
-                return onOpenLink(id, word)
-            }
-            view = pane
+        let view = GhosttyPaneView(frame: .zero)
+        view.onInput = { [weak self, weak view] data in
+            if let id = view?.terminal { self?.daemon.send(Msg(type: "input", terminal: id, data: data)) }
+        }
+        view.onResize = { [weak self, weak view] cols, rows in
+            // Showing another device's grid is not this app's own size.
+            if let self, let id = view?.terminal, grids[id] == nil { daemon.send(Msg(type: "resize", cols: cols, rows: rows, terminal: id)) }
+        }
+        view.onOpenLink = { [weak self, weak view] word in
+            guard let self, let id = view?.terminal else { return false }
+            return onOpenLink(id, word)
         }
         view.terminal = runningBlocks.contains(id) ? id : nil
         configure(view)
@@ -317,13 +210,13 @@ extension PaneTerminal: TerminalPaneView {
     }
 
     /// A pane reopened after a restart or update starts empty, so it is filled from the daemon's output buffer.
-    private func replay(_ id: String, into view: any TerminalPaneView) {
+    private func replay(_ id: String, into view: GhosttyPaneView) {
         attaching[id] = []
         let buffered = pendingOutput.removeValue(forKey: id)
         let request = requestAttach
         Task { [weak self] in
             let reply = try? await request(id)
-            // A newer view (engine switch) owns the queue now.
+            // A newer view (the pane was closed and reopened) owns the queue now.
             guard let self, views[id] === view else { return }
             let queued = attaching.removeValue(forKey: id) ?? []
             if let reply, let data = reply.data, let end = reply.end {
@@ -336,7 +229,7 @@ extension PaneTerminal: TerminalPaneView {
         }
     }
 
-    @discardableResult func attach(_ id: String, program: Program, to box: NSView) -> any TerminalPaneView {
+    @discardableResult func attach(_ id: String, program: Program, to box: NSView) -> GhosttyPaneView {
         let view = view(for: id, program: program)
         // SwiftUI can reuse a representable's container when switching tabs.
         // Its old terminal must leave the container before the new one is attached.
@@ -399,26 +292,6 @@ extension PaneTerminal: TerminalPaneView {
         knownBlocks.removeAll()
         runningBlocks.removeAll()
     }
-
-    func send(source: TerminalView, data: ArraySlice<UInt8>) {
-        if let id = (source as? PaneTerminal)?.terminal { daemon.send(Msg(type: "input", terminal: id, data: Data(data))) }
-    }
-    func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
-        // Showing another device's grid is not this app's own size.
-        if let id = (source as? PaneTerminal)?.terminal, grids[id] == nil { daemon.send(Msg(type: "resize", cols: newCols, rows: newRows, terminal: id)) }
-    }
-    func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
-        (source as? PaneTerminal)?.openedLink = true
-        guard let id = (source as? PaneTerminal)?.terminal, onOpenLink(id, link) else {
-            TerminalView.openDefaultLink(link)
-            return
-        }
-    }
-    func setTerminalTitle(source: TerminalView, title: String) {}
-    func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
-    func clipboardCopy(source: TerminalView, content: Data) {} // Rust approves OSC clipboard writes.
-    func scrolled(source: TerminalView, position: Double) {}
-    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 }
 
 struct TerminalHost: NSViewRepresentable {

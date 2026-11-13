@@ -1,17 +1,15 @@
 import CoreGraphics
 import CoreText
 import Foundation
-import SwiftTerm
 
 /// Supplies exact glyphs from the bundled Symbols Nerd Font Mono only when
 /// the selected terminal face does not contain them.
-final class NerdFontFallback: TerminalGlyphFallbackProvider, @unchecked Sendable {
+final class NerdFontFallback: @unchecked Sendable {
     static let shared: NerdFontFallback? = {
         ZurafaResources.url(forResource: "SymbolsNerdFontMono-Regular", withExtension: "ttf")
             .flatMap(NerdFontFallback.init)
     }()
 
-    let generation: UInt64 = 1
     private let font: CGFont
     private let coveredSymbols: Set<UInt32>
     private let lock = NSLock()
@@ -35,14 +33,8 @@ final class NerdFontFallback: TerminalGlyphFallbackProvider, @unchecked Sendable
         coveredSymbols = symbols
     }
 
-    func placementPolicy(for scalar: Unicode.Scalar) -> TerminalGlyphPlacementPolicy? {
-        guard coveredSymbols.contains(scalar.value) else { return nil }
-        // Powerline joins should fill their cell; ordinary icons retain their
-        // aspect ratio and fit within the selected font's cell height.
-        let placement: TerminalGlyphPlacementPolicy.Placement =
-            (0xE0A0...0xE0D7).contains(scalar.value) ? .stretch : .icon
-        return TerminalGlyphPlacementPolicy(placement: placement)
-    }
+    /// Whether the bundled font has this symbol. (The renderer stretches powerline joins, U+E0A0–E0D7, to fill their cell.)
+    func covers(_ scalar: Unicode.Scalar) -> Bool { coveredSymbols.contains(scalar.value) }
 
     func fallbackFont(forPointSize size: CGFloat) -> CTFont? {
         let key = Int((size * 64).rounded())

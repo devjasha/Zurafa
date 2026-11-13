@@ -1,5 +1,4 @@
 import AppKit
-import SwiftTerm
 import XCTest
 @testable import Zurafa
 
@@ -15,7 +14,6 @@ import XCTest
         XCTAssertEqual(box.subviews.count, 1)
         XCTAssertTrue(box.subviews.first === second)
         XCTAssertNil(first.superview)
-        XCTAssertNotNil((second as? PaneTerminal)?.glyphFallbackProvider)
     }
 
     func testSurvivingTerminalReattachesAfterSplitContainerChanges() {
@@ -39,14 +37,9 @@ import XCTest
 
     func testWordUnderClickIsTheRunOfNonBlankCells() {
         let cells = Array("-rw  README.md  x").map(String.init) + ["\0", "\0"]
-        XCTAssertEqual(PaneTerminal.word(in: cells, at: 8), "README.md")
-        XCTAssertNil(PaneTerminal.word(in: cells, at: 4))
-        XCTAssertNil(PaneTerminal.word(in: cells, at: 17))
-        XCTAssertEqual(PaneTerminal.word(in: cells, at: 16), "x")
-    }
-
-    func testReflectionFindsSwiftTermTerminal() {
-        let view = PaneTerminal(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
-        XCTAssertNotNil(Mirror(reflecting: view).superclassMirror?.descendant("terminal") as? Terminal)
+        XCTAssertEqual(GhosttyPaneView.word(in: cells, at: 8), "README.md")
+        XCTAssertNil(GhosttyPaneView.word(in: cells, at: 4))
+        XCTAssertNil(GhosttyPaneView.word(in: cells, at: 17))
+        XCTAssertEqual(GhosttyPaneView.word(in: cells, at: 16), "x")
     }
 }

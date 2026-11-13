@@ -1,5 +1,4 @@
 import AppKit
-import SwiftTerm
 import XCTest
 @testable import Zurafa
 
@@ -37,7 +36,7 @@ import XCTest
         XCTAssertEqual(sent(view) { view.keyDown(with: key("\r", "\r", code: 0x24)) }, "\r")
         XCTAssertEqual(sent(view) { view.keyDown(with: key("\u{3}", "c", code: 0x08, .control)) }, "\u{3}")
         XCTAssertEqual(sent(view) { view.keyDown(with: key("\u{F702}", "\u{F702}", code: 0x7b, [.function, .numericPad])) }, "\u{1b}[D")
-        // Option is Meta, as SwiftTerm's default: ESC + the plain key, not the layout's "∫".
+        // Option is Meta: ESC + the plain key, not the layout's "∫".
         XCTAssertEqual(sent(view) { view.keyDown(with: key("∫", "b", code: 0x0b, .option)) }, "\u{1b}b")
         XCTAssertEqual(sent(view) { view.keyDown(with: key("\u{F702}", "\u{F702}", code: 0x7b, [.option, .function])) }, "\u{1b}b")
     }
@@ -112,36 +111,22 @@ import XCTest
     }
 
     /// Output that arrives while a replay is in flight lands after it, minus what the replay already held.
-    func testReplayAndLiveOutputDedupeForBothEngines() async {
-        for engine in [TerminalEngine.swiftterm, .ghostty] {
-            let store = TerminalStore.shared
-            store.setEngine(engine)
-            let saved = store.requestAttach
-            defer { store.reset(); store.setEngine(.swiftterm); store.requestAttach = saved }
-            var reply = Msg(type: "attach")
-            reply.data = Data("hello".utf8)
-            reply.end = 5
-            store.requestAttach = { _ in reply }
-            store.sync(blocks: ["t"], running: ["t"])
-            let view = store.view(for: "t", program: .shell)
-            let output = DaemonClient.shared.onOutput
-            output("t", Data("llo".utf8), 5)       // already in the replay
-            output("t", Data(" world".utf8), 11)   // newer, queued behind it
-            for _ in 0..<20 { await Task.yield() }
-            output("t", Data("hello".utf8), 5)     // a late duplicate
-            output("t", Data("!".utf8), 12)
-            XCTAssertEqual(screenLine(view), "hello world!", "\(engine)")
-        }
-    }
-
-    private func screenLine(_ view: any TerminalPaneView) -> String {
-        let cells: [String]
-        if let pane = view as? GhosttyPaneView {
-            cells = pane.engine.line(row: 0)
-        } else {
-            let t = Mirror(reflecting: view).superclassMirror!.descendant("terminal") as! Terminal
-            cells = (0..<t.cols).map { t.getText(col: $0, row: 0) ?? "" }
-        }
-        return cells.joined().trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: "\0")))
+    func testReplayAndLiveOutputDedupe() async {
+        let store = TerminalStore.shared
+        let saved = store.requestAttach
+        defer { store.reset(); store.requestAttach = saved }
+        var reply = Msg(type: "attach")
+        reply.data = Data("hello".utf8)
+        reply.end = 5
+        store.requestAttach = { _ in reply }
+        store.sync(blocks: ["t"], running: ["t"])
+        let view = store.view(for: "t", program: .shell)
+        let output = DaemonClient.shared.onOutput
+        output("t", Data("llo".utf8), 5)       // already in the replay
+        output("t", Data(" world".utf8), 11)   // newer, queued behind it
+        for _ in 0..<20 { await Task.yield() }
+        output("t", Data("hello".utf8), 5)     // a late duplicate
+        output("t", Data("!".utf8), 12)
+        XCTAssertEqual(view.engine.line(row: 0).joined().trimmingCharacters(in: .whitespaces), "hello world!")
     }
 }

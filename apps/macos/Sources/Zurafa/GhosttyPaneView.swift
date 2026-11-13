@@ -1,31 +1,8 @@
 import AppKit
 
-/// What `TerminalStore`, `Pickers` and `Workspace` need from a pane's terminal, whichever engine draws it.
-@MainActor protocol TerminalPaneView: NSView {
-    /// The daemon terminal this pane types into; nil once its process exited.
-    var terminal: String? { get set }
-    var onFocus: (() -> Void)? { get set }
-    /// Called once, when the pane first gets a size.
-    var onSized: (() -> Void)? { get set }
-    var font: NSFont { get set }
-    var gridSize: (cols: Int, rows: Int) { get }
-    func feed(byteArray: ArraySlice<UInt8>)
-    func feed(text: String)
-    /// Types text as a paste (bracketed when the program asks).
-    func pasteText(_ text: String)
-    /// The frame that holds exactly `cols`×`rows` cells; nil when unknown (the pane fills).
-    func frameSize(cols: Int, rows: Int) -> NSSize?
-    func apply(colors: MacAppearance.Colors, selectedText: UInt32?)
-    func apply(cursor settings: GhosttyTerminalSettings)
-    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect
-}
-
-/// Which engine draws new terminal panes: `terminal-engine` in config.zurafa.
-enum TerminalEngine: String { case swiftterm, ghostty }
-
 /// A pane drawn by libghostty-vt (`GhosttyTerminal`) and the Metal `TerminalRenderView`.
 /// Input goes out through `onInput`; output comes in through `feed`.
-final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
+final class GhosttyPaneView: NSView, NSTextInputClient {
     var terminal: String?
     var onFocus: (() -> Void)?
     var onSized: (() -> Void)?
@@ -59,7 +36,7 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         super.init(frame: frame)
         renderer.frame = bounds
         renderer.autoresizingMask = [.width, .height]
-        // The workspace surface behind the pane is the background, as with SwiftTerm.
+        // The workspace surface behind the pane is the background.
         renderer.drawsBackground = false
         addSubview(renderer)
         preedit.isHidden = true
@@ -77,7 +54,7 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
     override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .iBeam) }
 
-    // MARK: TerminalPaneView
+    // MARK: Terminal
 
     var font: NSFont {
         get { renderer.font }
@@ -122,6 +99,16 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         }
         engine.setDefaultCursor(shape, blinking: settings.cursorBlink ?? true)
         scheduleFrame()
+    }
+
+    /// The run of non-blank cells around `col`, for ⌘-click on a bare name like README.md; empty cells read as NUL.
+    static func word(in cells: [String], at col: Int) -> String? {
+        let blank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: "\0"))).isEmpty }
+        guard cells.indices.contains(col), !blank(cells[col]) else { return nil }
+        var (lo, hi) = (col, col)
+        while lo > 0, !blank(cells[lo - 1]) { lo -= 1 }
+        while hi + 1 < cells.count, !blank(cells[hi + 1]) { hi += 1 }
+        return cells[lo...hi].joined()
     }
 
     // MARK: Size and frames
@@ -198,8 +185,8 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         engine.clearSelection()
         scheduleFrame()
         let composing = hasMarkedText()
-        // Option is Meta, as with SwiftTerm's default (optionAsMetaKey): ESC + the plain key, and
-        // Option-arrows move by word the way SwiftTerm sent them, unless kitty mode wants the real keys.
+        // Option is Meta: ESC + the plain key, and Option-arrows move by word (ESC b / ESC f),
+        // unless kitty mode wants the real keys.
         if !composing, mods.contains(.option) {
             switch event.keyCode {
             case 0x7b where !engine.kittyKeyboard: return type(Data("\u{1b}b".utf8))
@@ -304,7 +291,7 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         return renderer.cell(at: convert(event.locationInWindow, from: nil))
     }
 
-    /// Shift keeps the mouse for selection while a program tracks it, as in SwiftTerm.
+    /// Shift keeps the mouse for selection while a program tracks it.
     private func reports(_ event: NSEvent) -> Bool { engine.mouseTracking && !event.modifierFlags.contains(.shift) }
 
     private func report(_ action: GhosttyTerminal.MouseAction, _ button: Int?, _ event: NSEvent) {
@@ -393,7 +380,7 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
             }
             return
         }
-        guard let word = PaneTerminal.word(in: engine.line(row: at.row), at: at.col) else { return }
+        guard let word = Self.word(in: engine.line(row: at.row), at: at.col) else { return }
         if onOpenLink?(word) != true, let url = URL(string: word), ["http", "https"].contains(url.scheme?.lowercased()) {
             NSWorkspace.shared.open(url)
         }
@@ -408,7 +395,7 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
     /// The encoder drops motion unless the program asked for any-motion tracking.
     override func mouseMoved(with event: NSEvent) { if reports(event) { report(.motion, nil, event) } }
 
-    /// Like SwiftTerm: wheel reports while a program tracks the mouse, arrow keys on the alternate
+    /// The wheel reports while a program tracks the mouse, arrow keys on the alternate
     /// screen (mode 1007), otherwise scrollback. Shift or Option scrolls locally.
     override func scrollWheel(with event: NSEvent) {
         guard event.scrollingDeltaY != 0 else { return }

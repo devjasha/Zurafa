@@ -171,7 +171,7 @@ final class GhosttyTerminal {
         return Self.string(buf.prefix(n))
     }
 
-    /// One viewport row, a string per cell, for `PaneTerminal.word(in:at:)`.
+    /// One viewport row, a string per cell, for `GhosttyPaneView.word(in:at:)`.
     func line(row: Int) -> [String] { (0..<cols).map { text(row: row, col: $0) ?? "" } }
 
     // MARK: Selection
