@@ -15,6 +15,9 @@ import SwiftUI
     }
     private var process: Process?
     private var poll: Task<Void, Never>?
+    /// `ChatList`'s measured row heights, kept with the feed so showing the chat again measures nothing.
+    /// Per turn: the row as measured, and its height at each width it was shown at.
+    var heights: [String: (row: ChatList.Coordinator.Row, at: [Int: CGFloat])] = [:]
 
     /// One feed per pane and agent session, kept while the chat is hidden: switching back (⌥⌘C, a tab)
     /// shows it at once instead of starting zurafa-orch and laying the whole chat out again.
@@ -163,36 +166,32 @@ struct ChatView: View {
     /// Questions answered here, hidden until the agent's transcript shows the answer.
     @State private var answered: Set<String> = []
     @FocusState private var composing: Bool
+    /// Whether new lines scroll the chat: true until the reader scrolls up, again once they are back at the bottom.
+    @State private var pinned = true
+    /// How many of the newest turns are laid out; a tab switch builds a new chat, so a long one stays cheap to open.
+    @State private var shown = ChatView.page
+    static let page = 30
 
     var body: some View {
         let m = ws.meta(pane)
         let live = m.record?.state == "working" || m.record?.state == "blocked"
         let turns = feed.turns(live: live)
         VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        if let problem = feed.problem {
-                            Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary).font(.callout)
-                        }
-                        ForEach(Array(turns.enumerated()), id: \.element.id) { i, turn in
-                            TurnView(turn: turn, pane: pane, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1).equatable()
-                                .transition(.rise)
-                        }
-                        if live && turns.isEmpty {
-                            FoldLine(meta: m, title: "\(m.agentName) working…", live: true, open: .constant(false), expandable: false)
-                        }
-                        Color.clear.frame(height: 1).id("end")
-                    }
-                    .padding(.vertical, 16).padding(.horizontal, 16)
-                    .frame(maxWidth: ChatView.width).frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 12) {
+                if let problem = feed.problem {
+                    Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary).font(.callout)
                 }
-                // Opens at the newest message and stays there as the chat grows, as Messages does; no jump
-                // after the lazy rows below the fold settle their heights.
-                .defaultScrollAnchor(.bottom)
-                .onChange(of: feed.log.items.count) { proxy.scrollTo("end", anchor: .bottom) }
-                .onChange(of: feed.log.items.last?.result) { proxy.scrollTo("end", anchor: .bottom) }
+                if live && turns.isEmpty {
+                    FoldLine(meta: m, title: "\(m.agentName) working…", live: true, open: .constant(false), expandable: false)
+                }
             }
+            .padding(.horizontal, 16).padding(.top, feed.problem != nil || (live && turns.isEmpty) ? 16 : 0)
+            .frame(maxWidth: ChatView.width).frame(maxWidth: .infinity, alignment: .leading)
+            ChatList(turns: Array(turns.enumerated()).suffix(shown).map { i, turn in
+                         TurnView(turn: turn, pane: pane, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1)
+                     },
+                     earlier: turns.count > shown ? { shown += ChatView.page } : nil,
+                     feed: feed, ws: ws, pinned: $pinned)
             Group {
                 if live, let asked = feed.log.items.last(where: { !$0.questions.isEmpty && $0.result == nil }), !answered.contains(asked.id) {
                     QuestionCard(questions: asked.questions) { answers in
@@ -279,6 +278,7 @@ struct ChatView: View {
         ws.sendChat(pane, text)
         feed.log.sent(text)
         draft = ""
+        pinned = true
     }
 }
 
@@ -372,7 +372,7 @@ struct AgentGlyph: View {
 }
 
 /// Equatable so a new transcript line rebuilds only the turn it changed, not every turn on screen.
-private struct TurnView: View, Equatable {
+struct TurnView: View, Equatable {
     let turn: ChatTurn
     let pane: String
     let meta: PaneMeta
@@ -714,13 +714,20 @@ struct EditDiff: View {
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.ink.opacity(0.1)))
         // Highlighted once per edit and theme, not on every redraw of the chat.
         .task(id: colorScheme) {
+            let key = diffKey
+            guard Memo.diff[key] == nil else { return }
             let code = HighlightrCode(colorScheme: colorScheme), lang = URL(fileURLWithPath: edit.path).pathExtension.lowercased()
             let edit = edit
-            colored = await Task.detached(priority: .userInitiated) { (code.lines(edit.old, language: lang), code.lines(edit.new, language: lang)) }.value
+            let result = await Task.detached(priority: .userInitiated) { (code.lines(edit.old, language: lang), code.lines(edit.new, language: lang)) }.value
+            Memo.diff[key] = result
+            colored = result
         }
     }
 
+    private var diffKey: String { "\(colorScheme)\u{0}\(edit.path)\u{0}\(edit.old)\u{0}\(edit.new)" }
+
     private func text(_ line: FileEdit.Line) -> AttributedString {
+        let colored = colored ?? Memo.diff[diffKey]
         let source = line.mark == .removed ? colored?.old : colored?.new
         guard let source, source.indices.contains(line.at) else { return AttributedString(line.text) }
         return source[line.at]
@@ -736,7 +743,7 @@ struct ChatMarkdown: View, Equatable {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(MarkdownBlock.parse(text).enumerated()), id: \.offset) { _, block in
+            ForEach(Array(Memo.blocks(text) { MarkdownBlock.parse(text) }.enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .heading(let level, let t):
                     inline(t).font(.system(size: size * [1.45, 1.25, 1.12, 1.0, 1.0, 1.0][level - 1], weight: .semibold))
@@ -772,7 +779,7 @@ struct ChatMarkdown: View, Equatable {
     }
 
     private func inline(_ t: String) -> Text {
-        Text((try? AttributedString(markdown: t, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(t))
+        Text(Memo.inline(t) { (try? AttributedString(markdown: t, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(t) })
     }
 
     static func == (a: Self, b: Self) -> Bool { a.text == b.text && a.ink == b.ink && a.size == b.size }
@@ -802,7 +809,7 @@ private struct CodeCard: View {
             .padding(.horizontal, 10).padding(.vertical, 5)
             Divider()
             ScrollView(.horizontal) {
-                Text(colored ?? AttributedString(code))
+                Text(colored ?? Memo.code[codeKey] ?? AttributedString(code))
                     .font(.system(size: size * 0.88, design: .monospaced))
                     .fixedSize()
                     .padding(10)
@@ -812,8 +819,38 @@ private struct CodeCard: View {
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.ink.opacity(0.1)))
         // Off the main thread: a long chat's code blocks would otherwise run highlight.js before it opens.
         .task(id: colorScheme) {
+            let key = codeKey
+            guard Memo.code[key] == nil else { return }
             let highlighter = HighlightrCode(colorScheme: colorScheme), code = code, language = language.isEmpty ? nil : language
-            colored = await Task.detached(priority: .userInitiated) { highlighter.attributedCode(code, language: language) }.value
+            let result = await Task.detached(priority: .userInitiated) { highlighter.attributedCode(code, language: language) }.value
+            Memo.code[key] = result
+            colored = result
+        }
+    }
+
+    private var codeKey: String { "\(colorScheme)\u{0}\(language)\u{0}\(code)" }
+}
+
+/// Parsed and highlighted text kept across view rebuilds: switching tabs re-creates the chat, and parsing
+/// every message's Markdown and running highlight.js again on each switch made switching slow.
+@MainActor enum Memo {
+    static let blocks = Cache<[MarkdownBlock]>()
+    static let inline = Cache<AttributedString>()
+    static let code = Cache<AttributedString>()
+    static let diff = Cache<(old: [AttributedString], new: [AttributedString])>()
+
+    final class Cache<Value> {
+        private final class Box { let value: Value; init(_ value: Value) { self.value = value } }
+        private let store: NSCache<NSString, Box> = { let c = NSCache<NSString, Box>(); c.countLimit = 4000; return c }()
+        subscript(key: String) -> Value? {
+            get { store.object(forKey: key as NSString)?.value }
+            set { if let newValue { store.setObject(Box(newValue), forKey: key as NSString) } else { store.removeObject(forKey: key as NSString) } }
+        }
+        func callAsFunction(_ key: String, _ make: () -> Value) -> Value {
+            if let hit = self[key] { return hit }
+            let value = make()
+            self[key] = value
+            return value
         }
     }
 }
