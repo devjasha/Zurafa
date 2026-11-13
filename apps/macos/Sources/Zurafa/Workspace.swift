@@ -232,6 +232,7 @@ enum EditorKind: String, Identifiable {
             for (id, block) in session.blocks { next[id] = paneMeta(block, in: session, base: metas[id] ?? PaneMeta()) }
         }
         metas = next
+        ChatFeed.keep(Set(next.map { ChatFeed.key($0.key, $0.value) }))
         if value.sessions[sessionID] == nil {
             sessionID = value.sessions["default"] != nil ? "default" : value.sessions.keys.sorted().first ?? "default"
         }
@@ -425,7 +426,9 @@ enum EditorKind: String, Identifiable {
     /// Agent panes show what the agent-chat setting says; these were switched (⌥⌘C) to the other view.
     @Published var switchedPanes: Set<String> = []
     func toggleChat(_ id: String) {
-        if switchedPanes.remove(id) == nil { switchedPanes.insert(id) }
+        withAnimation(.easeOut(duration: 0.15)) {
+            if switchedPanes.remove(id) == nil { switchedPanes.insert(id) }
+        }
     }
     func toggleChatFocused() { if metas[tab.focus]?.hasChat == true { toggleChat(tab.focus) } }
     /// Types `text` into the pane's agent the way `zurafa send` does: a paste (bracketed when the

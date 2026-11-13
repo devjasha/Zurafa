@@ -969,11 +969,13 @@ struct PaneView: View {
                     .opacity(chat ? 0 : 1)
                     .allowsHitTesting(!chat)
                 if chat {
-                    ChatView(pane: id, focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil)
+                    ChatView(pane: id, focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil,
+                             feed: ChatFeed.of(ChatFeed.key(id, m)))
                         // Clear over a background image, so the chat shows the pane's part of it like the terminal does.
                         .background(backgroundImage == nil ? Theme.paneTint : .clear)
-                        // A tab switch reuses this view for another pane; a new identity restarts its feed for that pane.
-                        .id(id)
+                        // A tab switch reuses this view for another pane; a new identity starts its feed for that pane.
+                        .id(ChatFeed.key(id, m))
+                        .transition(.opacity)
                 }
             }
             .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)

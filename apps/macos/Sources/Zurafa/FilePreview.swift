@@ -213,6 +213,8 @@ struct HighlightrCode: CodeSyntaxHighlighter {
         Text(attributed(code, language: language))
     }
 
+    func attributedCode(_ code: String, language: String?) -> AttributedString { attributed(code, language: language) }
+
     /// The code colored, highlighted whole so a line inside a comment or string keeps its color.
     func lines(_ code: String, language: String?) -> [AttributedString] {
         let all = attributed(code, language: language)

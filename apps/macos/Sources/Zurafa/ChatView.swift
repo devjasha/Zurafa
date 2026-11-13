@@ -15,6 +15,24 @@ import SwiftUI
     }
     private var process: Process?
 
+    /// One feed per pane and agent session, kept while the chat is hidden: switching back (⌥⌘C, a tab)
+    /// shows it at once instead of starting zurafa-orch and laying the whole chat out again.
+    private static var feeds: [String: ChatFeed] = [:]
+    static func of(_ key: String) -> ChatFeed {
+        if let feed = feeds[key] { return feed }
+        let feed = ChatFeed()
+        feeds[key] = feed
+        return feed
+    }
+    /// Stops the feeds of panes that are gone, or whose pane moved on to another session.
+    static func keep(_ keys: Set<String>) {
+        for (key, feed) in feeds where !keys.contains(key) {
+            feed.stop()
+            feeds[key] = nil
+        }
+    }
+    static func key(_ pane: String, _ m: PaneMeta) -> String { "\(pane) \(m.thread?.session ?? m.program.title)" }
+
     /// zurafa-orch: ZURAFA_ORCH, else the one the app ships, else one installed beside the shell's tools
     /// (a `swift run` build has no bundle).
     static func orch() -> String? {
@@ -35,15 +53,17 @@ import SwiftUI
         p.arguments = ["--socket", DaemonClient.socket, "follow", "--pane", pane]
         p.standardOutput = out
         p.standardError = err
-        // One update per chunk read, not per line: opening a long chat redraws once, not hundreds of times.
+        // One update for all the chunks read while the main thread was busy, not one per chunk: a long
+        // chat opens in one redraw instead of filling up and scrolling in steps.
         let lines = LineBuffer()
         out.fileHandleForReading.readabilityHandler = { [weak self] h in
             let chunk = h.availableData
             if chunk.isEmpty { h.readabilityHandler = nil; return }
-            let batch = lines.take(chunk).compactMap(ChatLog.decode)
-            guard !batch.isEmpty else { return }
+            guard lines.take(chunk) else { return }
             Task { @MainActor in
                 guard let self else { return }
+                let batch = lines.drain()
+                guard !batch.isEmpty else { return }
                 var log = self.log
                 batch.forEach { log.add($0) }
                 self.log = log
@@ -63,15 +83,29 @@ import SwiftUI
     }
 }
 
-/// Splits a byte stream into lines; only the pipe's reader queue touches it.
+/// Splits a byte stream into decoded lines on the pipe's reader queue and hands them to the main
+/// thread in one batch, however many chunks came in meanwhile.
 private final class LineBuffer: @unchecked Sendable {
     private var pending = Data()
-    func take(_ chunk: Data) -> [Data] {
+    private let lock = NSLock()
+    private var ready: [[String: JSONValue]] = []
+
+    /// Decodes the whole lines in `chunk`; true when the main thread has to be woken for them.
+    func take(_ chunk: Data) -> Bool {
         pending.append(chunk)
-        guard let end = pending.lastIndex(of: UInt8(ascii: "\n")) else { return [] }
-        let lines = pending[..<end].split(separator: UInt8(ascii: "\n")).map { Data($0) }
+        guard let end = pending.lastIndex(of: UInt8(ascii: "\n")) else { return false }
+        let decoded = pending[..<end].split(separator: UInt8(ascii: "\n")).compactMap { ChatLog.decode(Data($0)) }
         pending.removeSubrange(...end)
-        return lines
+        guard !decoded.isEmpty else { return false }
+        return lock.withLock {
+            let wake = ready.isEmpty // a wakeup is already on its way otherwise
+            ready += decoded
+            return wake
+        }
+    }
+
+    func drain() -> [[String: JSONValue]] {
+        lock.withLock { defer { ready = [] }; return ready }
     }
 }
 
@@ -82,7 +116,7 @@ struct ChatView: View {
     let pane: String
     let focused: Bool
     @EnvironmentObject var ws: Workspace
-    @StateObject private var feed = ChatFeed()
+    @ObservedObject var feed: ChatFeed
     @State private var draft = ""
     /// What the chips changed, shown until the transcript catches up.
     @State private var changed = AgentSettings()
@@ -113,9 +147,11 @@ struct ChatView: View {
                     .padding(.vertical, 16).padding(.horizontal, 16)
                     .frame(maxWidth: ChatView.width).frame(maxWidth: .infinity)
                 }
+                // Opens at the newest message and stays there as the chat grows, as Messages does; no jump
+                // after the lazy rows below the fold settle their heights.
+                .defaultScrollAnchor(.bottom)
                 .onChange(of: feed.log.items.count) { proxy.scrollTo("end", anchor: .bottom) }
                 .onChange(of: feed.log.items.last?.result) { proxy.scrollTo("end", anchor: .bottom) }
-                .onAppear { proxy.scrollTo("end", anchor: .bottom) }
             }
             Group {
                 if live, let asked = feed.log.items.last(where: { !$0.questions.isEmpty && $0.result == nil }), !answered.contains(asked.id) {
@@ -142,7 +178,6 @@ struct ChatView: View {
             feed.start(pane: pane)
             if focused { composing = true }
         }
-        .onDisappear { feed.stop() }
         .onChange(of: focused) { if focused { composing = true } }
     }
 
@@ -696,6 +731,7 @@ private struct CodeCard: View {
     let size: CGFloat
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
+    @State private var colored: AttributedString?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -712,7 +748,7 @@ private struct CodeCard: View {
             .padding(.horizontal, 10).padding(.vertical, 5)
             Divider()
             ScrollView(.horizontal) {
-                HighlightrCode(colorScheme: colorScheme).highlightCode(code, language: language.isEmpty ? nil : language)
+                Text(colored ?? AttributedString(code))
                     .font(.system(size: size * 0.88, design: .monospaced))
                     .fixedSize()
                     .padding(10)
@@ -720,6 +756,11 @@ private struct CodeCard: View {
         }
         .background(Theme.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.ink.opacity(0.1)))
+        // Off the main thread: a long chat's code blocks would otherwise run highlight.js before it opens.
+        .task(id: colorScheme) {
+            let highlighter = HighlightrCode(colorScheme: colorScheme), code = code, language = language.isEmpty ? nil : language
+            colored = await Task.detached(priority: .userInitiated) { highlighter.attributedCode(code, language: language) }.value
+        }
     }
 }
 
