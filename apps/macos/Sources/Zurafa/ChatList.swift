@@ -151,10 +151,14 @@ struct ChatList: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, heightOfRow index: Int) -> CGFloat {
             let row = rows[index], w = tableView.bounds.width
             guard w > 0, let feed = list?.feed else { return 20 }
-            if let known = feed.heights[row.id], known.row == row, abs(known.width - w) < 0.5 { return known.height }
+            // A new table lays out at a passing width before its real one; keeping every width means neither is measured twice.
+            let key = Int(w.rounded())
+            if let known = feed.heights[row.id], known.row == row, let h = known.at[key] { return h }
             sizer.rootView = AnyView(content(row).fixedSize(horizontal: false, vertical: true))
             let h = max(1, sizer.sizeThatFits(in: CGSize(width: w, height: .greatestFiniteMagnitude)).height.rounded(.up))
-            feed.heights[row.id] = (row, w, h)
+            var at = feed.heights[row.id].flatMap { $0.row == row ? $0.at : nil } ?? [:]
+            at[key] = h
+            feed.heights[row.id] = (row, at)
             return h
         }
 
@@ -172,9 +176,12 @@ struct ChatList: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { false }
 
         private func reported(_ id: String, _ h: CGFloat) {
-            guard let table, let feed = list?.feed, let index = rows.firstIndex(where: { $0.id == id }),
-                  let known = feed.heights[id], abs(known.height - h) > 0.5, h > 0 else { return }
-            feed.heights[id] = (known.row, known.width, h)
+            guard let table, h > 0, let feed = list?.feed, let index = rows.firstIndex(where: { $0.id == id }),
+                  var known = feed.heights[id] else { return }
+            let key = Int(table.bounds.width.rounded())
+            guard let old = known.at[key], abs(old - h) > 0.5 else { return }
+            known.at[key] = h
+            feed.heights[id] = known
             DispatchQueue.main.async { [weak self] in
                 guard index < table.numberOfRows else { return }
                 NSAnimationContext.runAnimationGroup { $0.duration = 0; table.noteHeightOfRows(withIndexesChanged: [index]) }

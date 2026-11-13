@@ -16,7 +16,8 @@ import SwiftUI
     private var process: Process?
     private var poll: Task<Void, Never>?
     /// `ChatList`'s measured row heights, kept with the feed so showing the chat again measures nothing.
-    var heights: [String: (row: ChatList.Coordinator.Row, width: CGFloat, height: CGFloat)] = [:]
+    /// Per turn: the row as measured, and its height at each width it was shown at.
+    var heights: [String: (row: ChatList.Coordinator.Row, at: [Int: CGFloat])] = [:]
 
     /// One feed per pane and agent session, kept while the chat is hidden: switching back (⌥⌘C, a tab)
     /// shows it at once instead of starting zurafa-orch and laying the whole chat out again.
