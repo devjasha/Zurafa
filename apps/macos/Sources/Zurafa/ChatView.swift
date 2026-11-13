@@ -15,6 +15,8 @@ import SwiftUI
     }
     private var process: Process?
     private var poll: Task<Void, Never>?
+    /// `ChatList`'s measured row heights, kept with the feed so showing the chat again measures nothing.
+    var heights: [String: (row: ChatList.Coordinator.Row, width: CGFloat, height: CGFloat)] = [:]
 
     /// One feed per pane and agent session, kept while the chat is hidden: switching back (⌥⌘C, a tab)
     /// shows it at once instead of starting zurafa-orch and laying the whole chat out again.
@@ -174,35 +176,21 @@ struct ChatView: View {
         let live = m.record?.state == "working" || m.record?.state == "blocked"
         let turns = feed.turns(live: live)
         VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        if let problem = feed.problem {
-                            Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary).font(.callout)
-                        }
-                        if turns.count > shown {
-                            Button("Show earlier messages") { shown += ChatView.page }
-                                .buttonStyle(.link).frame(maxWidth: .infinity)
-                        }
-                        ForEach(Array(turns.enumerated()).suffix(shown), id: \.element.id) { i, turn in
-                            TurnView(turn: turn, pane: pane, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1).equatable()
-                                .transition(.rise)
-                        }
-                        if live && turns.isEmpty {
-                            FoldLine(meta: m, title: "\(m.agentName) working…", live: true, open: .constant(false), expandable: false)
-                        }
-                        Color.clear.frame(height: 1).id("end")
-                    }
-                    .padding(.vertical, 16).padding(.horizontal, 16)
-                    .frame(maxWidth: ChatView.width).frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 12) {
+                if let problem = feed.problem {
+                    Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary).font(.callout)
                 }
-                // Opens at the newest message and follows the chat as it grows, as Messages does.
-                .defaultScrollAnchor(.bottom)
-                .modifier(TracksBottom(pinned: $pinned))
-                .onChange(of: feed.log.items.count) { follow(proxy) }
-                .onChange(of: feed.log.items.last?.result) { follow(proxy) }
-                .onChange(of: live) { follow(proxy) }
+                if live && turns.isEmpty {
+                    FoldLine(meta: m, title: "\(m.agentName) working…", live: true, open: .constant(false), expandable: false)
+                }
             }
+            .padding(.horizontal, 16).padding(.top, feed.problem != nil || (live && turns.isEmpty) ? 16 : 0)
+            .frame(maxWidth: ChatView.width).frame(maxWidth: .infinity, alignment: .leading)
+            ChatList(turns: Array(turns.enumerated()).suffix(shown).map { i, turn in
+                         TurnView(turn: turn, pane: pane, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1)
+                     },
+                     earlier: turns.count > shown ? { shown += ChatView.page } : nil,
+                     feed: feed, ws: ws, pinned: $pinned)
             Group {
                 if live, let asked = feed.log.items.last(where: { !$0.questions.isEmpty && $0.result == nil }), !answered.contains(asked.id) {
                     QuestionCard(questions: asked.questions) { answers in
@@ -290,35 +278,6 @@ struct ChatView: View {
         feed.log.sent(text)
         draft = ""
         pinned = true
-    }
-
-    /// Scrolls to the end with the same motion the new row rises in with, so the two move as one.
-    private func follow(_ proxy: ScrollViewProxy) {
-        guard pinned else { return }
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            proxy.scrollTo("end", anchor: .bottom)
-        } else {
-            withAnimation(.snappy(duration: 0.3)) { proxy.scrollTo("end", anchor: .bottom) }
-        }
-    }
-}
-
-/// Unpins the chat when the reader scrolls up and pins it again at the bottom. Content growing under a
-/// still scroll offset changes neither. shortcut: macOS 14 has no scroll geometry, so it stays pinned there.
-private struct TracksBottom: ViewModifier {
-    @Binding var pinned: Bool
-    private struct Edge: Equatable { var offset: CGFloat; var gap: CGFloat }
-
-    func body(content: Content) -> some View {
-        if #available(macOS 15, *) {
-            content.onScrollGeometryChange(for: Edge.self) { g in
-                Edge(offset: g.contentOffset.y, gap: g.contentSize.height - g.containerSize.height - g.contentOffset.y)
-            } action: { old, new in
-                if new.gap < 40 { pinned = true } else if new.offset < old.offset { pinned = false }
-            }
-        } else {
-            content
-        }
     }
 }
 
@@ -412,7 +371,7 @@ struct AgentGlyph: View {
 }
 
 /// Equatable so a new transcript line rebuilds only the turn it changed, not every turn on screen.
-private struct TurnView: View, Equatable {
+struct TurnView: View, Equatable {
     let turn: ChatTurn
     let pane: String
     let meta: PaneMeta
