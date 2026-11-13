@@ -1,3 +1,4 @@
+use crate::input;
 use crate::protocol::{read_frame, write_frame, Msg};
 use crate::pty::{SpawnOptions, Terminals};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
@@ -64,10 +65,10 @@ impl Owners {
         s.wanted(client)
     }
     /// Typing takes the terminal, but only for a client showing it: `zurafa send` has no size.
-    /// Input led by ESC is not typing: it is mostly the terminal answering a query, or a mouse or
-    /// focus report, which every viewer sends after a resize, so it would trade the terminal back and forth.
+    /// A terminal's answer to a query, or a mouse or focus report, is not typing: every viewer
+    /// sends those after a resize, so they would trade the terminal back and forth.
     pub fn typed(&mut self, client: &str, terminal: &str, bytes: &[u8]) -> Option<Size> {
-        if bytes.first() == Some(&0x1b) {
+        if !input::parts(bytes).any(|(kind, _)| kind == input::Kind::Key) {
             return None;
         }
         let s = self.0.get_mut(terminal)?;
@@ -77,6 +78,11 @@ impl Owners {
         let size = s.wanted(client)?;
         s.owner = Some(client.into());
         Some(size)
+    }
+    /// Whether `client`'s emulator speaks for the terminal: its owner's does, or anyone's when it has none.
+    /// Every viewer answers the program's queries; the program should get one answer.
+    pub fn answers(&self, client: &str, terminal: &str) -> bool {
+        self.owner(terminal).is_none_or(|owner| owner == client)
     }
     /// The client stopped showing the terminal; if it owned it, the latest other viewer takes over.
     pub fn release(&mut self, client: &str, terminal: &str) -> Option<Size> {
@@ -131,7 +137,8 @@ fn reply(msg: Msg, t: &Arc<Terminals>, client: &str) -> Option<Value> {
             Ok((end, data, gap)) => {
                 let (cols, rows) = t.size(&terminal).unwrap_or((80, 24));
                 json!({"id":id,"type":"attached","terminal":terminal,
-                "end":end,"data":B64.encode(data),"gap":gap,"cols":cols,"rows":rows})
+                "end":end,"data":B64.encode(data),"gap":gap,"cols":cols,"rows":rows,
+                "keyboard":t.keyboard(&terminal)})
             }
             Err(e) => error(id, e),
         },
@@ -142,11 +149,17 @@ fn reply(msg: Msg, t: &Arc<Terminals>, client: &str) -> Option<Value> {
         Msg::Input { terminal, data } => {
             if let Ok(bytes) = B64.decode(data) {
                 // Resized before the keys land, so they act on the grid the typist sees.
-                let size = t.owners.lock().unwrap().typed(client, &terminal, &bytes);
+                let (size, answers) = {
+                    let mut owners = t.owners.lock().unwrap();
+                    (owners.typed(client, &terminal, &bytes), owners.answers(client, &terminal))
+                };
                 if size.is_some() {
                     t.sized(&terminal, size);
                 }
-                t.input(&terminal, &bytes);
+                let bytes = if answers { bytes } else { input::without_replies(&bytes) };
+                if !bytes.is_empty() {
+                    t.input(&terminal, &bytes);
+                }
             }
             return None;
         }
@@ -925,10 +938,17 @@ mod tests {
         assert_eq!(o.owner("t"), Some("mac"));
         // Typing on the phone hands it over at the phone's size; typing again changes nothing.
         // A terminal's own answer (here to `ESC[c`) is not typing.
-        assert_eq!(o.typed("phone", "t", b"\x1b[?62;22c"), None);
+        // Neither are mouse or focus reports.
+        for not_typing in [b"\x1b[?62;22c".as_slice(), b"\x1b[<0;3;4M", b"\x1b[I", b"\x1b[?1u"] {
+            assert_eq!(o.typed("phone", "t", not_typing), None);
+        }
         assert_eq!(o.owner("t"), Some("mac"));
+        assert!(o.answers("mac", "t") && !o.answers("phone", "t"));
         assert_eq!(o.typed("phone", "t", b"l"), Some((50, 30)));
         assert_eq!(o.typed("phone", "t", b"s"), None);
+        // A key under the kitty keyboard protocol starts with ESC, and is typing all the same.
+        assert_eq!(o.typed("mac", "t", b"\x1b[99;5u"), Some((100, 40)));
+        assert_eq!(o.typed("phone", "t", b"\x1b[A"), Some((50, 30)));
         assert_eq!(o.resize("mac", "t", (90, 40)), None);
         // A client that never sized the terminal, like `zurafa send`, cannot take it by typing.
         assert_eq!(o.typed("cli", "t", b"x"), None);

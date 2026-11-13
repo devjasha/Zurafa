@@ -1,5 +1,5 @@
 use crate::hosts::{self, HostRegistry};
-use crate::osc7501::{Action, Filter};
+use crate::osc7501::{Action, Filter, Keyboard};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde_json::{json, Value};
@@ -21,6 +21,7 @@ struct Term {
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     running: AtomicBool,
     replay: Mutex<Replay>,
+    keyboard: Mutex<Keyboard>,
 }
 
 /// Recent output kept so a client that reconnects can catch up on what it missed.
@@ -260,6 +261,11 @@ impl Terminals {
         Ok((replay.end, replay.buf.iter().skip(skip).copied().collect(), gap))
     }
 
+    /// The pane's kitty keyboard protocol flags; 0 when the program uses legacy keys.
+    pub fn keyboard(&self, id: &str) -> u8 {
+        self.get(id).map_or(0, |t| t.keyboard.lock().unwrap().flags())
+    }
+
     fn action(&self, terminal: &str, action: Action) {
         match action {
             Action::Report(Report::Query) => self.input(terminal, b"\x1b]7501;?\x1b\\"),
@@ -450,6 +456,7 @@ impl Terminals {
             killer: Mutex::new(child.clone_killer()),
             running: AtomicBool::new(true),
             replay: Mutex::default(),
+            keyboard: Mutex::default(),
         };
         let term = Arc::new(term);
         self.map.lock().unwrap().insert(id.clone(), term.clone());
@@ -482,6 +489,7 @@ impl Terminals {
             let (mut filter, mut buf) = (Filter::default(), [0u8; 8192]);
             // a read error (EIO once the child side closes) ends the stream like EOF
             while let Ok(n @ 1..) = reader.read(&mut buf) {
+                term.keyboard.lock().unwrap().feed(&buf[..n]);
                 if raw {
                     this.output(&tid, &term, &buf[..n]);
                     continue;

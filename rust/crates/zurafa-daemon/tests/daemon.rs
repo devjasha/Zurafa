@@ -636,3 +636,33 @@ fn remote_helper_uploads_daemon_survives_a_dropped_connection_and_returns_exit_c
     }
     let _ = fs::remove_dir_all(&home);
 }
+
+#[test]
+fn only_the_size_owner_answers_terminal_queries() {
+    let d = Daemon::start("answers");
+    let (mut mac, mut phone) = (d.connect(), d.connect());
+    mac.hello();
+    phone.hello();
+    mac.send(json!({"id":2,"type":"spawn","cols":80,"rows":24,
+        "command":["/bin/sh","-c","stty -echo; echo ready; cat -v"]}));
+    let msgs = mac.collect(|m| String::from_utf8_lossy(&output(m)).contains("ready"));
+    let t = of_type(&msgs, "spawned").next().unwrap()["terminal"].as_str().unwrap().to_owned();
+    let input = |c: &mut Client, data: &str| c.send(json!({"type":"input","terminal":t,"data":B64.encode(data)}));
+    mac.send(json!({"type":"resize","terminal":t,"cols":80,"rows":24}));
+    mac.request(json!({"id":3,"type":"ping"}));
+    phone.send(json!({"type":"resize","terminal":t,"cols":40,"rows":20}));
+    // Both emulators answer the program's `ESC[c`; only the owner's answer reaches it.
+    input(&mut phone, "\x1b[?62;22c");
+    phone.request(json!({"id":4,"type":"ping"}));
+    input(&mut mac, "\x1b[?1;2c");
+    mac.request(json!({"id":5,"type":"ping"}));
+    // A kitty-protocol keystroke (Esc) is typing: the phone takes the pane, and then answers for it.
+    input(&mut phone, "\x1b[27u");
+    phone.request(json!({"id":6,"type":"ping"}));
+    input(&mut mac, "\x1b[?1;2c");
+    mac.request(json!({"id":7,"type":"ping"}));
+    input(&mut phone, "\x1b[?62;22c|\n");
+    let msgs = mac.collect(|m| String::from_utf8_lossy(&output(m)).contains('|'));
+    let out = String::from_utf8_lossy(&output(&msgs)).into_owned();
+    assert!(out.contains("^[[?1;2c^[[27u^[[?62;22c|"), "{out:?}");
+}
