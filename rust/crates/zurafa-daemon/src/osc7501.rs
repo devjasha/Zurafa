@@ -176,6 +176,84 @@ impl Filter {
         std::mem::take(&mut self.pending)
     }
 }
+/// The kitty keyboard protocol flags the program asked for, so `zurafa key` can encode keys the
+/// way it reads them. Sees all output, so unlike a replay it survives the replay buffer's trimming.
+/// https://sw.kovidgoyal.net/kitty/keyboard-protocol/#progressive-enhancement
+#[derive(Default)]
+pub struct Keyboard {
+    /// One stack per screen: main, alternate.
+    stacks: [Vec<u8>; 2],
+    alternate: bool,
+    /// The escape sequence being read: ESC and what follows, up to its final byte.
+    seq: Vec<u8>,
+}
+impl Keyboard {
+    /// Kitty's own limit; a push onto a full stack drops the oldest entry.
+    const DEPTH: usize = 8;
+    pub fn flags(&self) -> u8 {
+        self.stacks[self.alternate as usize].last().copied().unwrap_or(0)
+    }
+    pub fn feed(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            if b == 27 {
+                self.seq = vec![b];
+            } else if self.seq.len() == 1 {
+                match b {
+                    b'[' => self.seq.push(b),
+                    b'c' => *self = Self::default(),
+                    _ => self.seq.clear(),
+                }
+            } else if !self.seq.is_empty() {
+                self.seq.push(b);
+                if (0x40..=0x7e).contains(&b) {
+                    let seq = std::mem::take(&mut self.seq);
+                    self.csi(&seq[2..seq.len() - 1], b);
+                } else if self.seq.len() > 64 {
+                    self.seq.clear();
+                }
+            }
+        }
+    }
+    fn csi(&mut self, params: &[u8], last: u8) {
+        let Ok(params) = std::str::from_utf8(params) else { return };
+        let mut chars = params.chars();
+        let lead = chars.next();
+        let nums: Vec<Option<u32>> = chars.as_str().split(';').map(|n| n.parse().ok()).collect();
+        let arg = |i: usize, default: u32| nums.get(i).copied().flatten().unwrap_or(default);
+        let stack = &mut self.stacks[self.alternate as usize];
+        match (lead, last) {
+            (Some('?'), b'h' | b'l') => {
+                if nums.iter().any(|n| matches!(n, Some(47 | 1047 | 1049))) {
+                    self.alternate = last == b'h';
+                }
+            }
+            (Some('>'), b'u') => {
+                if stack.len() == Self::DEPTH {
+                    stack.remove(0);
+                }
+                stack.push(arg(0, 0) as u8 & 0x1f);
+            }
+            (Some('<'), b'u') => {
+                let n = arg(0, 1) as usize;
+                stack.truncate(stack.len().saturating_sub(n));
+            }
+            (Some('='), b'u') => {
+                let (flags, current) = (arg(0, 0) as u8 & 0x1f, stack.last().copied().unwrap_or(0));
+                let flags = match arg(1, 1) {
+                    1 => flags,
+                    2 => current | flags,
+                    3 => current & !flags,
+                    _ => return,
+                };
+                match stack.last_mut() {
+                    Some(top) => *top = flags,
+                    None => stack.push(flags),
+                }
+            }
+            _ => {}
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +324,32 @@ mod tests {
         let (out, actions) = run(input, 1);
         assert_eq!(out, input);
         assert!(actions.is_empty());
+    }
+    #[test]
+    fn kitty_keyboard_flags_follow_the_program() {
+        let flags = |input: &[u8]| {
+            let mut k = Keyboard::default();
+            // Byte by byte, as a read may split a sequence anywhere.
+            input.iter().for_each(|b| k.feed(&[*b]));
+            k.flags()
+        };
+        assert_eq!(flags(b""), 0);
+        assert_eq!(flags(b"\x1b[>1u"), 1);
+        assert_eq!(flags(b"\x1b[>1u\x1b[>31u"), 31);
+        assert_eq!(flags(b"\x1b[>1u\x1b[>31u\x1b[<u"), 1);
+        assert_eq!(flags(b"\x1b[>1u\x1b[>3u\x1b[<5u"), 0);
+        assert_eq!(flags(b"\x1b[=5u"), 5);
+        assert_eq!(flags(b"\x1b[>1u\x1b[=8;2u"), 9);
+        assert_eq!(flags(b"\x1b[>9u\x1b[=1;3u"), 8);
+        assert_eq!(flags(b"\x1b[>1u\x1bc"), 0);
+        assert_eq!(flags(b"\x1b[>1u\x1b[?u\x1b[1;5u\x1b[31mx"), 1);
+        // The alternate screen has its own stack; leaving it finds the main screen's again.
+        assert_eq!(flags(b"\x1b[>1u\x1b[?1049h"), 0);
+        assert_eq!(flags(b"\x1b[>1u\x1b[?1049h\x1b[>11u"), 11);
+        assert_eq!(flags(b"\x1b[>1u\x1b[?1049h\x1b[>11u\x1b[?1049l"), 1);
+        // A full stack drops its oldest entry.
+        let mut pushes = b"\x1b[>2u".repeat(Keyboard::DEPTH);
+        pushes.extend(b"\x1b[<7u");
+        assert_eq!(flags(&[b"\x1b[>1u".as_slice(), &pushes].concat()), 2);
     }
 }

@@ -2,6 +2,7 @@ mod actions;
 mod awake;
 mod chat;
 mod hosts;
+mod input;
 mod listen;
 mod login;
 mod osc7501;

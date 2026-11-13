@@ -445,13 +445,13 @@ const PASTE_GAP: Duration = Duration::from_millis(200);
 /// Text plus Enter the way a person types it: the text as a paste (bracketed when the
 /// program enabled mode 2004), a pause, then Enter as its own write.
 fn submit(client: &mut Client, pane: &str, text: &str, enter: bool) -> Result<(), (i32, String)> {
+    let (parser, _, keyboard) = attach_parser(client, pane)?;
     if !text.is_empty() {
-        let bytes = paste(attach_parser(client, pane)?.0.screen().bracketed_paste(), text);
-        input(client, pane, &bytes)?;
+        input(client, pane, &paste(parser.screen().bracketed_paste(), text))?;
     }
     if enter {
         thread::sleep(PASTE_GAP);
-        input(client, pane, b"\r")?;
+        input(client, pane, &key_bytes("enter", keyboard).unwrap())?;
     }
     Ok(())
 }
@@ -495,12 +495,13 @@ fn cmd_key(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
     let Some((target, keys)) = pos.split_first().filter(|(_, k)| !k.is_empty()) else {
         return Err((2, "usage: zurafa key TARGET KEY...".into()));
     };
-    let bytes = keys
-        .iter()
-        .map(|key| key_bytes(key).ok_or((2, format!("unknown key {key:?}"))))
-        .collect::<Result<Vec<_>, _>>()?;
+    if let Some(key) = keys.iter().find(|key| key_bytes(key, 0).is_none()) {
+        return Err((2, format!("unknown key {key:?}")));
+    }
     let snapshot = client.snapshot().map_err(|e| (1, e))?;
     let (_, pane) = target_pane(&snapshot, args, Some(target.clone()))?;
+    let keyboard = attach_parser(client, &pane)?.2;
+    let bytes = keys.iter().map(|key| key_bytes(key, keyboard).unwrap());
     // One write per key, apart, so the program sees keypresses; Enter waits out a paste just sent.
     for (key, bytes) in keys.iter().zip(bytes) {
         let enter = matches!(key.to_ascii_lowercase().as_str(), "enter" | "return");
@@ -510,11 +511,19 @@ fn cmd_key(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
     Ok(())
 }
 
-fn key_bytes(key: &str) -> Option<Vec<u8>> {
+/// A key as the program asked to read keys: `keyboard` is its kitty keyboard protocol flags
+/// (https://sw.kovidgoyal.net/kitty/keyboard-protocol/), 0 for legacy encoding.
+// shortcut: no associated text (flag 16) or release events (flag 2); add them if a program needs them.
+fn key_bytes(key: &str, keyboard: u64) -> Option<Vec<u8>> {
+    let (disambiguate, all_keys) = (keyboard & 1 != 0, keyboard & 8 != 0);
+    let csi_u = |code: u8, mods: &str| Some(format!("\x1b[{code}{mods}u").into_bytes());
     let lower = key.to_ascii_lowercase();
     if let Some(c) = lower.strip_prefix("ctrl+").filter(|c| c.len() == 1) {
         let c = c.as_bytes()[0];
-        return c.is_ascii_lowercase().then(|| vec![c & 0x1f]);
+        if !c.is_ascii_lowercase() {
+            return None;
+        }
+        return if disambiguate || all_keys { csi_u(c, ";5") } else { Some(vec![c & 0x1f]) };
     }
     let seq: &[u8] = match lower.as_str() {
         "enter" | "return" => b"\r",
@@ -528,7 +537,13 @@ fn key_bytes(key: &str) -> Option<Vec<u8>> {
         "left" => b"\x1b[D",
         _ => return None,
     };
-    Some(seq.to_vec())
+    // Esc alone is ambiguous with the start of a sequence; the rest only when every key is reported.
+    // Arrows keep `CSI A` and the like: the protocol's form for them is the same.
+    match seq {
+        b"\x1b" if disambiguate || all_keys => csi_u(27, ""),
+        [c] if all_keys => csi_u(*c, ""),
+        _ => Some(seq.to_vec()),
+    }
 }
 
 /// Interprets \n \r \t \e \\ and \xHH.
@@ -569,7 +584,7 @@ fn screen(
     lines: Option<usize>,
     busy: bool,
 ) -> Result<String, (i32, String)> {
-    let (mut parser, mut end) = attach_parser(client, pane)?;
+    let (mut parser, mut end, _) = attach_parser(client, pane)?;
     let s = parser.screen();
     if let Some(n) = lines.filter(|&n| {
         n > s.size().0 as usize
@@ -587,7 +602,8 @@ fn screen(
 
 /// The pane's output replayed into a terminal, for its screen and modes, and where the replay ends.
 // shortcut: a replay trimmed by the daemon (`gap`) may miss when a mode was set; track modes in the daemon if that bites.
-fn attach_parser(client: &mut Client, pane: &str) -> Result<(vt100::Parser, u64), (i32, String)> {
+/// Also returns the pane's kitty keyboard flags, which the daemon tracks across the whole output.
+fn attach_parser(client: &mut Client, pane: &str) -> Result<(vt100::Parser, u64, u64), (i32, String)> {
     let reply = client
         .request(json!({"type":"attach","terminal":pane}))
         .map_err(|e| (1, e))?;
@@ -600,7 +616,7 @@ fn attach_parser(client: &mut Client, pane: &str) -> Result<(vt100::Parser, u64)
     );
     let mut parser = vt100::Parser::new(rows, cols, 10_000);
     parser.process(&data);
-    Ok((parser, reply["end"].as_u64().unwrap_or(0)))
+    Ok((parser, reply["end"].as_u64().unwrap_or(0), reply["keyboard"].as_u64().unwrap_or(0)))
 }
 
 fn screen_lines(parser: &mut vt100::Parser, lines: Option<usize>) -> Vec<String> {
@@ -2131,9 +2147,32 @@ mod tests {
     fn escapes_and_keys() {
         assert_eq!(unescape(r"y\n\e\x41\\").unwrap(), b"y\n\x1bA\\");
         assert!(unescape(r"\q").is_err());
-        assert_eq!(key_bytes("ctrl+c").unwrap(), [3]);
-        assert_eq!(key_bytes("Enter").unwrap(), b"\r");
-        assert!(key_bytes("ctrl+1").is_none());
+        assert_eq!(key_bytes("ctrl+c", 0).unwrap(), [3]);
+        assert_eq!(key_bytes("Enter", 0).unwrap(), b"\r");
+        assert!(key_bytes("ctrl+1", 0).is_none());
+        // Kitty keyboard protocol: disambiguate (1) encodes Esc and ctrl+letter; Enter, Tab,
+        // Backspace and space stay as typed, so a shell still works after a crashed program.
+        let kitty = |key, flags| String::from_utf8(key_bytes(key, flags).unwrap()).unwrap();
+        assert_eq!(kitty("ctrl+c", 1), "\x1b[99;5u");
+        assert_eq!(kitty("esc", 1), "\x1b[27u");
+        assert_eq!(kitty("enter", 1), "\r");
+        assert_eq!(kitty("up", 1), "\x1b[A");
+        // Report all keys (8) encodes those too.
+        for (key, code) in [("enter", 13), ("tab", 9), ("backspace", 127), ("space", 32), ("escape", 27)] {
+            assert_eq!(kitty(key, 8), format!("\x1b[{code}u"));
+        }
+        assert_eq!(kitty("ctrl+a", 31), "\x1b[97;5u");
+        assert_eq!(kitty("left", 31), "\x1b[D");
+        assert_eq!(kitty("tab", 2), "\t");
+    }
+
+    #[test]
+    fn kitty_graphics_leave_the_screen_alone() {
+        // An image sent with the kitty graphics protocol (APC ... ST), in one piece and in chunks.
+        let mut parser = vt100::Parser::new(3, 20, 0);
+        parser.process(b"ab\x1b_Ga=T,f=100,m=1;iVBORw0KGgo=\x1b\\\x1b_Gm=0;AAAA\x1b\\cd\r\nnext");
+        assert_eq!(parser.screen().contents(), "abcd\nnext");
+        assert_eq!(parser.screen().cursor_position(), (1, 4));
     }
 
     #[test]
