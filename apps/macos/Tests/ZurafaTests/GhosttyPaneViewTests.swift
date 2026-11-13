@@ -42,6 +42,33 @@ import XCTest
         XCTAssertEqual(sent(view) { view.keyDown(with: key("\u{F702}", "\u{F702}", code: 0x7b, [.option, .function])) }, "\u{1b}b")
     }
 
+    func testOptionArrowsAreRealKeysInKittyMode() {
+        let view = GhosttyPaneView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        view.feed(text: "\u{1b}[>1u")
+        XCTAssertTrue(view.engine.kittyKeyboard)
+        XCTAssertEqual(sent(view) { view.keyDown(with: key("\u{F702}", "\u{F702}", code: 0x7b, [.option, .function])) }, "\u{1b}[1;3D")
+    }
+
+    func testSelectAllAndHyperlinks() {
+        let view = GhosttyPaneView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        view.feed(text: "one\r\n\u{1b}]8;;https://example.com\u{1b}\\link\u{1b}]8;;\u{1b}\\ two")
+        view.selectAll(nil)
+        XCTAssertEqual(view.engine.selectionText(), "one\nlink two")
+        XCTAssertEqual(view.engine.hyperlink(row: 1, col: 1), "https://example.com")
+        XCTAssertNil(view.engine.hyperlink(row: 1, col: 6))
+    }
+
+    func testScreenRowSelectionSurvivesScrolling() {
+        let view = GhosttyPaneView(frame: .zero)
+        view.setFrameSize(view.frameSize(cols: 20, rows: 3)!)
+        view.feed(text: (1...10).map { "line\($0)" }.joined(separator: "\r\n"))
+        XCTAssertEqual(view.engine.viewportTop, 7)
+        view.engine.scroll(by: -2)
+        XCTAssertEqual(view.engine.viewportTop, 5)
+        view.engine.select(fromScreen: (0, 5), toScreen: (5, 9))
+        XCTAssertEqual(view.engine.selectionText(), "line6\nline7\nline8\nline9\nline10")
+    }
+
     func testPasteIsBracketedWhenTheProgramAsks() {
         let view = GhosttyPaneView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
         XCTAssertEqual(sent(view) { view.pasteText("hi") }, "hi")

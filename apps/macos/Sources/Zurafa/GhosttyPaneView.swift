@@ -45,7 +45,13 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
     private var link: CADisplayLink?
     private var cellPixels = (width: 0, height: 0)
     private var scrollRemainder: CGFloat = 0
+    /// Where a selection drag began, in screen rows so it survives scrolling.
     private var dragStart: (col: Int, row: Int)?
+    /// Scrolls the viewport while a selection drag sits above or below the pane.
+    private var dragScroll: Timer?
+    private var lastDrag: NSEvent?
+    /// The input method's composing text, drawn over the cursor.
+    private let preedit = NSTextField(labelWithString: "")
     private var dragged = false
     private var reportedButton: Int?
 
@@ -56,6 +62,9 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         // The workspace surface behind the pane is the background, as with SwiftTerm.
         renderer.drawsBackground = false
         addSubview(renderer)
+        preedit.isHidden = true
+        preedit.drawsBackground = true
+        addSubview(preedit)
         engine.onReply = { [weak self] in self?.onInput?($0) }
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self))
         updateGrid()
@@ -97,7 +106,9 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         engine.setColors(foreground: color(colors.foreground), background: color(colors.background), cursor: color(colors.cursor),
                          ansi16: colors.palette.map(color))
         renderer.cursorColor = TerminalStore.ns(colors.cursor)
-        // shortcut: the renderer has no selected-text color, so `selectedText` is ignored; add one to TerminalRenderView if themes need it.
+        renderer.selectionForeground = selectedText.map(TerminalStore.ns)
+        preedit.textColor = TerminalStore.ns(colors.foreground)
+        preedit.backgroundColor = TerminalStore.ns(colors.background)
         renderer.selectionColor = colors.selection.map { TerminalStore.ns($0).withAlphaComponent(0.35) }
             ?? NSColor(srgbRed: 0.45, green: 0.6, blue: 0.9, alpha: 0.3)
         scheduleFrame()
@@ -188,11 +199,11 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         scheduleFrame()
         let composing = hasMarkedText()
         // Option is Meta, as with SwiftTerm's default (optionAsMetaKey): ESC + the plain key, and
-        // Option-arrows move by word the way SwiftTerm sent them.
+        // Option-arrows move by word the way SwiftTerm sent them, unless kitty mode wants the real keys.
         if !composing, mods.contains(.option) {
             switch event.keyCode {
-            case 0x7b: return type(Data("\u{1b}b".utf8))
-            case 0x7c: return type(Data("\u{1b}f".utf8))
+            case 0x7b where !engine.kittyKeyboard: return type(Data("\u{1b}b".utf8))
+            case 0x7c where !engine.kittyKeyboard: return type(Data("\u{1b}f".utf8))
             default: return type(engine.encodeKey(event, optionAsAlt: true))
             }
         }
@@ -229,17 +240,30 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
 
     func insertText(_ string: Any, replacementRange: NSRange) {
         let text = (string as? NSAttributedString)?.string ?? string as? String ?? ""
-        marked = ""
+        unmarkText()
         if keyText != nil { keyText?.append(text) } else { type(Data(text.utf8)) }
     }
 
-    // shortcut: the composing text is not drawn in the grid (the input method's candidate window still
-    // anchors at the cursor); draw `marked` over the cursor cell if CJK users need to see it inline.
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         marked = (string as? NSAttributedString)?.string ?? string as? String ?? ""
+        showPreedit()
     }
 
-    func unmarkText() { marked = "" }
+    func unmarkText() { marked = ""; showPreedit() }
+
+    /// Draws the composing text, underlined, over the cursor cell; hidden when nothing is composing.
+    private func showPreedit() {
+        preedit.isHidden = marked.isEmpty
+        guard !marked.isEmpty else { return }
+        flush()
+        preedit.attributedStringValue = NSAttributedString(string: marked, attributes: [
+            .font: renderer.font, .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .foregroundColor: preedit.textColor ?? .textColor])
+        preedit.sizeToFit()
+        let cursor = renderer.convert(renderer.cursorRect(), to: self)
+        preedit.frame = NSRect(x: min(cursor.minX, max(bounds.width - preedit.frame.width, 0)), y: cursor.minY,
+                               width: preedit.frame.width, height: cursor.height)
+    }
     func selectedRange() -> NSRange { NSRange(location: NSNotFound, length: 0) }
     func markedRange() -> NSRange { marked.isEmpty ? NSRange(location: NSNotFound, length: 0) : NSRange(location: 0, length: marked.utf16.count) }
     func hasMarkedText() -> Bool { !marked.isEmpty }
@@ -262,6 +286,11 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         guard let text = engine.selectionText(), !text.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    override func selectAll(_ sender: Any?) {
+        engine.selectAll()
+        scheduleFrame()
     }
 
     @objc func paste(_ sender: Any?) {
@@ -312,24 +341,58 @@ final class GhosttyPaneView: NSView, TerminalPaneView, NSTextInputClient {
         switch event.clickCount {
         case 2: engine.select(around: at, line: false)
         case 3...: engine.select(around: at, line: true)
-        default: engine.clearSelection(); dragStart = at
+        default: engine.clearSelection(); dragStart = (at.col, at.row + engine.viewportTop)
         }
         scheduleFrame()
     }
 
     override func mouseDragged(with event: NSEvent) {
         if reportedButton != nil { return report(.motion, reportedButton, event) }
-        guard let dragStart else { return }
+        guard dragStart != nil else { return }
         dragged = true
-        engine.select(from: dragStart, to: cell(event))
+        lastDrag = event
+        extendDrag()
+        let y = convert(event.locationInWindow, from: nil).y
+        if y < 0 || y > bounds.height {
+            if dragScroll == nil {
+                dragScroll = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.extendDrag() }
+                }
+            }
+        } else {
+            stopDragScroll()
+        }
+    }
+
+    /// Moves the selection's end to the last drag point, scrolling a line when it is past the top or bottom.
+    private func extendDrag() {
+        guard let dragStart, let event = lastDrag else { return stopDragScroll() }
+        let y = convert(event.locationInWindow, from: nil).y
+        if y < 0 { engine.scroll(by: -1) } else if y > bounds.height { engine.scroll(by: 1) }
+        let end = cell(event)
+        engine.select(fromScreen: dragStart, toScreen: (end.col, end.row + engine.viewportTop))
         scheduleFrame()
     }
 
+    private func stopDragScroll() {
+        dragScroll?.invalidate()
+        dragScroll = nil
+    }
+
     override func mouseUp(with event: NSEvent) {
+        stopDragScroll()
+        lastDrag = nil
         if release(1, event) { return }
         defer { dragStart = nil }
         guard event.modifierFlags.contains(.command), !dragged, event.clickCount == 1 else { return }
         let at = cell(event)
+        if let link = engine.hyperlink(row: at.row, col: at.col) {
+            // Only web links open directly: an OSC 8 target is program output and could name any scheme.
+            if onOpenLink?(link) != true, let url = URL(string: link), ["http", "https"].contains(url.scheme?.lowercased()) {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
         guard let word = PaneTerminal.word(in: engine.line(row: at.row), at: at.col) else { return }
         if onOpenLink?(word) != true, let url = URL(string: word), ["http", "https"].contains(url.scheme?.lowercased()) {
             NSWorkspace.shared.open(url)

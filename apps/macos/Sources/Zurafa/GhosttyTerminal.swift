@@ -119,6 +119,14 @@ final class GhosttyTerminal {
     var alternateScreen: Bool { value(GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, GHOSTTY_TERMINAL_SCREEN_PRIMARY) == GHOSTTY_TERMINAL_SCREEN_ALTERNATE }
     /// Mode 1007: the wheel sends arrow keys on the alternate screen.
     var alternateScroll: Bool { mode(1007) }
+    /// A program pushed kitty keyboard flags, so keys must go through the encoder.
+    var kittyKeyboard: Bool { value(GHOSTTY_TERMINAL_DATA_KITTY_KEYBOARD_FLAGS, UInt8(0)) != 0 }
+    /// Screen rows above the viewport: viewport row + this = screen row.
+    var viewportTop: Int {
+        var bar = GhosttyTerminalScrollbar()
+        ghostty_terminal_get(term, GHOSTTY_TERMINAL_DATA_SCROLLBAR, &bar)
+        return Int(bar.offset)
+    }
 
     /// The cursor a program gets back when it resets it (DECSCUSR 0); applied now too.
     func setDefaultCursor(_ shape: TerminalFrame.CursorShape, blinking: Bool) {
@@ -170,9 +178,31 @@ final class GhosttyTerminal {
 
     /// Selects from one viewport cell to another, both included; the terminal keeps it as output scrolls.
     func select(from start: (col: Int, row: Int), to end: (col: Int, row: Int)) {
-        guard let a = ref(start), let b = ref(end) else { return }
+        let top = viewportTop
+        select(fromScreen: (start.col, start.row + top), toScreen: (end.col, end.row + top))
+    }
+
+    /// Like `select(from:to:)` with screen rows (scrollback included), so a drag can outlive a scroll.
+    func select(fromScreen start: (col: Int, row: Int), toScreen end: (col: Int, row: Int)) {
+        guard let a = ref(start, screen: true), let b = ref(end, screen: true) else { return }
         var selection = GhosttySelection(start: a, end: b, rectangle: false)
         ghostty_terminal_set(term, GHOSTTY_TERMINAL_OPT_SELECTION, &selection)
+    }
+
+    func selectAll() {
+        var selection = GhosttySelection()
+        guard ghostty_terminal_select_all(term, &selection) == GHOSTTY_SUCCESS else { return }
+        ghostty_terminal_set(term, GHOSTTY_TERMINAL_OPT_SELECTION, &selection)
+    }
+
+    /// The OSC 8 link on a viewport cell; nil when it has none.
+    func hyperlink(row: Int, col: Int) -> String? {
+        guard var at = ref((col, row)) else { return nil }
+        var len = 0
+        guard ghostty_grid_ref_hyperlink_uri(&at, nil, 0, &len) == GHOSTTY_OUT_OF_SPACE, len > 0 else { return nil }
+        var buf = [UInt8](repeating: 0, count: len)
+        guard ghostty_grid_ref_hyperlink_uri(&at, &buf, len, &len) == GHOSTTY_SUCCESS else { return nil }
+        return String(decoding: buf.prefix(len), as: UTF8.self)
     }
 
     /// Selects the word (`line` false) or line under a viewport cell; false when there is nothing to select.
@@ -216,10 +246,10 @@ final class GhosttyTerminal {
         return String(decoding: UnsafeBufferPointer(start: ptr, count: len), as: UTF8.self)
     }
 
-    private func ref(_ cell: (col: Int, row: Int)) -> GhosttyGridRef? {
-        guard (0..<rows).contains(cell.row), (0..<cols).contains(cell.col) else { return nil }
+    private func ref(_ cell: (col: Int, row: Int), screen: Bool = false) -> GhosttyGridRef? {
+        guard cell.row >= 0, screen || cell.row < rows, (0..<cols).contains(cell.col) else { return nil }
         var point = GhosttyPoint()
-        point.tag = GHOSTTY_POINT_TAG_VIEWPORT
+        point.tag = screen ? GHOSTTY_POINT_TAG_SCREEN : GHOSTTY_POINT_TAG_VIEWPORT
         point.value.coordinate = GhosttyPointCoordinate(x: UInt16(cell.col), y: UInt32(cell.row))
         var ref = GhosttyGridRef()
         return ghostty_terminal_grid_ref(term, point, &ref) == GHOSTTY_SUCCESS ? ref : nil

@@ -13,6 +13,8 @@ final class TerminalRenderView: NSView {
     /// One cell, in points (whole device pixels at the current backing scale).
     private(set) var cellSize: CGSize = .zero
     var selectionColor: NSColor = NSColor(srgbRed: 0.33, green: 0.45, blue: 0.7, alpha: 0.6) { didSet { invalidateAll() } }
+    /// Text color inside the selection; nil keeps each cell's own.
+    var selectionForeground: NSColor? { didSet { invalidateAll() } }
     /// nil: the frame's default foreground.
     var cursorColor: NSColor? { didSet { requestRender() } }
     /// false leaves the default background transparent so whatever is behind the view shows through.
@@ -273,6 +275,8 @@ final class TerminalRenderView: NSView {
         let utf16 = Array(text.utf16)
         let scalars = text.unicodeScalars
         let stretch = scalars.count == 1 && (0xE0A0...0xE0D7).contains(scalars.first!.value)
+        // Box drawing and blocks: the font's line box is scaled onto the whole cell so lines meet across rows.
+        let fill = scalars.count == 1 && (0x2500...0x259F).contains(scalars.first!.value)
         var font = base
         var glyphIDs = [CGGlyph](repeating: 0, count: utf16.count)
         if !CTFontGetGlyphsForCharacters(base, utf16, &glyphIDs, utf16.count) {
@@ -310,7 +314,7 @@ final class TerminalRenderView: NSView {
 
         let box: CGRect  // pixel box in line space (y up), before any stretch
         let offset: SIMD2<Float>
-        if stretch {
+        if stretch || fill {
             box = CGRect(x: 0, y: 0, width: cellW, height: cellH)
             offset = .zero
         } else {
@@ -328,6 +332,9 @@ final class TerminalRenderView: NSView {
         if stretch {
             context.scaleBy(x: cellW / bounds.width, y: cellH / bounds.height)
             context.translateBy(x: -bounds.minX, y: -bounds.minY)
+        } else if fill {
+            context.scaleBy(x: cellW / max(advance, 1), y: cellH / max(ascent + descent, 1))
+            context.translateBy(x: 0, y: descent)
         } else {
             context.translateBy(x: -box.minX, y: -box.minY)
         }
@@ -366,15 +373,16 @@ final class TerminalRenderView: NSView {
         }
         if rowDirty.count != frame.rows.count { rowDirty = Array(repeating: true, count: frame.rows.count) }
         let dfg = vec(frame.defaultForeground), dbg = vec(frame.defaultBackground), sel = vec(selectionColor)
+        let selFG = selectionForeground.map(vec)
         for r in frame.rows.indices where full || rowDirty[r] {
-            buildRow(frame.rows[r], at: r, cols: frame.cols, dfg: dfg, dbg: dbg, sel: sel)
+            buildRow(frame.rows[r], at: r, cols: frame.cols, dfg: dfg, dbg: dbg, sel: sel, selFG: selFG)
             if needsFullRebuild { return false }
             rowDirty[r] = false
         }
         return true
     }
 
-    private func buildRow(_ row: TerminalFrame.Row, at r: Int, cols: Int, dfg: SIMD4<Float>, dbg: SIMD4<Float>, sel: SIMD4<Float>) {
+    private func buildRow(_ row: TerminalFrame.Row, at r: Int, cols: Int, dfg: SIMD4<Float>, dbg: SIMD4<Float>, sel: SIMD4<Float>, selFG: SIMD4<Float>?) {
         var bgs = rowBG[r], fgs = rowFG[r]
         rowBG[r] = []; rowFG[r] = []  // keep the arrays uniquely referenced so appends don't copy
         bgs.removeAll(keepingCapacity: true)
@@ -387,7 +395,7 @@ final class TerminalRenderView: NSView {
             var fg = cell.fg.map(vec) ?? dfg
             var bg = cell.bg.map(vec)
             if style.contains(.inverse) { let f = fg; fg = bg ?? dbg; bg = f }
-            if style.contains(.selected) { bg = sel }
+            if style.contains(.selected) { bg = sel; if let selFG { fg = selFG } }
             if let bg, let open = run, open.end == c, open.color == bg {
                 run!.end = c + 1
             } else {
