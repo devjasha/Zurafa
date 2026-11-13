@@ -197,11 +197,17 @@ struct ChatList: NSViewRepresentable {
             super.init(frame: frame)
             host.sizingOptions = []
             host.translatesAutoresizingMaskIntoConstraints = true
-            host.autoresizingMask = [.width, .height]
             host.frame = bounds
             addSubview(host)
         }
         convenience init() { self.init(frame: .zero) }
+        // Autoresizing applies size changes as deltas; once a row's height changed mid-animation the host drifted
+        // from its cell for good (content centered and spilling over its neighbours), so the host is always set to the cell.
+        override func resizeSubviews(withOldSize oldSize: NSSize) { host.frame = bounds }
+        override func layout() {
+            super.layout()
+            if host.frame != bounds { host.frame = bounds }
+        }
         required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     }
 }
