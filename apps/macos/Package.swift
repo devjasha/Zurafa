@@ -25,7 +25,7 @@ let package = Package(
             resources: [.copy("Resources/Zurafa-iOS-Default-1024@1x.png"), .copy("Resources/zurafa-star.png"), .copy("Resources/zurafa-menubar.png"),
                         .copy("Resources/brands"),
                         .copy("Resources/SymbolsNerdFontMono-Regular.ttf"), .copy("Resources/SymbolsNerdFont-LICENSE.txt"),
-                        .copy("Resources/themes"), .copy("Resources/Themes-LICENSE.txt")]),
+                        .copy("Resources/themes"), .copy("Resources/Themes-LICENSE.txt"), .copy("Resources/Ghostty-LICENSE.txt")]),
         // libghostty-vt, the terminal-state engine (static library). Official signed release:
         // minisign -V -P RWQlAjJC23149WL2sEpT/l0QKy7hMIFhYdQOFy0Z7z7PbneUgvlsnYcV -m ghostty-vt-1.0.1.xcframework.zip
         .binaryTarget(

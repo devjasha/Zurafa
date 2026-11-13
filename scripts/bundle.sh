@@ -82,6 +82,7 @@ cp "$root/apps/macos/Sources/Zurafa/Resources/SymbolsNerdFont-LICENSE.txt" "$app
 cp -R "$root/apps/macos/Sources/Zurafa/Resources/themes" "$app/Contents/Resources/themes"
 cp "$root/apps/macos/Sources/Zurafa/Resources/Themes-LICENSE.txt" "$app/Contents/Resources/Themes-LICENSE.txt"
 cp "$root/apps/macos/.build/checkouts/SwiftTerm/LICENSE" "$app/Contents/Resources/SwiftTerm-LICENSE.txt"
+cp "$root/apps/macos/Sources/Zurafa/Resources/Ghostty-LICENSE.txt" "$app/Contents/Resources/Ghostty-LICENSE.txt"
 # Highlightr's Bundle.module looks in Contents/Resources and fatalErrors if its bundle is missing.
 cp -R "$bin/Highlightr_Highlightr.bundle" "$app/Contents/Resources/Highlightr_Highlightr.bundle"
 # Same for SwiftMath: its math fonts live in the bundle, and rendering a formula without them crashes.
