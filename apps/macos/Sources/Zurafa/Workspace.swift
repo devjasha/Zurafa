@@ -17,6 +17,14 @@ enum TabStripLayout: String {
     case horizontal, vertical
 }
 
+struct Toast: Identifiable, Equatable {
+    let id = UUID()
+    let pane: String
+    let program: Program
+    let title, subtitle, body: String
+    let blocked, permission: Bool
+}
+
 struct PaneMeta: Equatable {
     var program: Program = .shell
     var title = "Shell"
@@ -124,6 +132,8 @@ enum EditorKind: String, Identifiable {
     @Published private(set) var tabStripLayout = TabStripLayout(rawValue: UserDefaults.standard.string(forKey: "tabStripLayout") ?? "horizontal") ?? .horizontal
     @Published private(set) var commandError: String?
     @Published private(set) var notice: String?
+    /// In-app banners for panes that need you or finished while Zurafa is in front, newest first.
+    @Published private(set) var toasts: [Toast] = []
     @Published private(set) var workspaceBackground: Color?
     @Published private(set) var style = ZurafaStyle()
     /// Measured by `WindowConfig`; the defaults are the compact title bar's, used until the first layout.
@@ -318,7 +328,10 @@ enum EditorKind: String, Identifiable {
                 let before = metas[id]?.status
                 let shown = event.payload.object?["shown"]?.string
                 edit(id) { $0.setStatus(key, record); $0.shown = shown }
-                if let after = metas[id]?.status, after != before, after == "blocked" || after == "completed" { notify(id) }
+                let after = metas[id]?.status
+                if let after, after != before, after == "blocked" || after == "completed" { notify(id) }
+                // A pane that went back to work, or was answered in place, no longer needs its banner.
+                else if after != "blocked", after != "completed" { dismissToast(id) }
             }
         case "terminal.program_status_removed":
             if let id = event.blockID, case .array(let keys)? = event.payload.object?["ids"] {
@@ -474,6 +487,7 @@ enum EditorKind: String, Identifiable {
     }
     /// Shows a pane in whichever workspace holds it; a hidden one comes back floating.
     func jump(to pane: String) {
+        dismissToast(pane)
         guard let owner = snapshot?.sessions.first(where: { $0.value.blocks[pane] != nil })?.key else { return }
         if owner != sessionID { selectSession(owner) }
         if hidden(in: snapshot?.sessions[owner]).contains(pane) { float(pane, in: owner) } else { focus(pane) }
@@ -515,9 +529,24 @@ enum EditorKind: String, Identifiable {
         if !PhonePush.userAtMac {
             PhonePush.send(pane: pane, thread: session.sessionID, title: title, subtitle: subtitle, body: body, answerable: m.waitingForPermission)
         }
-        if NSApp.isActive && session.sessionID == sessionID && tab.panes.contains(pane) { return }
-        Attention.shared.notify(pane: pane, title: title, subtitle: subtitle, body: body, answerable: m.waitingForPermission)
+        guard NSApp.isActive else {
+            return Attention.shared.notify(pane: pane, title: title, subtitle: subtitle, body: body, answerable: m.waitingForPermission)
+        }
+        // In front of you already: nothing to tell.
+        if session.sessionID == sessionID && tab.panes.contains(pane) { return }
+        let toast = Toast(pane: pane, program: m.program, title: title, subtitle: subtitle, body: body,
+                          blocked: m.status == "blocked", permission: m.waitingForPermission)
+        toasts = Array(([toast] + toasts.filter { $0.pane != pane }).prefix(4))
+        // Finished panes fade on their own; one waiting on you stays until it is answered or opened.
+        if !toast.blocked {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(8))
+                toasts.removeAll { $0.id == toast.id }
+            }
+        }
     }
+
+    func dismissToast(_ pane: String) { toasts.removeAll { $0.pane == pane } }
 
     /// Agents for the phone's Live Activity: live panes reporting a status (agents report theirs through hooks or OSC 7501).
     private func publishActivity() {
@@ -553,6 +582,7 @@ enum EditorKind: String, Identifiable {
     }
 
     func answerPermission(_ pane: String, approve: Bool) {
+        dismissToast(pane)
         // The prompt may have been answered or replaced since the banner went out.
         guard metas[pane]?.waitingForPermission == true else { return jump(to: pane) }
         // Claude Code's prompt highlights "Yes" first; Escape declines.

@@ -303,6 +303,7 @@ struct RootView: View {
             if ws.paletteOpen { CommandPicker() }
             if let kind = ws.editor { EditorSheet(kind: kind) }
         }
+        .overlay(alignment: .topTrailing) { ToastStack().padding(.top, ws.windowControls.height + 6).padding(.trailing, 12) }
         .ignoresSafeArea()
         .coordinateSpace(name: PaneBackgroundImage.space)
         .onGeometryChange(for: CGSize.self) { $0.size } action: { windowSize = $0 }
@@ -425,6 +426,47 @@ struct BarStatus: View {
             .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
             .padding(.trailing, 8)
         }
+    }
+}
+
+/// Panes that need you or finished elsewhere while Zurafa is in front; click one to jump to it.
+struct ToastStack: View {
+    @EnvironmentObject var ws: Workspace
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            ForEach(ws.toasts) { toast in
+                HStack(alignment: .top, spacing: 10) {
+                    ProgramGlyph(program: toast.program).frame(width: 18, height: 18)
+                        .foregroundStyle(StatusDot.colors[toast.blocked ? "blocked" : "done"]!)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(toast.title).font(.system(size: 12, weight: .semibold))
+                        if !toast.subtitle.isEmpty { Text(toast.subtitle).font(.system(size: 11)).foregroundStyle(.secondary) }
+                        Text(toast.body).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                        if toast.permission {
+                            HStack {
+                                Button("Approve") { ws.answerPermission(toast.pane, approve: true) }
+                                Button("Deny", role: .destructive) { ws.answerPermission(toast.pane, approve: false) }
+                            }
+                            .controlSize(.small).padding(.top, 4)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Button { ws.dismissToast(toast.pane) } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.borderless).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                        .help("Dismiss")
+                }
+                .padding(12)
+                .frame(width: 300)
+                .zurafaGlass(in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+                .onTapGesture { ws.jump(to: toast.pane) }
+                .help("Open this pane")
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: ws.toasts)
     }
 }
 
