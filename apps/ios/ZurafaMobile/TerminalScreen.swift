@@ -1,4 +1,3 @@
-import SwiftTerm
 import SwiftUI
 
 /// One Mac pane full screen: process and folder up top, a menu to jump to any other pane, and a key bar for what the iOS keyboard lacks.
@@ -33,7 +32,7 @@ struct TerminalScreen: View {
     @State private var terminals: Set<String> = []
     @State private var newChat = false
     private var chat: Bool { block?.hasChat == true && !terminals.contains(id) }
-    private var view: TerminalView { Terminals.shared.view(for: id) }
+    private var view: PhoneTerminal { Terminals.shared.view(for: id) }
 
     /// `fish ~/src/app`, like the Mac's tab title.
     private var title: String {
@@ -312,7 +311,7 @@ struct PaneMap: View {
 }
 
 struct KeyBar: View {
-    let view: TerminalView
+    let view: PhoneTerminal
     @State private var ctrl = false
     @State private var alt = false
     @State private var shift = false

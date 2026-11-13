@@ -1,13 +1,12 @@
 import PhotosUI
-import SwiftTerm
 import SwiftUI
 import UIKit
 
-/// One SwiftTerm view per Mac pane the phone has opened, fed from the daemon's output stream.
-@MainActor final class Terminals: NSObject, TerminalViewDelegate {
+/// One terminal view per Mac pane the phone has opened, fed from the daemon's output stream.
+@MainActor final class Terminals {
     static let shared = Terminals()
     private let mac = MacClient.shared
-    private var views: [String: TerminalView] = [:]
+    private var views: [String: PhoneTerminal] = [:]
     /// Output offset already shown per pane; live chunks up to it are duplicates.
     private var shown: [String: UInt64] = [:]
     /// Live output held back while a pane's replay is in flight, so it lands after it.
@@ -15,13 +14,12 @@ import UIKit
     /// The grid of a terminal the Mac sizes; the phone draws it as-is instead of its own.
     private var grids: [String: (cols: Int, rows: Int)] = [:]
 
-    /// The Mac's terminal colors for the phone's current appearance; nil keeps SwiftTerm's dark default.
+    /// The Mac's terminal colors for the phone's current appearance; nil keeps a dark default.
     var colors: MacAppearance.Colors? {
-        didSet { if colors != oldValue { views.values.forEach(paint) } }
+        didSet { if colors != oldValue { views.values.forEach { $0.apply(colors: colors) } } }
     }
 
-    override init() {
-        super.init()
+    init() {
         mac.onOutput = { [weak self] id, data, end in self?.receive(id, data, end) }
         mac.onSize = { [weak self] id, cols, rows, mine in
             self?.grids[id] = mine ? nil : (cols, rows)
@@ -50,15 +48,16 @@ import UIKit
 
     func applyFont() { views.values.forEach { $0.font = Self.font } }
 
-    func view(for id: String) -> TerminalView {
+    func view(for id: String) -> PhoneTerminal {
         if let view = views[id] { return view }
         let view = PhoneTerminal(frame: .zero)
-        view.terminalDelegate = self
         view.font = Self.font
-        try? view.setUseMetal(true) // CoreGraphics redraws every scrolled frame on the CPU; falls back to it without Metal
-        view.glyphFallbackProvider = NerdFontFallback.shared
-        view.inputAccessoryView = nil // the terminal screen draws its own key bar
-        paint(view)
+        view.apply(colors: colors)
+        view.onInput = { [weak self] data in self?.mac.send(Msg(type: "input", terminal: id, data: data)) }
+        // Showing the Mac's grid is not the phone's own size.
+        view.onResize = { [weak self] cols, rows in
+            if self?.grids[id] == nil { self?.mac.send(Msg(type: "resize", cols: cols, rows: rows, terminal: id)) }
+        }
         views[id] = view
         return view
     }
@@ -81,7 +80,7 @@ import UIKit
             }
             for (data, end) in queued { receive(id, data, end) }
             // A size change makes full-screen programs redraw for the phone.
-            let size = view.terminalDimensions
+            let size = view.gridSize
             mac.send(Msg(type: "resize", cols: size.cols, rows: max(size.rows - 1, 1), terminal: id))
             mac.send(Msg(type: "resize", cols: size.cols, rows: size.rows, terminal: id))
         }
@@ -91,12 +90,7 @@ import UIKit
     func place(_ id: String) {
         guard let view = views[id], let box = view.superview else { return }
         var frame = box.bounds
-        let cell = view.getOptimalFrameSize().size, now = view.terminalDimensions
-        if let grid = grids[id], now.cols > 0, now.rows > 0 {
-            // Half a point over, so rounding never loses a cell.
-            frame.size = CGSize(width: cell.width / CGFloat(now.cols) * CGFloat(grid.cols) + 0.5,
-                                height: cell.height / CGFloat(now.rows) * CGFloat(grid.rows) + 0.5)
-        }
+        if let grid = grids[id] { frame.size = view.frameSize(cols: grid.cols, rows: grid.rows) }
         if view.frame != frame { view.frame = frame }
     }
 
@@ -105,27 +99,12 @@ import UIKit
         guard let view = views[id] else { return }
         grids[id] = nil
         place(id)
-        let size = view.terminalDimensions
+        let size = view.gridSize
         mac.send(view.bounds.width > 0 && size.cols > 0 ? Msg(type: "claim", cols: size.cols, rows: size.rows, terminal: id) : Msg(type: "claim", terminal: id))
     }
 
     /// Off screen, the phone's size stops counting and the terminal goes back to the Mac's.
     func release(_ id: String) { mac.send(Msg(type: "release", terminal: id)) }
-
-    /// As the Mac's `TerminalStore.configureColors`, from its resolved colors.
-    private func paint(_ view: TerminalView) {
-        guard let colors else {
-            view.nativeBackgroundColor = UIColor(white: 0.08, alpha: 1)
-            view.nativeForegroundColor = UIColor(white: 0.9, alpha: 1)
-            return
-        }
-        view.installColors(colors.palette.map { SwiftTerm.Color(red8: UInt16($0 >> 16 & 255), green8: UInt16($0 >> 8 & 255), blue8: UInt16($0 & 255)) })
-        view.nativeBackgroundColor = UIColor(hex: colors.background)
-        view.nativeForegroundColor = UIColor(hex: colors.foreground)
-        view.caretColor = UIColor(hex: colors.cursor)
-        view.selectedTextBackgroundColor = colors.selection.map { UIColor(hex: $0).withAlphaComponent(0.35) }
-            ?? UIColor(red: 0.45, green: 0.6, blue: 0.9, alpha: 0.3)
-    }
 
     /// Panes the Mac closed are forgotten.
     func sync(blocks: Set<String>) {
@@ -137,38 +116,6 @@ import UIKit
         if let end, let seen = shown[id], end <= seen { return }
         views[id]?.feed(byteArray: ArraySlice(data))
         if let end { shown[id] = end }
-    }
-
-    private func id(of source: TerminalView) -> String? { views.first { $0.value === source }?.key }
-
-    func send(source: TerminalView, data: ArraySlice<UInt8>) {
-        if let id = id(of: source) { mac.send(Msg(type: "input", terminal: id, data: Data(data))) }
-    }
-    func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
-        // Showing the Mac's grid is not the phone's own size.
-        if let id = id(of: source), grids[id] == nil { mac.send(Msg(type: "resize", cols: newCols, rows: newRows, terminal: id)) }
-    }
-    func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
-        if let url = URL(string: link) { UIApplication.shared.open(url) }
-    }
-    func clipboardCopy(source: TerminalView, content: Data) {
-        UIPasteboard.general.string = String(decoding: content, as: UTF8.self)
-    }
-    func setTerminalTitle(source: TerminalView, title: String) {}
-    func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
-    func scrolled(source: TerminalView, position: Double) {}
-    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
-}
-
-/// Pastes an image as the path of a copy saved on the Mac, as the Mac app does with its own pastes.
-final class PhoneTerminal: TerminalView {
-    override func paste(_ sender: Any?) {
-        guard let image = UIPasteboard.general.image, let data = Upload.data(image) else { return super.paste(sender) }
-        Task {
-            // An older Mac without ui.paste_image: paste whatever text there is.
-            guard let path = try? await Upload.save(data) else { return super.paste(sender) }
-            pasteText(path + " ")
-        }
     }
 }
 

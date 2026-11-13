@@ -1,4 +1,14 @@
+#if os(macOS)
 import AppKit
+typealias PlatformView = NSView
+typealias PlatformFont = NSFont
+typealias PlatformColor = NSColor
+#else
+import UIKit
+typealias PlatformView = UIView
+typealias PlatformFont = UIFont
+typealias PlatformColor = UIColor
+#endif
 import CoreText
 import Metal
 import QuartzCore
@@ -6,19 +16,19 @@ import QuartzCore
 /// Draws a `TerminalFrame` with Metal: CoreText glyphs cached in an atlas texture, every cell
 /// background, glyph and decoration an instanced quad. It only draws and measures; the terminal
 /// engine produces the frames and the host handles input. Coordinates are flipped: row 0 at the top.
-final class TerminalRenderView: NSView {
+final class TerminalRenderView: PlatformView {
     // MARK: Public API
 
-    var font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular) { didSet { rebuildFonts() } }
+    var font: PlatformFont = .monospacedSystemFont(ofSize: 13, weight: .regular) { didSet { rebuildFonts() } }
     /// One cell, in points (whole device pixels at the current backing scale).
     private(set) var cellSize: CGSize = .zero
-    var selectionColor: NSColor = NSColor(srgbRed: 0.33, green: 0.45, blue: 0.7, alpha: 0.6) { didSet { invalidateAll() } }
+    var selectionColor = PlatformColor(red: 0.33, green: 0.45, blue: 0.7, alpha: 0.6) { didSet { invalidateAll() } }
     /// Text color inside the selection; nil keeps each cell's own.
-    var selectionForeground: NSColor? { didSet { invalidateAll() } }
+    var selectionForeground: PlatformColor? { didSet { invalidateAll() } }
     /// nil: the frame's default foreground.
-    var cursorColor: NSColor? { didSet { requestRender() } }
+    var cursorColor: PlatformColor? { didSet { requestRender() } }
     /// false leaves the default background transparent so whatever is behind the view shows through.
-    var drawsBackground = true { didSet { layer?.isOpaque = drawsBackground; requestRender() } }
+    var drawsBackground = true { didSet { metalLayer?.isOpaque = drawsBackground; requestRender() } }
     /// A font for a scalar the terminal font lacks, tried before CoreText's own fallback.
     /// The size is in pixels. Defaults to Zurafa's bundled Symbols Nerd Font.
     var symbolFallback: ((Unicode.Scalar, CGFloat) -> CTFont?)? = TerminalRenderView.nerdFontFallback { didSet { rebuildFonts() } }
@@ -33,16 +43,16 @@ final class TerminalRenderView: NSView {
     /// Device pixels per point.
     var pixelScale: CGFloat { scale }
 
-    func gridSize(for size: NSSize) -> (cols: Int, rows: Int) {
+    func gridSize(for size: CGSize) -> (cols: Int, rows: Int) {
         (max(1, Int(size.width / cellSize.width)), max(1, Int(size.height / cellSize.height)))
     }
 
-    func frameSize(cols: Int, rows: Int) -> NSSize {
-        NSSize(width: CGFloat(cols) * cellSize.width, height: CGFloat(rows) * cellSize.height)
+    func frameSize(cols: Int, rows: Int) -> CGSize {
+        CGSize(width: CGFloat(cols) * cellSize.width, height: CGFloat(rows) * cellSize.height)
     }
 
     /// The cell under a point in view coordinates, clamped to the grid.
-    func cell(at point: NSPoint) -> (col: Int, row: Int) {
+    func cell(at point: CGPoint) -> (col: Int, row: Int) {
         let grid = current.map { ($0.cols, $0.rows.count) } ?? gridSize(for: bounds.size)
         let col = Int((point.x / cellSize.width).rounded(.down))
         let row = Int((point.y / cellSize.height).rounded(.down))
@@ -50,9 +60,9 @@ final class TerminalRenderView: NSView {
     }
 
     /// The cursor's cell in view coordinates, for IME and popup anchoring.
-    func cursorRect() -> NSRect {
+    func cursorRect() -> CGRect {
         guard let cursor = current?.cursor else { return .zero }
-        return NSRect(x: CGFloat(cursor.col) * cellSize.width, y: CGFloat(cursor.row) * cellSize.height,
+        return CGRect(x: CGFloat(cursor.col) * cellSize.width, y: CGFloat(cursor.row) * cellSize.height,
                       width: cellSize.width, height: cellSize.height)
     }
 
@@ -149,10 +159,15 @@ final class TerminalRenderView: NSView {
     private var blinkTimer: Timer?
     private var cursorBlinkOn = true
 
-    override init(frame: NSRect) {
+    override init(frame: CGRect) {
         super.init(frame: frame)
+        #if os(macOS)
         wantsLayer = true
         layerContentsRedrawPolicy = .never
+        #else
+        configure(metalLayer!)
+        isOpaque = false
+        #endif
         if let device = TerminalMetal.device { atlas = GlyphAtlas(device: device) }
         rebuildFonts()
     }
@@ -164,46 +179,79 @@ final class TerminalRenderView: NSView {
         blinkTimer?.invalidate()
     }
 
-    override var isFlipped: Bool { true }
-
-    override func makeBackingLayer() -> CALayer {
-        let layer = CAMetalLayer()
+    private func configure(_ layer: CAMetalLayer) {
         layer.device = TerminalMetal.device
         layer.pixelFormat = .bgra8Unorm
         layer.isOpaque = drawsBackground
         layer.contentsGravity = .topLeft
         layer.needsDisplayOnBoundsChange = false
-        return layer
     }
 
     private var metalLayer: CAMetalLayer? { layer as? CAMetalLayer }
 
+    #if os(macOS)
+    override var isFlipped: Bool { true }
+
+    override func makeBackingLayer() -> CALayer {
+        let layer = CAMetalLayer()
+        configure(layer)
+        return layer
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        displayLink?.invalidate()
-        displayLink = nil
-        if window != nil {
-            let link = displayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.step))
-            link.add(to: .main, forMode: .common)
-            displayLink = link
-            viewDidChangeBackingProperties()
-        }
-        updateBlinkTimer()
+        movedToWindow()
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
-        let newScale = window?.backingScaleFactor ?? scale
+        updateScale()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        updateDrawableSize()
+    }
+
+    private func makeDisplayLink() -> CADisplayLink { displayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.step)) }
+    private var screenScale: CGFloat? { window?.backingScaleFactor }
+    #else
+    override class var layerClass: AnyClass { CAMetalLayer.self }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        movedToWindow()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateDrawableSize()
+    }
+
+    private func makeDisplayLink() -> CADisplayLink { CADisplayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.step)) }
+    private var screenScale: CGFloat? { window.map { $0.screen.scale } }
+    #endif
+
+    private func movedToWindow() {
+        displayLink?.invalidate()
+        displayLink = nil
+        if window != nil {
+            let link = makeDisplayLink()
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+            updateScale()
+        }
+        updateBlinkTimer()
+    }
+
+    /// Follows the screen's pixels per point; the cell size changes with it, so hosts read it after.
+    func updateScale() {
+        let newScale = screenScale ?? scale
         metalLayer?.contentsScale = newScale
         if newScale != scale {
             scale = newScale
             rebuildFonts()
         }
-        updateDrawableSize()
-    }
-
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
         updateDrawableSize()
     }
 
@@ -215,7 +263,7 @@ final class TerminalRenderView: NSView {
     // MARK: Fonts and metrics
 
     private func rebuildFonts() {
-        let base = CTFontCreateWithFontDescriptor(font.fontDescriptor as CTFontDescriptor, font.pointSize * scale, nil)
+        let base = CTFontCreateCopyWithAttributes(font as CTFont, font.pointSize * scale, nil, nil)
         let bold = CTFontCreateCopyWithSymbolicTraits(base, 0, nil, .traitBold, .traitBold)
         syntheticBold = bold == nil
         var skew = CGAffineTransform(a: 1, b: 0, c: 0.2, d: 1, tx: 0, ty: 0)
@@ -358,9 +406,10 @@ final class TerminalRenderView: NSView {
         SIMD4(Float(c.r) / 255, Float(c.g) / 255, Float(c.b) / 255, 1)
     }
 
-    private func vec(_ c: NSColor) -> SIMD4<Float> {
-        let s = c.usingColorSpace(.sRGB) ?? .white
-        return SIMD4(Float(s.redComponent), Float(s.greenComponent), Float(s.blueComponent), Float(s.alphaComponent))
+    private func vec(_ c: PlatformColor) -> SIMD4<Float> {
+        let s = c.cgColor.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)?.components ?? [1, 1, 1, 1]
+        guard s.count == 4 else { return SIMD4(1, 1, 1, 1) }
+        return SIMD4(Float(s[0]), Float(s[1]), Float(s[2]), Float(s[3]))
     }
 
     /// Rebuilds the cached quads of dirty rows; returns false when the atlas reset mid-pass.
@@ -618,7 +667,11 @@ private final class GlyphAtlas {
 
     static func makeTexture(_ device: MTLDevice, height: Int) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: width, height: height, mipmapped: false)
+        #if os(macOS)
         descriptor.storageMode = device.hasUnifiedMemory ? .shared : .managed
+        #else
+        descriptor.storageMode = .shared
+        #endif
         descriptor.usage = .shaderRead
         return device.makeTexture(descriptor: descriptor)
     }

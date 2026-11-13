@@ -1,5 +1,7 @@
 import Accelerate
+#if os(macOS)
 import AppKit
+#endif
 import GhosttyVt
 import ImageIO
 
@@ -432,6 +434,7 @@ final class GhosttyTerminal {
 
     // MARK: Input
 
+    #if os(macOS)
     /// `optionAsAlt`: Option is Meta (ESC prefix) instead of typing the layout's Option characters.
     func encodeKey(_ event: NSEvent, optionAsAlt: Bool = false) -> Data? {
         let action: KeyAction
@@ -456,6 +459,19 @@ final class GhosttyTerminal {
     /// `keyCode` is the macOS virtual key code (NSEvent.keyCode); `text` is what the key types, if anything.
     func encodeKey(keyCode: UInt16, mods: NSEvent.ModifierFlags, text: String?, unshifted: Unicode.Scalar?,
                    action: KeyAction = .press, optionAsAlt: Bool = false) -> Data? {
+        encodeKey(Self.keys[keyCode] ?? GHOSTTY_KEY_UNIDENTIFIED, mods: Self.mods(mods), text: text, unshifted: unshifted,
+                  action: action, optionAsAlt: optionAsAlt)
+    }
+
+    func encodeMouse(_ action: MouseAction, button: Int?, mods: NSEvent.ModifierFlags, at point: CGPoint,
+                     anyButtonPressed: Bool = false) -> Data? {
+        encodeMouse(action, button: button, mods: Self.mods(mods), at: point, anyButtonPressed: anyButtonPressed)
+    }
+    #endif
+
+    /// The key as libghostty names it; `text` is what the key types, if anything.
+    func encodeKey(_ key: GhosttyKey, mods ghosttyMods: GhosttyMods = 0, text: String?, unshifted: Unicode.Scalar?,
+                   action: KeyAction = .press, optionAsAlt: Bool = false) -> Data? {
         ghostty_key_encoder_set_from_terminal(keyEncoder, term)  // resets option-as-alt to false
         var asAlt = optionAsAlt ? GHOSTTY_OPTION_AS_ALT_TRUE : GHOSTTY_OPTION_AS_ALT_FALSE
         ghostty_key_encoder_set(keyEncoder, GHOSTTY_KEY_ENCODER_OPT_MACOS_OPTION_AS_ALT, &asAlt)
@@ -465,8 +481,7 @@ final class GhosttyTerminal {
         case .release: GHOSTTY_KEY_ACTION_RELEASE
         }
         ghostty_key_event_set_action(keyEvent, keyAction)
-        ghostty_key_event_set_key(keyEvent, Self.keys[keyCode] ?? GHOSTTY_KEY_UNIDENTIFIED)
-        let ghosttyMods = Self.mods(mods)
+        ghostty_key_event_set_key(keyEvent, key)
         ghostty_key_event_set_mods(keyEvent, ghosttyMods)
         // Shift and Option went into producing the text, so the encoder should not report them again
         // (unless Option is Alt: then the text is the plain key and Alt is reported).
@@ -483,7 +498,7 @@ final class GhosttyTerminal {
 
     /// `button`: 1 left, 2 right, 3 middle, 4/5 wheel up/down, nil for motion with nothing pressed.
     /// `point` is in pixels from the top-left of the terminal's cell area. Nil when the program is not tracking.
-    func encodeMouse(_ action: MouseAction, button: Int?, mods: NSEvent.ModifierFlags, at point: CGPoint,
+    func encodeMouse(_ action: MouseAction, button: Int?, mods: GhosttyMods, at point: CGPoint,
                      anyButtonPressed: Bool = false) -> Data? {
         ghostty_mouse_encoder_set_from_terminal(mouseEncoder, term)
         var size = GhosttyMouseEncoderSize()
@@ -503,7 +518,7 @@ final class GhosttyTerminal {
         ghostty_mouse_event_set_action(mouseEvent, mouseAction)
         if let button { ghostty_mouse_event_set_button(mouseEvent, GhosttyMouseButton(rawValue: UInt32(button))) }
         else { ghostty_mouse_event_clear_button(mouseEvent) }
-        ghostty_mouse_event_set_mods(mouseEvent, Self.mods(mods))
+        ghostty_mouse_event_set_mods(mouseEvent, mods)
         ghostty_mouse_event_set_position(mouseEvent, GhosttyMousePosition(x: Float(point.x), y: Float(point.y)))
         return encode { ghostty_mouse_encoder_encode(mouseEncoder, mouseEvent, $0, $1, $2) }
     }
@@ -563,6 +578,7 @@ final class GhosttyTerminal {
         return String(s)
     }
 
+    #if os(macOS)
     private static func mods(_ flags: NSEvent.ModifierFlags) -> GhosttyMods {
         var m: Int32 = 0
         if flags.contains(.shift) { m |= GHOSTTY_MODS_SHIFT }
@@ -610,6 +626,7 @@ final class GhosttyTerminal {
         0x3e: GHOSTTY_KEY_CONTROL_RIGHT, 0x3c: GHOSTTY_KEY_SHIFT_RIGHT, 0x3d: GHOSTTY_KEY_ALT_RIGHT,
         0x36: GHOSTTY_KEY_META_RIGHT
     ]
+    #endif
 
     /// Kitty graphics PNGs (f=100) decoded with ImageIO; installed once per process.
     private static let installPNGDecoder: Void = {

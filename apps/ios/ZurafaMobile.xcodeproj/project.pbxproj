@@ -10,7 +10,11 @@
 		A10000000000000000000001 /* Protocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* Protocol.swift */; };
 		A10000000000000000000002 /* EventModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* EventModels.swift */; };
 		A10000000000000000000003 /* Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* Layout.swift */; };
-		A10000000000000000000004 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* SwiftTerm */; };
+		A10000000000000000000004 /* GhosttyVt in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* GhosttyVt */; };
+		AE0000000000000000000001 /* GhosttyTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000011 /* GhosttyTerminal.swift */; };
+		AE0000000000000000000002 /* TerminalRenderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000012 /* TerminalRenderView.swift */; };
+		AE0000000000000000000003 /* TerminalFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000013 /* TerminalFrame.swift */; };
+		AE0000000000000000000004 /* Resources/Ghostty-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000014 /* Resources/Ghostty-LICENSE.txt */; };
 		A10000000000000000000005 /* NerdFontFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* NerdFontFallback.swift */; };
 		A10000000000000000000006 /* Resources/SymbolsNerdFontMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */; };
 		A10000000000000000000007 /* Program.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Program.swift */; };
@@ -50,6 +54,10 @@
 		A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/SymbolsNerdFontMono-Regular.ttf"; sourceTree = "<group>"; };
 		A20000000000000000000006 /* Program.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Program.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* ChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModel.swift; sourceTree = "<group>"; };
+		AE0000000000000000000011 /* GhosttyTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminal.swift; sourceTree = "<group>"; };
+		AE0000000000000000000012 /* TerminalRenderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalRenderView.swift; sourceTree = "<group>"; };
+		AE0000000000000000000013 /* TerminalFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalFrame.swift; sourceTree = "<group>"; };
+		AE0000000000000000000014 /* Resources/Ghostty-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Resources/Ghostty-LICENSE.txt"; sourceTree = "<group>"; };
 		A20000000000000000000010 /* ZurafaMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZurafaMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000011 /* ZurafaAgents.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ZurafaAgents.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -93,7 +101,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000004 /* SwiftTerm in Frameworks */,
+				A10000000000000000000004 /* GhosttyVt in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,6 +127,10 @@
 				A20000000000000000000004 /* NerdFontFallback.swift */,
 				A20000000000000000000006 /* Program.swift */,
 				A20000000000000000000007 /* ChatModel.swift */,
+				AE0000000000000000000011 /* GhosttyTerminal.swift */,
+				AE0000000000000000000012 /* TerminalRenderView.swift */,
+				AE0000000000000000000013 /* TerminalFrame.swift */,
+				AE0000000000000000000014 /* Resources/Ghostty-LICENSE.txt */,
 				A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */,
 			);
 			name = Shared;
@@ -157,7 +169,7 @@
 			);
 			name = ZurafaMobile;
 			packageProductDependencies = (
-				A90000000000000000000001 /* SwiftTerm */,
+				A90000000000000000000001 /* GhosttyVt */,
 			);
 			productName = ZurafaMobile;
 			productReference = A20000000000000000000010 /* ZurafaMobile.app */;
@@ -203,7 +215,7 @@
 			mainGroup = A50000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AA0000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				AA0000000000000000000001 /* XCLocalSwiftPackageReference "../GhosttyVt" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A50000000000000000000003 /* Products */;
@@ -229,6 +241,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000006 /* Resources/SymbolsNerdFontMono-Regular.ttf in Resources */,
+				AE0000000000000000000004 /* Resources/Ghostty-LICENSE.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -252,6 +265,9 @@
 				A10000000000000000000002 /* EventModels.swift in Sources */,
 				A10000000000000000000003 /* Layout.swift in Sources */,
 				A1000000000000000000C0DE /* ChatModel.swift in Sources */,
+				AE0000000000000000000001 /* GhosttyTerminal.swift in Sources */,
+				AE0000000000000000000002 /* TerminalRenderView.swift in Sources */,
+				AE0000000000000000000003 /* TerminalFrame.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -437,22 +453,17 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		AA0000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.99.0;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		AA0000000000000000000001 /* XCLocalSwiftPackageReference "../GhosttyVt" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../GhosttyVt;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		A90000000000000000000001 /* SwiftTerm */ = {
+		A90000000000000000000001 /* GhosttyVt */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
-			productName = SwiftTerm;
+			productName = GhosttyVt;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
