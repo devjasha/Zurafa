@@ -58,7 +58,7 @@ import SwiftUI
                     if let lines = reply.lines, !lines.isEmpty {
                         var log = self.log
                         lines.forEach { log.add(Data($0.utf8)) }
-                        self.log = log
+                        self.publish(log)
                     }
                     next = reply.next ?? next
                 } catch {
@@ -94,7 +94,7 @@ import SwiftUI
                 guard !batch.isEmpty else { return }
                 var log = self.log
                 batch.forEach { log.add($0) }
-                self.log = log
+                self.publish(log)
             }
         }
         p.terminationHandler = { [weak self] p in
@@ -103,6 +103,15 @@ import SwiftUI
             Task { @MainActor in self?.problem = msg.trimmingCharacters(in: .whitespacesAndNewlines) }
         }
         do { try p.run(); process = p } catch { problem = "Cannot run zurafa-orch: \(error.localizedDescription)" }
+    }
+
+    /// New lines rise into place once the chat has loaded; its history lands at once.
+    private func publish(_ next: ChatLog) {
+        if log.items.isEmpty || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            log = next
+        } else {
+            withAnimation(.snappy(duration: 0.3)) { log = next }
+        }
     }
 
     func stop() {
@@ -168,6 +177,7 @@ struct ChatView: View {
                         }
                         ForEach(Array(turns.enumerated()), id: \.element.id) { i, turn in
                             TurnView(turn: turn, pane: pane, meta: m, live: live && i == turns.count - 1, last: i == turns.count - 1).equatable()
+                                .transition(.rise)
                         }
                         if live && turns.isEmpty {
                             FoldLine(meta: m, title: "\(m.agentName) working…", live: true, open: .constant(false), expandable: false)
@@ -384,7 +394,10 @@ private struct TurnView: View, Equatable {
         // The work shows while the agent is on it, and folds away once it answers.
         let shown = open ?? live
         VStack(alignment: .leading, spacing: 8) {
-            if let user = turn.user { UserBubble(text: user.text) }
+            if let user = turn.user {
+                UserBubble(text: user.text)
+                    .transition(.asymmetric(insertion: .scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity), removal: .opacity))
+            }
             if live || !turn.work.isEmpty {
                 FoldLine(meta: meta, title: title, live: live, start: turn.start,
                          open: Binding(get: { shown }, set: { open = $0 }), expandable: !turn.work.isEmpty)
@@ -392,6 +405,7 @@ private struct TurnView: View, Equatable {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(turn.work.enumerated()), id: \.element.id) { i, item in
                             WorkRow(item: item).equatable()
+                                .transition(.rise)
                                 .padding(.leading, 20).padding(.bottom, 6)
                                 .background(alignment: .topLeading) { Rail(tail: i == turn.work.count - 1).stroke(Theme.ink.opacity(0.16)) }
                         }
@@ -430,7 +444,8 @@ private struct TurnView: View, Equatable {
 }
 
 
-/// "Claude worked for 1m 56s": the folded work of a turn. While the agent runs, its clock ticks and pulses.
+/// "Claude worked for 1m 56s": the folded work of a turn. While the agent runs, Zurafa's star turns in
+/// place of its glyph and a shimmer runs over its clock; when it answers, the star bursts back into the glyph.
 private struct FoldLine: View {
     let meta: PaneMeta
     let title: String
@@ -439,25 +454,33 @@ private struct FoldLine: View {
     @Binding var open: Bool
     let expandable: Bool
     @State private var hover = false
-    @State private var pulse = false
+    @State private var finished = 0
 
     var body: some View {
         Button { if expandable { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } } label: {
             HStack(spacing: 6) {
                 ZStack {
-                    AgentGlyph(program: meta.program).opacity(open || (expandable && hover) ? 0 : 1)
+                    Group {
+                        if live {
+                            WorkingStar(waiting: meta.record?.state == "blocked").transition(.scale(scale: 0.3).combined(with: .opacity))
+                        } else {
+                            AgentGlyph(program: meta.program).transition(.scale(scale: 0.3).combined(with: .opacity))
+                        }
+                    }
+                    .opacity(open || (expandable && hover) ? 0 : 1)
+                    SparkleBurst(trigger: finished)
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
                         .rotationEffect(.degrees(open ? 90 : 0))
                         .foregroundStyle(Theme.ink.opacity(0.45))
                         .opacity(open || (expandable && hover) ? 1 : 0)
                 }
                 .frame(width: 14, height: 14)
+                .animation(.spring(duration: 0.4, bounce: 0.5), value: live)
                 if live {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        Text(liveTitle(ctx.date))
+                        Text(liveTitle(ctx.date)).foregroundStyle(Theme.ink.opacity(0.6)).contentTransition(.numericText())
                     }
-                    .opacity(pulse ? 0.45 : 1)
-                    .onAppear { withAnimation(.easeInOut(duration: 0.9).repeatForever()) { pulse = true } }
+                    .shimmer()
                 } else {
                     Text(title).foregroundStyle(Theme.ink.opacity(hover && expandable ? 0.8 : 0.5))
                 }
@@ -469,6 +492,7 @@ private struct FoldLine: View {
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
+        .onChange(of: live) { was, now in if was && !now { finished += 1 } }
     }
 
     private func liveTitle(_ now: Date) -> String {
@@ -597,7 +621,7 @@ private struct WorkRow: View, Equatable {
                         target
                         if !item.edits.isEmpty { DiffCount(edits: item.edits) }
                         if item.result == nil {
-                            ProgressView().controlSize(.mini)
+                            HopDots()
                         } else if !item.ok {
                             Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.red)
                         }
@@ -839,6 +863,8 @@ struct Composer<Chips: View>: View {
     /// Pasted or dropped images, shown above the text and sent ahead of it.
     @State private var images: [URL] = []
     @State private var pasteMonitor: Any?
+    /// Messages sent from here, for the send button's hop.
+    @State private var sent = 0
 
     private var suggestions: [Suggestion] {
         guard let word = Completion.token(draft), word != closed, let dir else { return [] }
@@ -874,6 +900,7 @@ struct Composer<Chips: View>: View {
                 Spacer(minLength: 0)
                 Button(action: submit) {
                     Image(systemName: "chevron.up").font(.system(size: 13, weight: .semibold))
+                        .symbolEffect(.bounce.up, value: sent)
                         .frame(width: 32, height: 32)
                         .foregroundStyle(Theme.ink.opacity(ready ? 0.9 : 0.4))
                         .background(Theme.ink.opacity(ready ? 0.25 : 0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -924,6 +951,7 @@ struct Composer<Chips: View>: View {
 
     /// Sends the images as @-mentions ahead of the text, the way the attach button adds files.
     private func submit() {
+        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty { sent += 1 }
         if !images.isEmpty {
             draft = (images.map { "@" + $0.path } + [draft]).joined(separator: " ")
             images = []
