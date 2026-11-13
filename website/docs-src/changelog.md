@@ -2,6 +2,14 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.40
+
+**November 13, 2026**
+
+- **Ghostty's terminal engine, as an option.** Turn it on under Settings → Terminal → Engine (or `terminal-engine = ghostty` in config.zurafa): terminals are then run by libghostty and drawn on the GPU. It supports input methods, clickable OSC 8 links, kitty images, ⌘A and selecting past the edge to scroll. The current engine stays the default.
+- **Kitty keyboard protocol.** Programs that ask for it, such as Claude Code, Neovim and Helix, get every key with its modifiers, including key releases where they want them, in either engine. `zurafa key` sends keys the way such programs expect.
+- **Fixes.** In a pane open on several devices, keys sent in kitty's encoding now also give the size to the device you type on, and only that device answers the program's terminal queries, so programs no longer get duplicate replies.
+
 ## 0.1.39
 
 **November 13, 2026**
