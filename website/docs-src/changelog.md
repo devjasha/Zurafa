@@ -2,6 +2,18 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.39
+
+**November 13, 2026**
+
+- **Chat feels native.** Switching a pane between terminal and chat (⌥⌘C) or coming back to its tab shows the chat at once instead of reloading it, long chats open in one go at the newest message, and the switch fades.
+- **Zurafa's star in the chat.** While an agent works, the star turns and a shimmer runs over its clock; waiting on you, it wiggles; when the answer lands, it bursts back into the agent's logo. New messages and steps rise into place. Reduce Motion keeps it all still.
+- **Notifications inside the window.** With Zurafa in front, an agent that finishes or needs you in another tab shows a card in the corner instead of a macOS banner. Click it to jump there, or approve and deny a permission prompt right from the card.
+- **Remote chats show the whole conversation.** Agents on SSH hosts now show their tool calls and steps in the chat, not just their answers.
+- **New Chat picks a session.** Choose which Zurafa session a new chat starts in; it opens in that session's current folder.
+- **Snappier on busy agents.** Tab switches and split drags respond at once, and agent panes that update constantly cost much less.
+- **Fixes.** Turning on a direct connection for a host that runs the Zurafa login server now tells you how to update it instead of failing.
+
 ## 0.1.38
 
 **November 11, 2026**
