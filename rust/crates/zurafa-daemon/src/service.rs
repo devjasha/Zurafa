@@ -6,7 +6,7 @@
 //! login server instead (see `login`), as Rex's `rex-login-server.service`.
 use std::fs::{self, DirBuilder};
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{env, thread, time::Duration};
 
@@ -68,6 +68,7 @@ pub fn install() -> Result<String, String> {
         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
         fs::rename(&tmp, &bin).map_err(|e| e.to_string())?;
     }
+    copy_orch(&exe, &dir)?;
     let unit = unit_path()?;
     if fs::read_to_string(&unit).ok().as_deref() != Some(UNIT_FILE) {
         fs::create_dir_all(unit.parent().unwrap()).map_err(|e| e.to_string())?;
@@ -157,6 +158,7 @@ pub fn install_login_server() -> Result<String, String> {
         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
         fs::rename(&tmp, &bin).map_err(|e| e.to_string())?;
     }
+    copy_orch(&exe, Path::new(LOGIN_DIR))?;
     let accounts = PathBuf::from(crate::login::ACCOUNTS);
     let mut note = String::new();
     if !accounts.exists() {
@@ -219,6 +221,20 @@ pub fn uninstall() -> Result<String, String> {
         fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
     }
     Ok("Direct connection is off: tabs to this host use SSH.".into())
+}
+
+
+/// Copies the zurafa-orch uploaded beside `exe` into `dir`, where the service's daemon runs it for chats.
+fn copy_orch(exe: &Path, dir: &Path) -> Result<(), String> {
+    let src = exe.with_file_name("zurafa-orch");
+    let dst = dir.join("zurafa-orch");
+    if !src.is_file() || fs::read(&src).ok() == fs::read(&dst).ok() {
+        return Ok(());
+    }
+    let tmp = dir.join("zurafa-orch.tmp");
+    fs::copy(&src, &tmp).map_err(|e| e.to_string())?;
+    fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &dst).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

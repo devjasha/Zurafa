@@ -14,6 +14,7 @@ import SwiftUI
         return turns
     }
     private var process: Process?
+    private var poll: Task<Void, Never>?
 
     /// One feed per pane and agent session, kept while the chat is hidden: switching back (⌥⌘C, a tab)
     /// shows it at once instead of starting zurafa-orch and laying the whole chat out again.
@@ -40,6 +41,33 @@ import SwiftUI
         let candidates = [ProcessInfo.processInfo.environment["ZURAFA_ORCH"], Bundle.main.url(forResource: "zurafa-orch", withExtension: nil)?.path].compactMap { $0 }
             + ["\(home)/.local/bin", "\(home)/.cargo/bin", "/opt/homebrew/bin", "/usr/local/bin"].map { "\($0)/zurafa-orch" }
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// A remote pane's agent writes its transcript on its host: the daemon follows it there, and
+    /// this reads its lines, as the phone does.
+    func start(remotePane pane: String) {
+        guard poll == nil else { return }
+        poll = Task { [weak self] in
+            var next = 0
+            while !Task.isCancelled {
+                let request: [String: JSONValue] = ["type": .string("ui.chat.read"), "block": .string(pane), "from": .number(Double(next))]
+                do {
+                    let reply = try await DaemonClient.shared.request(request)
+                    guard let self else { return }
+                    self.problem = nil
+                    if let lines = reply.lines, !lines.isEmpty {
+                        var log = self.log
+                        lines.forEach { log.add(Data($0.utf8)) }
+                        self.log = log
+                    }
+                    next = reply.next ?? next
+                } catch {
+                    self?.problem = error.localizedDescription
+                }
+                // shortcut: polls each second while the chat shows; have the daemon push lines as events if this lags.
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
     }
 
     func start(pane: String) {
@@ -80,6 +108,8 @@ import SwiftUI
     func stop() {
         process?.terminate()
         process = nil
+        poll?.cancel()
+        poll = nil
     }
 }
 
@@ -175,7 +205,7 @@ struct ChatView: View {
             .padding(.bottom, 10)
         }
         .onAppear {
-            feed.start(pane: pane)
+            if ws.currentSession?.remote != nil { feed.start(remotePane: pane) } else { feed.start(pane: pane) }
             if focused { composing = true }
         }
         .onChange(of: focused) { if focused { composing = true } }

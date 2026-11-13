@@ -534,11 +534,24 @@ async fn request(
             let known = terms.actions.answer(late, call, if ok { Ok(message) } else { Err(message) });
             return id.map(|id| if known { json!({"id":id,"type":"ok"}) } else { error(id, "unknown call") });
         }
-        Request::UiChatRead { id, block, from } => match tokio::task::spawn_blocking(move || crate::chat::read(&block, from)).await {
-            Ok(Ok((lines, next))) => json!({"id":id,"type":"ui.chat","lines":lines,"next":next}),
-            Ok(Err(e)) => error(id, e),
-            Err(e) => error(id, e),
-        },
+        Request::UiChatRead { id, block, from } => {
+            // A remote pane's agent runs on its host: the chat comes from the daemon there.
+            let snapshot = terms.dispatcher.snapshot();
+            let remote = snapshot.sessions.values().find_map(|s| {
+                let b = s.blocks.get(&block)?;
+                Some((crate::hosts::ssh_destination(s.remote.as_ref()?), b.foreground.as_ref().map(|p| p.pid)))
+            });
+            let remote = match remote {
+                Some((_, None)) => return Some(error(id, "The remote pane has not reported its agent yet")),
+                Some((dest, Some(pid))) => Some((dest, pid)),
+                None => None,
+            };
+            match tokio::task::spawn_blocking(move || crate::chat::read(&block, from, remote)).await {
+                Ok(Ok((lines, next))) => json!({"id":id,"type":"ui.chat","lines":lines,"next":next}),
+                Ok(Err(e)) => error(id, e),
+                Err(e) => error(id, e),
+            }
+        }
         Request::UiOrch { id, args } => match tokio::task::spawn_blocking(move || crate::chat::run(&args)).await {
             Ok(Ok(out)) => json!({"id":id,"type":"ui.orch","out":out}),
             Ok(Err(e)) => error(id, e),

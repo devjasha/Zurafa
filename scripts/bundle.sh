@@ -46,6 +46,13 @@ lipo -create -output "$root/build/zurafa-orch" "$root/build/orch-"{aarch64,x86_6
 remote_targets=(x86_64-unknown-linux-musl aarch64-unknown-linux-musl)
 (cd "$root/rust" && rustup target add "${remote_targets[@]}" >/dev/null &&
   cargo build --release -p zurafa-daemon $(printf -- '--target %s ' "${remote_targets[@]}"))
+# zurafa-orch for the remote daemon, which follows the host's agent chats. Linked like the daemon
+# (rust/.cargo/config.toml), which cargo install can't see from here.
+for t in "${remote_targets[@]}"; do
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld \
+  CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --force "${orch_src[@]}" \
+    --target "$t" --target-dir "$root/build/orch-target" --root "$root/build/orch-$t" zurafa-orch
+done
 # The app's own Tailscale device (Settings → Server), a Go program because tsnet is Go.
 # cgo otherwise targets the build machine's macOS, and the helper would not launch on older systems.
 for a in arm64 amd64; do
@@ -92,6 +99,7 @@ cp "$root/build/zurafa-orch" "$app/Contents/Resources/zurafa-orch"
 for target in "${remote_targets[@]}"; do
   mkdir -p "$app/Contents/Resources/remote/$target"
   install -m 644 "$root/rust/target/$target/release/zurafa-daemon" "$app/Contents/Resources/remote/$target/zurafa-daemon"
+  install -m 644 "$root/build/orch-$target/bin/zurafa-orch" "$app/Contents/Resources/remote/$target/zurafa-orch"
 done
 
 # The app loads AppIcon via Bundle.main, so the SwiftPM resource bundle is not needed (codesign rejects it at the .app root).

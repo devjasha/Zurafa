@@ -48,26 +48,40 @@ fn bridge_script(build: &str) -> String {
     ))
 }
 
-fn upload_script(build: &str) -> String {
+fn upload_script(build: &str, name: &str) -> String {
     remote_command(&format!(
-        "d=\"$HOME/.zurafa/{build}\"; mkdir -p -m 700 \"$d\" && cat > \"$d/zurafa-daemon.tmp\" && chmod 755 \"$d/zurafa-daemon.tmp\" && mv \"$d/zurafa-daemon.tmp\" \"$d/zurafa-daemon\""
+        "d=\"$HOME/.zurafa/{build}\"; mkdir -p -m 700 \"$d\" && cat > \"$d/{name}.tmp\" && chmod 755 \"$d/{name}.tmp\" && mv \"$d/{name}.tmp\" \"$d/{name}\""
     ))
 }
 
-/// The daemon build to upload for a remote `uname -sm`.
-fn binary_for(uname: &str) -> Option<PathBuf> {
+/// The build of `name` (zurafa-daemon or zurafa-orch) to upload for a remote `uname -sm`.
+fn binary_for(uname: &str, name: &str) -> Option<PathBuf> {
     let exe = env::current_exe().ok()?;
+    let resources = exe.parent().unwrap_or(&exe).join("../Resources");
     let triple = match uname.trim() {
         "Linux x86_64" => "x86_64-unknown-linux-musl",
         "Linux aarch64" | "Linux arm64" => "aarch64-unknown-linux-musl",
-        // shortcut: assumes this binary is universal (bundle.sh builds it so); a bare `cargo build` would upload the wrong arch to a Mac of the other kind.
-        "Darwin arm64" | "Darwin x86_64" if cfg!(target_os = "macos") => return Some(exe),
+        // shortcut: assumes these binaries are universal (bundle.sh builds them so); a bare `cargo build` would upload the wrong arch to a Mac of the other kind.
+        "Darwin arm64" | "Darwin x86_64" if cfg!(target_os = "macos") => {
+            return Some(if name == "zurafa-daemon" { exe } else { resources.join(name) }).filter(|p| p.is_file())
+        }
         _ => return None,
     };
-    let dir = env::var_os("ZURAFA_REMOTE_BINARIES")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| exe.parent().unwrap_or(&exe).join("../Resources/remote"));
-    Some(dir.join(triple).join("zurafa-daemon")).filter(|p| p.is_file())
+    let dir = env::var_os("ZURAFA_REMOTE_BINARIES").map(PathBuf::from).unwrap_or_else(|| resources.join("remote"));
+    Some(dir.join(triple).join(name)).filter(|p| p.is_file())
+}
+
+/// Uploads this build's daemon to the host, and zurafa-orch beside it when this app has one for it
+/// (the remote daemon runs it to show the host's agent chats).
+fn install(dest: &[String], build: &str, uname: &str) -> Result<(), String> {
+    let bin = binary_for(uname, "zurafa-daemon").ok_or_else(|| format!("No Zurafa daemon build for {uname}"))?;
+    if !upload(dest, build, &bin, "zurafa-daemon") {
+        return Err("Installing the Zurafa daemon on the host failed".into());
+    }
+    if let Some(orch) = binary_for(uname, "zurafa-orch") {
+        upload(dest, build, &orch, "zurafa-orch");
+    }
+    Ok(())
 }
 
 fn ssh(dest: &[String], extra: &[&str], command: String) -> Command {
@@ -245,19 +259,16 @@ fn open_ssh(dest: &[String], build: &str) -> Conn {
     match open(dest, build) {
         Open::Ready(conn) => conn,
         Open::Failed => fallback(dest, "Remote daemon unavailable"),
-        Open::Need(uname) => match binary_for(&uname) {
-            None => fallback(dest, &format!("No Zurafa daemon build for {uname}")),
-            Some(bin) => {
-                notice(&format!("Installing the Zurafa daemon on this host ({uname})…"));
-                if !upload(dest, build, &bin) {
-                    fallback(dest, "Installing the remote daemon failed");
-                }
-                match open(dest, build) {
-                    Open::Ready(conn) => conn,
-                    _ => fallback(dest, "Remote daemon unavailable"),
-                }
+        Open::Need(uname) => {
+            notice(&format!("Installing the Zurafa daemon on this host ({uname})…"));
+            if let Err(why) = install(dest, build, &uname) {
+                fallback(dest, &why);
             }
-        },
+            match open(dest, build) {
+                Open::Ready(conn) => conn,
+                _ => fallback(dest, "Remote daemon unavailable"),
+            }
+        }
     }
 }
 
@@ -289,10 +300,7 @@ pub fn service(dest: &[String], enable: bool) -> Result<String, String> {
             .map_err(|e| format!("cannot run ssh: {e}"))?;
         let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
         if let Some(uname) = text.strip_prefix("zurafa-need ") {
-            let bin = binary_for(uname).ok_or_else(|| format!("No Zurafa daemon build for {uname}"))?;
-            if !upload(dest, &build, &bin) {
-                return Err("Installing the Zurafa daemon on the host failed".into());
-            }
+            install(dest, &build, uname)?;
             continue;
         }
         return match (out.status.success(), text.is_empty()) {
@@ -394,9 +402,75 @@ mod tls {
     }
 }
 
-fn upload(dest: &[String], build: &str, binary: &PathBuf) -> bool {
+fn upload(dest: &[String], build: &str, binary: &PathBuf, name: &str) -> bool {
     let Ok(file) = std::fs::File::open(binary) else { return false };
-    ssh(dest, &[], upload_script(build)).stdin(file).stdout(Stdio::null()).status().is_ok_and(|s| s.success())
+    ssh(dest, &[], upload_script(build, name)).stdin(file).stdout(Stdio::null()).status().is_ok_and(|s| s.success())
+}
+
+/// A remote pane's agent chat, which only the host can read: reaches the remote daemon the way the
+/// pane does (direct, else SSH), finds the terminal whose foreground is process `pid` there, and
+/// copies its `ui.chat.read` lines into `sink` until the connection drops.
+pub fn follow_chat(dest: &[String], pid: u32, sink: &Mutex<Vec<String>>) -> Result<(), String> {
+    let (user, host) = destination(dest);
+    let conn = match open_first_direct(host, user) {
+        Some((_, conn)) => conn,
+        None => match open(dest, &build_id()) {
+            Open::Ready(conn) => conn,
+            _ => return Err("Cannot reach the Zurafa daemon on the host".into()),
+        },
+    };
+    let Conn { child, mut to, mut from } = conn;
+    let mut id = 10u64;
+    let mut ask = |mut req: Value| -> Result<Value, String> {
+        id += 1;
+        req["id"] = id.into();
+        write_frame(&mut to, &req).map_err(|e| e.to_string())?;
+        loop {
+            let reply = read_frame(&mut from).map_err(|_| "Lost the connection to the host".to_string())?;
+            if reply["id"] == id {
+                let message = reply["message"].as_str().unwrap_or("The host refused");
+                return match reply["type"].as_str() {
+                    // A direct connection's service keeps the build it was installed with.
+                    Some("error") if message.contains("unknown variant") => {
+                        Err("The Zurafa service on this host is too old for chats: turn its direct connection on again to update it".into())
+                    }
+                    Some("error") => Err(message.to_owned()),
+                    _ => Ok(reply),
+                };
+            }
+        }
+    };
+    let result = (|| {
+        let snapshot = ask(json!({"type":"events.snapshot"}))?;
+        let terminal = snapshot["snapshot"]["sessions"]
+            .as_object()
+            .into_iter()
+            .flat_map(|s| s.values())
+            .filter_map(|s| s["blocks"].as_object())
+            .flatten()
+            .find(|(_, b)| b["foreground"]["pid"] == pid)
+            .map(|(id, _)| id.clone())
+            .ok_or("The host has no pane running this agent")?;
+        // After a reconnect, carry on from what came before: the host keeps its follow and its index.
+        // shortcut: a host daemon that restarted counts from 0 again, so its lines up to our count are skipped; start over when its `next` drops.
+        let mut next = sink.lock().unwrap().len() as u64;
+        loop {
+            let reply = ask(json!({"type":"ui.chat.read","block":terminal,"from":next}))?;
+            let lines: Vec<String> = reply["lines"].as_array().into_iter().flatten().filter_map(|l| l.as_str().map(String::from)).collect();
+            next = reply["next"].as_u64().unwrap_or(next);
+            if lines.is_empty() {
+                // shortcut: polls the host each second like the phone does; push lines as events if it lags.
+                thread::sleep(Duration::from_secs(1));
+            } else {
+                sink.lock().unwrap().extend(lines);
+            }
+        }
+    })();
+    if let Some(mut child) = child {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    result
 }
 
 fn fallback(dest: &[String], why: &str) -> ! {
@@ -623,7 +697,7 @@ mod tests {
     fn remote_scripts_are_single_quoted_posix_sh() {
         let build = build_id();
         assert_eq!(build.len(), 16);
-        for script in [bridge_script(&build), upload_script(&build)] {
+        for script in [bridge_script(&build), upload_script(&build, "zurafa-orch")] {
             assert!(script.starts_with("sh -c '") && script.ends_with('\''));
             assert_eq!(script.matches('\'').count(), 2, "{script}");
             assert!(script.contains(&format!("$HOME/.zurafa/{build}")));
@@ -673,10 +747,10 @@ mod tests {
 
     #[test]
     fn picks_a_build_per_remote_platform() {
-        assert_eq!(binary_for("FreeBSD amd64"), None);
+        assert_eq!(binary_for("FreeBSD amd64", "zurafa-daemon"), None);
         if cfg!(target_os = "macos") {
-            assert_eq!(binary_for("Darwin arm64\n"), env::current_exe().ok());
-            assert_eq!(binary_for("Darwin x86_64\n"), env::current_exe().ok());
+            assert_eq!(binary_for("Darwin arm64\n", "zurafa-daemon"), env::current_exe().ok());
+            assert_eq!(binary_for("Darwin x86_64\n", "zurafa-daemon"), env::current_exe().ok());
         }
     }
 }
