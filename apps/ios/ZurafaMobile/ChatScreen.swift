@@ -258,6 +258,7 @@ struct PhoneComposer<Menus: View>: View {
                 .accessibilityLabel("Send")
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .attachments(photos: $photos, files: $files) { paths in
