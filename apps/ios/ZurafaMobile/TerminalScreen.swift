@@ -41,6 +41,11 @@ struct TerminalScreen: View {
     @State private var composerHeight: CGFloat = 0
     /// The pane bar's column: 40 pt wide, 4 pt from the edge.
     static let barWidth: CGFloat = 44
+    static let barLeftKey = "paneBarLeft"
+    /// The pane bar runs down the left edge instead of the right.
+    @AppStorage(barLeftKey) private var barLeft = false
+    /// The pane bar's side, for views without the setting's AppStorage.
+    static var barEdge: Edge.Set { UserDefaults.standard.bool(forKey: barLeftKey) ? .leading : .trailing }
     private var chat: Bool { block?.hasChat == true && chats != flipped.contains(id) }
     private var view: PhoneTerminal { Terminals.shared.view(for: id) }
 
@@ -64,22 +69,23 @@ struct TerminalScreen: View {
             // The pill animates a pane switch; the terminal swaps at once instead of crossfading two live grids.
             .transaction { $0.animation = nil }
             .background((mac.appearance.map { Color(hex: $0.colors(scheme).background) } ?? Color(white: 0.08)).ignoresSafeArea())
-            // The pane bar runs down the right edge, clear of the composer and the key bar.
-            .safeAreaInset(edge: .trailing, spacing: 0) {
+            // The pane bar runs down the chosen edge, clear of the composer and the key bar.
+            .safeAreaInset(edge: barLeft ? .leading : .trailing, spacing: 0) {
                 // In a chat the composer runs full width under the bar, so the bar ends above it.
-                panes.glassGroup().padding(.trailing, 4).padding(.bottom, chat ? composerHeight : 0)
+                panes.glassGroup().padding(barLeft ? .leading : .trailing, 4).padding(.bottom, chat ? composerHeight : 0)
             }
             .safeAreaInset(edge: .bottom) {
                 if !chat { KeyBar(view: view).glassGroup().padding(.bottom, 8) }
             }
-            .overlay(alignment: .topLeading) {
+            // Opposite the pane bar, so it never covers the bar's top panes.
+            .overlay(alignment: barLeft ? .topTrailing : .topLeading) {
                 if mapShown, let layout = window?.layout, layout.panes.count > 1 {
                     PaneMap(layout: layout, current: id)
                         .frame(width: 36, height: 24)
                         .padding(6)
                         .glass(in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .padding(.leading, 12).padding(.top, 6)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topLeading)))
+                        .padding(barLeft ? .trailing : .leading, 12).padding(.top, 6)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: barLeft ? .topTrailing : .topLeading)))
                         .accessibilityHidden(true) // the pane bar says the same
                 }
             }

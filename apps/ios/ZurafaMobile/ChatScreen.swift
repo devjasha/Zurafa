@@ -171,7 +171,7 @@ struct PhoneChat: View {
             }
             .padding(.horizontal, 12).padding(.bottom, 8)
             // Full width: into the pane bar's column, which ends above the composer.
-            .padding(.trailing, -TerminalScreen.barWidth)
+            .padding(TerminalScreen.barEdge, -TerminalScreen.barWidth)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
         }
         .task { feed.start(pane) }

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(Terminals.fontSizeKey) private var fontSize = Terminals.defaultFontSize
     @AppStorage(TerminalScreen.keepAwakeKey) private var keepAwake = false
     @AppStorage(TerminalScreen.chatKey) private var chats = true
+    @AppStorage(TerminalScreen.barLeftKey) private var barLeft = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -25,10 +26,14 @@ struct SettingsView: View {
                 Section {
                     Stepper("Font Size: \(Int(fontSize)) pt", value: $fontSize, in: 9...24)
                     Toggle("Keep Screen On", isOn: $keepAwake)
+                    Picker("Pane Bar", selection: $barLeft) {
+                        Text("Left").tag(true)
+                        Text("Right").tag(false)
+                    }
                 } header: {
                     Text("Terminal")
                 } footer: {
-                    Text("The font also grows with the iPhone's Text Size. Keep Screen On stops the iPhone locking while a terminal is open.")
+                    Text("The font also grows with the iPhone's Text Size. Keep Screen On stops the iPhone locking while a terminal is open. Pane Bar is the side of a tab's column of panes.")
                 }
                 Section {
                     Toggle("Open Agents as Chat", isOn: $chats)
