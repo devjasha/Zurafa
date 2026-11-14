@@ -92,6 +92,8 @@ struct PhoneChat: View {
     /// Questions answered here, hidden until the agent's transcript shows the answer.
     @State private var answered: Set<String> = []
     @FocusState private var composing: Bool
+    /// How many of the newest turns are laid out.
+    @State private var shown = 30
 
     private var program: Program { block?.program(remote: remote) ?? .shell }
     private var agent: String { block?.agent(remote: remote) ?? "" }
@@ -106,8 +108,13 @@ struct PhoneChat: View {
         let turns = feed.log.turns(live: live)
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    ForEach(Array(turns.enumerated()), id: \.element.id) { i, turn in
+                // Not lazy: lazy rows guess their heights and settle while the chat grows, so it jumped as it streamed.
+                // The newest turns only, as on the Mac, so a long chat stays cheap.
+                VStack(alignment: .leading, spacing: 18) {
+                    if turns.count > shown {
+                        Button("Earlier messages") { shown += 30 }.font(.subheadline).frame(maxWidth: .infinity)
+                    }
+                    ForEach(Array(turns.enumerated()).suffix(shown), id: \.element.id) { i, turn in
                         PhoneTurn(turn: turn, name: name, program: program, live: live && i == turns.count - 1, record: record,
                                   dir: block?.foreground?.cwd ?? block?.pwd)
                     }
@@ -119,9 +126,7 @@ struct PhoneChat: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
             }
             .scrollDismissesKeyboard(.interactively)
-            .defaultScrollAnchor(.bottom)
-            .onChange(of: feed.log.items.count) { proxy.scrollTo("end", anchor: .bottom) }
-            .onChange(of: feed.log.items.last?.result) { proxy.scrollTo("end", anchor: .bottom) }
+            .modifier(StaysAtBottom(proxy: proxy, count: feed.log.items.count, result: feed.log.items.last?.result))
         }
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -204,6 +209,25 @@ struct PhoneChat: View {
                 changed = before
                 problem = "Could not change that"
             }
+        }
+    }
+}
+
+/// Opens at the newest message and keeps it in view as the chat grows and as the keyboard comes up.
+/// iOS 18 keeps the bottom anchored itself: no jump per new line, and a reader scrolled up stays put.
+private struct StaysAtBottom: ViewModifier {
+    let proxy: ScrollViewProxy
+    let count: Int
+    let result: String?
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.defaultScrollAnchor(.bottom).defaultScrollAnchor(.bottom, for: .sizeChanges)
+        } else {
+            content.defaultScrollAnchor(.bottom)
+                .onChange(of: count) { proxy.scrollTo("end", anchor: .bottom) }
+                .onChange(of: result) { proxy.scrollTo("end", anchor: .bottom) }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in proxy.scrollTo("end", anchor: .bottom) }
         }
     }
 }

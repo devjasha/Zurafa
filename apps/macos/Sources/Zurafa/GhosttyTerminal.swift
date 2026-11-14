@@ -115,6 +115,8 @@ final class GhosttyTerminal {
     }
 
     var bracketedPaste: Bool { mode(2004) }
+    /// Mode 2026: the program is mid-redraw and wants its screen shown only once it is done.
+    var synchronizedOutput: Bool { mode(2026) }
     var mouseTracking: Bool { value(GHOSTTY_TERMINAL_DATA_MOUSE_TRACKING, false) }
 
     /// The alternate screen (full-screen programs) is showing; it has no scrollback.

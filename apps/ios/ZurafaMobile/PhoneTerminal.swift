@@ -21,6 +21,8 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
     let engine = GhosttyTerminal(cols: 80, rows: 24, scrollbackLines: 10_000)
     let renderer = TerminalRenderView(frame: .zero)
     private var frameDue = false
+    /// When the frame began waiting on a synchronized redraw.
+    private var heldSince: CFTimeInterval?
     private var link: CADisplayLink?
     private var cellPixels = (width: 0, height: 0)
     private var panRemainder: CGFloat = 0
@@ -132,6 +134,13 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
     }
 
     fileprivate func tick() {
+        // An agent's redraw (mode 2026) often arrives over several network chunks: show it finished, not
+        // half drawn. Held at most a second, as Ghostty does, so a program that never ends it still shows.
+        if frameDue, engine.synchronizedOutput {
+            let now = CACurrentMediaTime()
+            if now - (heldSince ?? now) < 1 { heldSince = heldSince ?? now; return }
+        }
+        heldSince = nil
         link?.isPaused = true
         flush()
     }
