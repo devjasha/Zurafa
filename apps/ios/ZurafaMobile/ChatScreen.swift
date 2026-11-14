@@ -84,6 +84,8 @@ struct PhoneChat: View {
     let pane: String
     let block: BlockSnapshot?
     let remote: RemoteHost?
+    /// Reported to the screen, which ends the pane bar above the composer.
+    @Binding var composerHeight: CGFloat
     @StateObject private var feed = PhoneChatFeed()
     @ObservedObject private var models = PhoneModels.shared
     @State private var draft = ""
@@ -155,6 +157,9 @@ struct PhoneChat: View {
                 .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 10)
             }
             .padding(.horizontal, 12)
+            // Full width: into the pane bar's column, which ends above the composer.
+            .padding(.trailing, -TerminalScreen.barWidth)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
         }
         .task { feed.start(pane) }
         .onDisappear { feed.stop() }
@@ -291,7 +296,7 @@ struct PhoneComposer<Menus: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), interactive: false)
         .attachments(photos: $photos, files: $files) { paths in
             draft += draft.isEmpty || draft.hasSuffix(" ") || draft.hasSuffix("\n") ? paths : " " + paths
         }
@@ -320,7 +325,7 @@ struct PhoneComposer<Menus: View>: View {
                 }
                 .scrollIndicators(.never)
                 .frame(height: min(CGFloat(shown.count) * 46 + 8, 260))
-                .glass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .glass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: false)
                 .alignmentGuide(.top) { $0[.bottom] + 8 }
                 .transition(.opacity.combined(with: .offset(y: 8)))
             }
@@ -582,7 +587,7 @@ private struct PhoneQuestionCard: View {
             }
         }
         .padding(12)
-        .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), interactive: false)
     }
 
     private func option(_ title: String, detail: String, on: Bool, multiple: Bool, action: @escaping () -> Void) -> some View {

@@ -31,6 +31,10 @@ struct TerminalScreen: View {
     /// Agent panes the user switched back to their terminal.
     @State private var terminals: Set<String> = []
     @State private var newChat = false
+    /// The chat composer's height; the pane bar stops above it.
+    @State private var composerHeight: CGFloat = 0
+    /// The pane bar's column: 40 pt wide, 4 pt from the edge.
+    static let barWidth: CGFloat = 44
     private var chat: Bool { block?.hasChat == true && !terminals.contains(id) }
     private var view: PhoneTerminal { Terminals.shared.view(for: id) }
 
@@ -44,7 +48,7 @@ struct TerminalScreen: View {
     var body: some View {
         Group {
             if chat {
-                PhoneChat(pane: id, block: block, remote: session?.remote)
+                PhoneChat(pane: id, block: block, remote: session?.remote, composerHeight: $composerHeight)
                     .id(id) // Its feed follows one pane; another pane gets a fresh one.
             } else {
                 TerminalPane(id: id).padding(.horizontal, 6)
@@ -56,7 +60,8 @@ struct TerminalScreen: View {
             .background((mac.appearance.map { Color(hex: $0.colors(scheme).background) } ?? Color(white: 0.08)).ignoresSafeArea())
             // The pane bar runs down the right edge, clear of the composer and the key bar.
             .safeAreaInset(edge: .trailing, spacing: 0) {
-                panes.glassGroup().padding(.trailing, 4)
+                // In a chat the composer runs full width under the bar, so the bar ends above it.
+                panes.glassGroup().padding(.trailing, 4).padding(.bottom, chat ? composerHeight : 0)
             }
             .safeAreaInset(edge: .bottom) {
                 if !chat { KeyBar(view: view).glassGroup().padding(.bottom, 8) }
@@ -399,10 +404,11 @@ extension View {
         if #available(iOS 26, *) { GlassEffectContainer(spacing: 10) { self } } else { self }
     }
 
-    /// Liquid Glass where the system has it, a material before.
-    @ViewBuilder func glass(in shape: some Shape) -> some View {
+    /// Liquid Glass where the system has it, a material before. Interactive for buttons only: a panel
+    /// holding a text field (the composer) would take its buttons' taps and focus the field instead.
+    @ViewBuilder func glass(in shape: some Shape, interactive: Bool = true) -> some View {
         if #available(iOS 26, *) {
-            glassEffect(.regular.interactive(), in: shape)
+            glassEffect(.regular.interactive(interactive), in: shape)
         } else {
             background(.ultraThinMaterial, in: shape)
         }
