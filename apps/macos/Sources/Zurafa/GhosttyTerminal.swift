@@ -153,6 +153,13 @@ final class GhosttyTerminal {
         ghostty_terminal_scroll_viewport(term, s)
     }
 
+    /// The viewport shows the newest lines (it follows output).
+    var atBottom: Bool {
+        var bar = GhosttyTerminalScrollbar()
+        ghostty_terminal_get(term, GHOSTTY_TERMINAL_DATA_SCROLLBAR, &bar)
+        return bar.offset + bar.len >= bar.total
+    }
+
     func scrollToBottom() {
         var s = GhosttyTerminalScrollViewport()
         s.tag = GHOSTTY_TERMINAL_SCROLL_VIEWPORT_BOTTOM

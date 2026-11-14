@@ -7,6 +7,21 @@ import XCTest
 final class GhosttyTerminalTests: XCTestCase {
     private func feed(_ t: GhosttyTerminal, _ s: String) { t.feed(Array(s.utf8)) }
 
+    /// The phone's smooth scroll peeks one line up and back at the bottom; the view must still follow output.
+    func testAtBottomAndPeekingKeepsFollowingOutput() {
+        let t = GhosttyTerminal(cols: 10, rows: 3, scrollbackLines: 100)
+        feed(t, (1...10).map(String.init).joined(separator: "\r\n"))
+        XCTAssertTrue(t.atBottom)
+        t.scroll(by: -1)
+        XCTAssertFalse(t.atBottom)
+        XCTAssertEqual(t.line(row: 0).joined(), "7")
+        t.scroll(by: 1)
+        XCTAssertTrue(t.atBottom)
+        feed(t, "\r\n11")
+        XCTAssertTrue(t.atBottom)
+        XCTAssertEqual(t.line(row: 2).joined(), "11")
+    }
+
     func testTextColorsAndWideCharLandInFrame() {
         let t = GhosttyTerminal(cols: 20, rows: 4, scrollbackLines: 100)
         t.setColors(foreground: .init(r: 200, g: 200, b: 200), background: .init(r: 1, g: 2, b: 3), cursor: nil,

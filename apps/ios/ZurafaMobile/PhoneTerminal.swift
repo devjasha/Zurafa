@@ -26,14 +26,21 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
     private var link: CADisplayLink?
     private var cellPixels = (width: 0, height: 0)
     private var panRemainder: CGFloat = 0
+    /// Smooth scrollback: how far the picture sits below the viewport's top line (0 up to one row; the
+    /// line above shows in the gap), a flick's speed in points per second, and the last tick's time.
+    private var scrollFraction: CGFloat = 0
+    private var flingVelocity: CGFloat = 0
+    private var lastTick: CFTimeInterval = 0
+    private var dragging = false
+    /// After the finger lifts: still flinging, or easing onto a whole line.
+    private var settling: Bool { !dragging && (flingVelocity != 0 || scrollFraction > 0) }
     /// Where a long-press selection began, in screen rows so it survives scrolling.
     private var selectStart: (col: Int, row: Int)?
     private lazy var editMenu = UIEditMenuInteraction(delegate: self)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        renderer.frame = bounds
-        renderer.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        clipsToBounds = true // the renderer is a row taller, for the line that slides in while scrolling
         renderer.isUserInteractionEnabled = false
         addSubview(renderer)
         engine.onReply = { [weak self] in self?.onInput?($0) }
@@ -51,7 +58,7 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
 
     var font: UIFont {
         get { renderer.font }
-        set { renderer.font = newValue; updateGrid() }
+        set { renderer.font = newValue; placeRenderer(); updateGrid() }
     }
 
     var gridSize: (cols: Int, rows: Int) { (engine.cols, engine.rows) }
@@ -91,7 +98,15 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        placeRenderer()
         updateGrid()
+    }
+
+    /// One row taller than the view; between lines it moves down by the fraction, the line above on top.
+    private func placeRenderer() {
+        let h = renderer.cellSize.height
+        let frame = CGRect(x: 0, y: scrollFraction > 0 ? scrollFraction - h : 0, width: bounds.width, height: bounds.height + h)
+        if renderer.frame != frame { renderer.frame = frame }
     }
 
     override func didMoveToWindow() {
@@ -117,6 +132,7 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
         guard changed || pixels != cellPixels else { return }
         cellPixels = pixels
         engine.resize(cols: grid.cols, rows: grid.rows, cellPixelWidth: pixels.width, cellPixelHeight: pixels.height)
+        (scrollFraction, flingVelocity) = (0, 0)
         scheduleFrame()
         if changed { onResize?(grid.cols, grid.rows) }
     }
@@ -130,18 +146,65 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
     private func flush() {
         guard frameDue else { return }
         frameDue = false
-        renderer.show(engine.frame())
+        placeRenderer()
+        renderer.show(scrollFraction > 0 ? framePeeking() : engine.frame())
+    }
+
+    /// The viewport with the line above it on top, for a scroll that sits between lines.
+    private func framePeeking() -> TerminalFrame {
+        engine.scroll(by: -1)
+        var above = engine.frame().rows.first
+        engine.scroll(by: 1)
+        var frame = engine.frame()
+        above?.dirty = true
+        if let above { frame.rows.insert(above, at: 0) }
+        frame.cursor.row += 1
+        for i in frame.images.indices { frame.images[i].row += 1 }
+        frame.fullRedraw = true
+        return frame
+    }
+
+    /// Moves the scrollback by points, finger-down positive: whole lines go to the engine, the rest
+    /// offsets the picture. False when it hit the top or the bottom.
+    @discardableResult private func scrollSmoothly(by points: CGFloat) -> Bool {
+        let h = max(renderer.cellSize.height, 1)
+        var f = scrollFraction + points, free = true
+        while f >= h, engine.viewportTop > 0 { engine.scroll(by: -1); f -= h }
+        while f < 0, !engine.atBottom { engine.scroll(by: 1); f += h }
+        if f < 0 || (f > 0 && engine.viewportTop == 0) { f = 0; free = false } // no line beyond either end
+        scrollFraction = f
+        scheduleFrame()
+        return free
+    }
+
+    /// A flick slows as UIScrollView's does (rate 0.998 per ms); then the picture eases onto the nearest line.
+    private func settleScroll() {
+        guard settling else { lastTick = 0; return }
+        let now = CACurrentMediaTime()
+        let dt = CGFloat(lastTick == 0 ? 1.0 / 60 : min(now - lastTick, 0.05))
+        lastTick = now
+        if flingVelocity != 0 {
+            if !scrollSmoothly(by: flingVelocity * dt) { flingVelocity = 0 }
+            flingVelocity *= pow(0.998, dt * 1000)
+            if abs(flingVelocity) < 40 { flingVelocity = 0 }
+        } else {
+            let h = max(renderer.cellSize.height, 1)
+            let gap = (scrollFraction > h / 2 ? h : 0) - scrollFraction
+            scrollSmoothly(by: abs(gap) < 0.5 ? gap : gap * min(1, dt * 18))
+        }
     }
 
     fileprivate func tick() {
+        settleScroll()
         // An agent's redraw (mode 2026) often arrives over several network chunks: show it finished, not
         // half drawn. Held at most a second, as Ghostty does, so a program that never ends it still shows.
-        if frameDue, engine.synchronizedOutput {
+        // Not while the reader scrolls: that would stall the scroll.
+        if frameDue, engine.synchronizedOutput, !dragging, !settling {
             let now = CACurrentMediaTime()
             if now - (heldSince ?? now) < 1 { heldSince = heldSince ?? now; return }
         }
         heldSince = nil
-        link?.isPaused = true
+        link?.isPaused = !settling
         flush()
     }
 
@@ -151,6 +214,7 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
         guard let data, !data.isEmpty else { return }
         engine.clearSelection()
         engine.scrollToBottom()
+        (scrollFraction, flingVelocity) = (0, 0)
         scheduleFrame()
         onInput?(data)
     }
@@ -263,7 +327,8 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
 
     private func cell(_ point: CGPoint) -> (col: Int, row: Int) {
         flush()
-        return renderer.cell(at: convert(point, to: renderer))
+        let at = renderer.cell(at: convert(point, to: renderer))
+        return scrollFraction > 0 ? (at.col, max(at.row - 1, 0)) : at // the line above is on top
     }
 
     /// A tap shows the keyboard, clears a selection, or opens the web link under it.
@@ -280,7 +345,16 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
 
     /// Scrollback, arrow keys on the alternate screen (mode 1007), or wheel reports while a program tracks the mouse.
     @objc private func panned(_ pan: UIPanGestureRecognizer) {
-        if pan.state == .began { panRemainder = 0 }
+        if pan.state == .began { panRemainder = 0; flingVelocity = 0 }
+        // Scrollback follows the finger point by point and coasts after a flick; programs that scroll
+        // themselves (mouse tracking, full-screen apps) still get whole lines below.
+        if !engine.mouseTracking, !engine.alternateScreen {
+            dragging = pan.state == .began || pan.state == .changed
+            scrollSmoothly(by: pan.translation(in: self).y)
+            pan.setTranslation(.zero, in: self)
+            if pan.state == .ended { flingVelocity = pan.velocity(in: self).y }
+            return
+        }
         let height = max(renderer.cellSize.height, 1)
         panRemainder += pan.translation(in: self).y
         pan.setTranslation(.zero, in: self)
@@ -297,9 +371,6 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
             for _ in 0..<abs(lines) {
                 if let data = engine.encodeKey(lines > 0 ? GHOSTTY_KEY_ARROW_UP : GHOSTTY_KEY_ARROW_DOWN, text: nil, unshifted: nil) { onInput?(data) }
             }
-        } else {
-            engine.scroll(by: -lines)
-            scheduleFrame()
         }
     }
 
