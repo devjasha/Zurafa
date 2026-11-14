@@ -9,6 +9,9 @@ struct TerminalScreen: View {
     @Environment(\.colorScheme) private var scheme
     static let keepAwakeKey = "keepScreenOn"
     @AppStorage(keepAwakeKey) private var keepAwake = false
+    static let chatKey = "agentsAsChat"
+    /// Agent panes open as a chat; off, as their terminal.
+    @AppStorage(chatKey) private var chats = true
     @Namespace private var paneBar
 
     /// Falls back to the last known session (and `window` to the last known tab): right after a
@@ -28,14 +31,14 @@ struct TerminalScreen: View {
     /// Bumped on each switch between panes of one tab; the pane map shows briefly for each.
     @State private var paneSwitches = 0
     @State private var mapShown = false
-    /// Agent panes the user switched back to their terminal.
-    @State private var terminals: Set<String> = []
+    /// Agent panes the user switched away from the setting: to their terminal, or to a chat.
+    @State private var flipped: Set<String> = []
     @State private var newChat = false
     /// The chat composer's height; the pane bar stops above it.
     @State private var composerHeight: CGFloat = 0
     /// The pane bar's column: 40 pt wide, 4 pt from the edge.
     static let barWidth: CGFloat = 44
-    private var chat: Bool { block?.hasChat == true && !terminals.contains(id) }
+    private var chat: Bool { block?.hasChat == true && chats != flipped.contains(id) }
     private var view: PhoneTerminal { Terminals.shared.view(for: id) }
 
     /// `fish ~/src/app`, like the Mac's tab title.
@@ -99,7 +102,7 @@ struct TerminalScreen: View {
                         Button("New Chat", systemImage: "bubble.left.and.text.bubble.right") { newChat = true }
                         if block?.hasChat == true {
                             Button(chat ? "Show Terminal" : "Show Chat", systemImage: chat ? "terminal" : "text.bubble") {
-                                if chat { terminals.insert(id) } else { terminals.remove(id) }
+                                if flipped.remove(id) == nil { flipped.insert(id) }
                             }
                         }
                         Button("New Tab", systemImage: "plus", action: newTab)

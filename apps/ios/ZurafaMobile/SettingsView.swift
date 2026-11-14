@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage("macAddress") private var address = ""
     @AppStorage(Terminals.fontSizeKey) private var fontSize = Terminals.defaultFontSize
     @AppStorage(TerminalScreen.keepAwakeKey) private var keepAwake = false
+    @AppStorage(TerminalScreen.chatKey) private var chats = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -28,6 +29,13 @@ struct SettingsView: View {
                     Text("Terminal")
                 } footer: {
                     Text("The font also grows with the iPhone's Text Size. Keep Screen On stops the iPhone locking while a terminal is open.")
+                }
+                Section {
+                    Toggle("Open Agents as Chat", isOn: $chats)
+                } header: {
+                    Text("Agents")
+                } footer: {
+                    Text("Claude Code, Codex and Pi panes open as a chat; off, as their terminal. ••• → Show Terminal or Show Chat switches one pane.")
                 }
                 Section("Notifications") {
                     Button("Notification Settings", systemImage: "bell.badge") {
