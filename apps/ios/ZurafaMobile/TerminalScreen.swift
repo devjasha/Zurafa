@@ -34,6 +34,9 @@ struct TerminalScreen: View {
     /// Agent panes the user switched away from the setting: to their terminal, or to a chat.
     @State private var flipped: Set<String> = []
     @State private var newChat = false
+    /// The overview of every workspace, in place of the back button; `leaving` goes back to the list once it closes.
+    @State private var overview = false
+    @State private var leaving = false
     /// The chat composer's height; the pane bar stops above it.
     @State private var composerHeight: CGFloat = 0
     /// The pane bar's column: 40 pt wide, 4 pt from the edge.
@@ -95,7 +98,11 @@ struct TerminalScreen: View {
                 if !Task.isCancelled { withAnimation(.easeOut(duration: 0.4)) { mapShown = false } }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden()
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Workspaces", systemImage: "sidebar.left") { overview = true }
+                }
                 ToolbarItem(placement: .principal) { header }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis") {
@@ -113,6 +120,20 @@ struct TerminalScreen: View {
             }
             // Without a theme from the Mac the terminal stays dark, so its chrome does too.
             .environment(\.colorScheme, mac.appearance == nil ? .dark : scheme)
+            .sheet(isPresented: $overview, onDismiss: { if leaving { dismiss() } }) {
+                NavigationStack {
+                    SessionsList(current: id, pick: { id = $0; overview = false }, open: { id = $0; overview = false })
+                        .navigationTitle("Workspaces")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Sessions", systemImage: "chevron.backward") { leaving = true; overview = false }
+                                    .labelStyle(.titleAndIcon)
+                            }
+                            ToolbarItem(placement: .confirmationAction) { Button("Done") { overview = false } }
+                        }
+                }
+            }
             .sheet(isPresented: $newChat) {
                 PhoneNewChat(session: session?.sessionID ?? "default") { pane in id = pane }
             }
