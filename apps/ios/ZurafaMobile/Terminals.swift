@@ -148,11 +148,17 @@ import UIKit
     }
 }
 
-/// Photo and file pickers whose picks arrive as Mac paths, space-separated with a trailing space.
+/// A pick saved on the Mac, with the phone's copy of it when it is an image, for a thumbnail.
+struct Attached: Hashable {
+    let path: String
+    let image: UIImage?
+}
+
+/// Photo and file pickers whose picks arrive as Mac paths, in the order picked.
 struct Attachments: ViewModifier {
     @Binding var photos: Bool
     @Binding var files: Bool
-    let attach: (String) -> Void
+    let attach: ([Attached]) -> Void
     @State private var picked: [PhotosPickerItem] = []
     @State private var error: String?
 
@@ -168,7 +174,7 @@ struct Attachments: ViewModifier {
                         guard let raw = try await item.loadTransferable(type: Data.self), let image = UIImage(data: raw), let data = Upload.data(image) else {
                             throw Upload.Failure("Could not read that photo.")
                         }
-                        return try await Upload.save(data)
+                        return Attached(path: try await Upload.save(data), image: image)
                     }
                 })
             }
@@ -180,7 +186,8 @@ struct Attachments: ViewModifier {
                         {
                             let scoped = url.startAccessingSecurityScopedResource()
                             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                            return try await Upload.save(Data(contentsOf: url), name: url.lastPathComponent)
+                            let data = try Data(contentsOf: url)
+                            return Attached(path: try await Upload.save(data, name: url.lastPathComponent), image: UIImage(data: data))
                         }
                     })
                 }
@@ -189,19 +196,19 @@ struct Attachments: ViewModifier {
     }
 
     /// One at a time, in the order picked; the paths that made it are attached even if one fails.
-    private func send(_ uploads: [() async throws -> String]) {
+    private func send(_ uploads: [() async throws -> Attached]) {
         Task {
-            var paths: [String] = []
+            var picks: [Attached] = []
             for upload in uploads {
-                do { paths.append(try await upload()) } catch { self.error = error.localizedDescription }
+                do { picks.append(try await upload()) } catch { self.error = error.localizedDescription }
             }
-            if !paths.isEmpty { attach(paths.joined(separator: " ") + " ") }
+            if !picks.isEmpty { attach(picks) }
         }
     }
 }
 
 extension View {
-    func attachments(photos: Binding<Bool>, files: Binding<Bool>, attach: @escaping (String) -> Void) -> some View {
+    func attachments(photos: Binding<Bool>, files: Binding<Bool>, attach: @escaping ([Attached]) -> Void) -> some View {
         modifier(Attachments(photos: photos, files: files, attach: attach))
     }
 }

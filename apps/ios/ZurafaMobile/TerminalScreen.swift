@@ -373,7 +373,7 @@ struct KeyBar: View {
         }
         .font(.title3)
         .foregroundStyle(.primary)
-        .attachments(photos: $photos, files: $files) { view.pasteText($0) }
+        .attachments(photos: $photos, files: $files) { view.pasteText($0.map(\.path).joined(separator: " ") + " ") }
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewControlModifierReset, object: view)) { _ in ctrl = false }
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewMetaModifierReset, object: view)) { _ in alt = false }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }

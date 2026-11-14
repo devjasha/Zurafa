@@ -147,7 +147,7 @@ struct PhoneChat: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                composer
+                // Above the composer's top left, not squeezed between it and the keyboard.
                 HStack(spacing: 12) {
                     if let cwd = block?.foreground?.cwd { Label(URL(fileURLWithPath: cwd).lastPathComponent, systemImage: "folder") }
                     if let problem { Text(problem).foregroundStyle(.red).lineLimit(1) }
@@ -155,8 +155,9 @@ struct PhoneChat: View {
                     if live { ProgressView().controlSize(.small) }
                 }
                 .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 10)
+                composer
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 12).padding(.bottom, 8)
             // Full width: into the pane bar's column, which ends above the composer.
             .padding(.trailing, -TerminalScreen.barWidth)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
@@ -250,6 +251,8 @@ struct PhoneComposer<Menus: View>: View {
     @ObservedObject private var catalog = CompletionCatalog.shared
     @State private var photos = false
     @State private var files = false
+    /// Picks going with the next message, as thumbnails above the text, as on the Mac.
+    @State private var attached: [Attached] = []
 
     private var suggestions: [Suggestion] {
         guard let word = Completion.token(draft), let dir else { return [] }
@@ -259,9 +262,10 @@ struct PhoneComposer<Menus: View>: View {
     }
 
     var body: some View {
-        let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty
         let shown = suggestions
         VStack(alignment: .leading, spacing: 10) {
+            if !attached.isEmpty { AttachedStrip(attached: $attached) }
             TextField("Ask, build, / for commands, @ for references…", text: $draft, axis: .vertical)
                 .lineLimit(1...6)
                 .focused(focus)
@@ -283,7 +287,7 @@ struct PhoneComposer<Menus: View>: View {
                     ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { menus(true) } }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Button(action: send) {
+                Button(action: submit) {
                     Image(systemName: "chevron.up").font(.system(size: 15, weight: .semibold))
                         .frame(width: 34, height: 34)
                         .foregroundStyle(ready ? Color.primary : Color.secondary)
@@ -297,9 +301,8 @@ struct PhoneComposer<Menus: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), interactive: false)
-        .attachments(photos: $photos, files: $files) { paths in
-            draft += draft.isEmpty || draft.hasSuffix(" ") || draft.hasSuffix("\n") ? paths : " " + paths
-        }
+        .animation(.snappy(duration: 0.16), value: attached)
+        .attachments(photos: $photos, files: $files) { attached += $0 }
         // Floats above the composer, so the text stays put while the list comes and goes.
         .overlay(alignment: .top) {
             if !shown.isEmpty {
@@ -338,6 +341,55 @@ struct PhoneComposer<Menus: View>: View {
             if !agent.isEmpty { _ = catalog.commands(agent, in: dir) }
             _ = catalog.files(in: dir)
         }
+    }
+}
+
+extension PhoneComposer {
+    /// Sends the picks as @-mentions ahead of the text, as the Mac does.
+    func submit() {
+        if !attached.isEmpty {
+            draft = (attached.map { "@" + $0.path } + [draft]).joined(separator: " ")
+            attached = []
+        }
+        send()
+    }
+}
+
+/// The picks going with the next message: thumbnails for images, the name for other files.
+private struct AttachedStrip: View {
+    @Binding var attached: [Attached]
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+                ForEach(attached, id: \.self) { pick in
+                    Group {
+                        if let image = pick.image {
+                            Image(uiImage: image).resizable().scaledToFill()
+                        } else {
+                            VStack(spacing: 4) {
+                                Image(systemName: "doc").foregroundStyle(.secondary)
+                                Text(URL(fileURLWithPath: pick.path).lastPathComponent).font(.caption2).lineLimit(2).multilineTextAlignment(.center)
+                            }
+                            .padding(4)
+                        }
+                    }
+                    .frame(width: 64, height: 64)
+                    .background(Color.primary.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.12)))
+                    .overlay(alignment: .topTrailing) {
+                        Button { attached.removeAll { $0 == pick } } label: {
+                            Image(systemName: "xmark.circle.fill").font(.system(size: 18))
+                                .symbolRenderingMode(.palette).foregroundStyle(.white, .black.opacity(0.65))
+                        }
+                        .buttonStyle(.plain).offset(x: 6, y: -6)
+                        .accessibilityLabel("Remove \(URL(fileURLWithPath: pick.path).lastPathComponent)")
+                    }
+                }
+            }
+            .padding(.top, 6).padding(.trailing, 6) // room for the remove badge
+        }
+        .scrollIndicators(.never)
     }
 }
 
