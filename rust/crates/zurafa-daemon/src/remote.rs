@@ -409,8 +409,9 @@ fn upload(dest: &[String], build: &str, binary: &PathBuf, name: &str) -> bool {
 
 /// A remote pane's agent chat, which only the host can read: reaches the remote daemon the way the
 /// pane does (direct, else SSH), finds the terminal whose foreground is process `pid` there, and
-/// copies its `ui.chat.read` lines into `sink` until the connection drops.
-pub fn follow_chat(dest: &[String], pid: u32, sink: &Mutex<Vec<String>>) -> Result<(), String> {
+/// hands its `ui.chat.read` lines from index `next` on to `push`, until the connection drops or
+/// `push` returns false (nobody follows this agent any more).
+pub fn follow_chat(dest: &[String], pid: u32, next: &mut u64, push: &dyn Fn(Vec<String>) -> bool) -> Result<(), String> {
     let (user, host) = destination(dest);
     let conn = match open_first_direct(host, user) {
         Some((_, conn)) => conn,
@@ -451,18 +452,17 @@ pub fn follow_chat(dest: &[String], pid: u32, sink: &Mutex<Vec<String>>) -> Resu
             .find(|(_, b)| b["foreground"]["pid"] == pid)
             .map(|(id, _)| id.clone())
             .ok_or("The host has no pane running this agent")?;
-        // After a reconnect, carry on from what came before: the host keeps its follow and its index.
-        // shortcut: a host daemon that restarted counts from 0 again, so its lines up to our count are skipped; start over when its `next` drops.
-        let mut next = sink.lock().unwrap().len() as u64;
         loop {
-            let reply = ask(json!({"type":"ui.chat.read","block":terminal,"from":next}))?;
+            let reply = ask(json!({"type":"ui.chat.read","block":terminal,"from":*next}))?;
             let lines: Vec<String> = reply["lines"].as_array().into_iter().flatten().filter_map(|l| l.as_str().map(String::from)).collect();
-            next = reply["next"].as_u64().unwrap_or(next);
-            if lines.is_empty() {
+            *next = reply["next"].as_u64().unwrap_or(*next);
+            let idle = lines.is_empty();
+            if !push(lines) {
+                return Ok(());
+            }
+            if idle {
                 // shortcut: polls the host each second like the phone does; push lines as events if it lags.
                 thread::sleep(Duration::from_secs(1));
-            } else {
-                sink.lock().unwrap().extend(lines);
             }
         }
     })();

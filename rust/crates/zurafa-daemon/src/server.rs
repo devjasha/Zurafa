@@ -550,16 +550,16 @@ async fn request(
         Request::UiChatRead { id, block, from } => {
             // A remote pane's agent runs on its host: the chat comes from the daemon there.
             let snapshot = terms.dispatcher.snapshot();
-            let remote = snapshot.sessions.values().find_map(|s| {
+            let Some((pid, remote)) = snapshot.sessions.values().find_map(|s| {
                 let b = s.blocks.get(&block)?;
-                Some((crate::hosts::ssh_destination(s.remote.as_ref()?), b.foreground.as_ref().map(|p| p.pid)))
-            });
-            let remote = match remote {
-                Some((_, None)) => return Some(error(id, "The remote pane has not reported its agent yet")),
-                Some((dest, Some(pid))) => Some((dest, pid)),
-                None => None,
+                Some((b.foreground.as_ref().map(|p| p.pid), s.remote.as_ref().map(crate::hosts::ssh_destination)))
+            }) else {
+                return Some(error(id, format!("no pane {block:?}")));
             };
-            match tokio::task::spawn_blocking(move || crate::chat::read(&block, from, remote)).await {
+            if remote.is_some() && pid.is_none() {
+                return Some(error(id, "The remote pane has not reported its agent yet"));
+            }
+            match tokio::task::spawn_blocking(move || crate::chat::read(&block, from, pid.unwrap_or(0), remote)).await {
                 Ok(Ok((lines, next))) => json!({"id":id,"type":"ui.chat","lines":lines,"next":next}),
                 Ok(Err(e)) => error(id, e),
                 Err(e) => error(id, e),
