@@ -79,10 +79,13 @@ import UIKit
                 shown[id] = end
             }
             for (data, end) in queued { receive(id, data, end) }
-            // A size change makes full-screen programs redraw for the phone.
+            // A size change makes a full-screen program redraw for the phone. Only for one: a shell redraws
+            // its prompt on every resize and leaves a line break behind, on the Mac too.
             let size = view.gridSize
-            mac.send(Msg(type: "resize", cols: size.cols, rows: max(size.rows - 1, 1), terminal: id))
-            mac.send(Msg(type: "resize", cols: size.cols, rows: size.rows, terminal: id))
+            if view.laidOut, view.engine.alternateScreen {
+                mac.send(Msg(type: "resize", cols: size.cols, rows: max(size.rows - 1, 1), terminal: id))
+                mac.send(Msg(type: "resize", cols: size.cols, rows: size.rows, terminal: id))
+            }
         }
     }
 
@@ -100,7 +103,8 @@ import UIKit
         grids[id] = nil
         place(id)
         let size = view.gridSize
-        mac.send(view.bounds.width > 0 && size.cols > 0 ? Msg(type: "claim", cols: size.cols, rows: size.rows, terminal: id) : Msg(type: "claim", terminal: id))
+        // Not laid out yet: claim without a size; the first layout sends the real one.
+        mac.send(view.laidOut ? Msg(type: "claim", cols: size.cols, rows: size.rows, terminal: id) : Msg(type: "claim", terminal: id))
     }
 
     /// Off screen, the phone's size stops counting and the terminal goes back to the Mac's.

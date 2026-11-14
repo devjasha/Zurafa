@@ -62,6 +62,8 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
     }
 
     var gridSize: (cols: Int, rows: Int) { (engine.cols, engine.rows) }
+    /// The grid fits the view: until the first layout it is the engine's 80×24, which is no one's size.
+    private(set) var laidOut = false
 
     func feed(byteArray: ArraySlice<UInt8>) {
         engine.feed(byteArray)
@@ -132,6 +134,7 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
         guard changed || pixels != cellPixels else { return }
         cellPixels = pixels
         engine.resize(cols: grid.cols, rows: grid.rows, cellPixelWidth: pixels.width, cellPixelHeight: pixels.height)
+        laidOut = true
         (scrollFraction, flingVelocity) = (0, 0)
         scheduleFrame()
         if changed { onResize?(grid.cols, grid.rows) }
