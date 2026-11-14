@@ -18,6 +18,8 @@
 		A10000000000000000000005 /* NerdFontFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* NerdFontFallback.swift */; };
 		A10000000000000000000006 /* Resources/SymbolsNerdFontMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */; };
 		A10000000000000000000007 /* Program.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Program.swift */; };
+		A10000000000000000000009 /* ChatMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* ChatMotion.swift */; };
+		A1000000000000000000000A /* Resources/zurafa-star.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* Resources/zurafa-star.png */; };
 		A1000000000000000000C0DE /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* ChatModel.swift */; };
 		A10000000000000000000008 /* ZurafaAgents.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* ZurafaAgents.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -53,6 +55,8 @@
 		A20000000000000000000004 /* NerdFontFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NerdFontFallback.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* Resources/SymbolsNerdFontMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/SymbolsNerdFontMono-Regular.ttf"; sourceTree = "<group>"; };
 		A20000000000000000000006 /* Program.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Program.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* ChatMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMotion.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* Resources/zurafa-star.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Resources/zurafa-star.png"; sourceTree = "<group>"; };
 		A20000000000000000000007 /* ChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModel.swift; sourceTree = "<group>"; };
 		AE0000000000000000000011 /* GhosttyTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminal.swift; sourceTree = "<group>"; };
 		AE0000000000000000000012 /* TerminalRenderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalRenderView.swift; sourceTree = "<group>"; };
@@ -127,6 +131,8 @@
 				A20000000000000000000004 /* NerdFontFallback.swift */,
 				A20000000000000000000006 /* Program.swift */,
 				A20000000000000000000007 /* ChatModel.swift */,
+				A20000000000000000000008 /* ChatMotion.swift */,
+				A20000000000000000000009 /* Resources/zurafa-star.png */,
 				AE0000000000000000000011 /* GhosttyTerminal.swift */,
 				AE0000000000000000000012 /* TerminalRenderView.swift */,
 				AE0000000000000000000013 /* TerminalFrame.swift */,
@@ -242,6 +248,7 @@
 			files = (
 				A10000000000000000000006 /* Resources/SymbolsNerdFontMono-Regular.ttf in Resources */,
 				AE0000000000000000000004 /* Resources/Ghostty-LICENSE.txt in Resources */,
+				A1000000000000000000000A /* Resources/zurafa-star.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -265,6 +272,7 @@
 				A10000000000000000000002 /* EventModels.swift in Sources */,
 				A10000000000000000000003 /* Layout.swift in Sources */,
 				A1000000000000000000C0DE /* ChatModel.swift in Sources */,
+				A10000000000000000000009 /* ChatMotion.swift in Sources */,
 				AE0000000000000000000001 /* GhosttyTerminal.swift in Sources */,
 				AE0000000000000000000002 /* TerminalRenderView.swift in Sources */,
 				AE0000000000000000000003 /* TerminalFrame.swift in Sources */,

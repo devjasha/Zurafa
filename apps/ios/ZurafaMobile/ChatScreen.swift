@@ -62,7 +62,9 @@ extension BlockSnapshot {
                     if !lines.isEmpty {
                         var log = self.log
                         lines.forEach { log.add(Data($0.utf8)) }
-                        self.log = log
+                        // New lines rise into place once the chat has loaded; its history lands at once.
+                        if self.log.items.isEmpty || UIAccessibility.isReduceMotionEnabled { self.log = log }
+                        else { withAnimation(.snappy(duration: 0.3)) { self.log = log } }
                     }
                     next = reply.next ?? next
                 }
@@ -253,6 +255,7 @@ struct PhoneComposer<Menus: View>: View {
     @State private var files = false
     /// Picks going with the next message, as thumbnails above the text, as on the Mac.
     @State private var attached: [Attached] = []
+    @State private var sent = 0
 
     private var suggestions: [Suggestion] {
         guard let word = Completion.token(draft), let dir else { return [] }
@@ -289,6 +292,7 @@ struct PhoneComposer<Menus: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: submit) {
                     Image(systemName: "chevron.up").font(.system(size: 15, weight: .semibold))
+                        .symbolEffect(.bounce.up, value: sent)
                         .frame(width: 34, height: 34)
                         .foregroundStyle(ready ? Color.primary : Color.secondary)
                         .background(Color.primary.opacity(ready ? 0.22 : 0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -347,6 +351,7 @@ struct PhoneComposer<Menus: View>: View {
 extension PhoneComposer {
     /// Sends the picks as @-mentions ahead of the text, as the Mac does.
     func submit() {
+        sent += 1
         if !attached.isEmpty {
             draft = (attached.map { "@" + $0.path } + [draft]).joined(separator: " ")
             attached = []
@@ -486,6 +491,7 @@ private struct PhoneTurn: View {
     /// The pane's folder, which the changed files are shown under.
     let dir: String?
     @State private var open: Bool?
+    @State private var finished = 0
 
     var body: some View {
         let shown = open ?? live
@@ -497,15 +503,27 @@ private struct PhoneTurn: View {
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .background(Color.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
+                .transition(.asymmetric(insertion: .scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity), removal: .opacity))
             }
             if live || !turn.work.isEmpty {
                 Button { withAnimation(.snappy) { open = !shown } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: shown ? "chevron.down" : "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(.secondary).frame(width: 14)
-                        ProgramGlyph(program: program).frame(width: 14, height: 14)
-                            .foregroundStyle(program.badge.color.map { Color(hex: $0) } ?? .primary)
+                        // While the agent works its star turns in place of the glyph; when it answers, it bursts back.
+                        ZStack {
+                            if live {
+                                WorkingStar(waiting: record?.state == "blocked").transition(.scale(scale: 0.3).combined(with: .opacity))
+                            } else {
+                                ProgramGlyph(program: program).foregroundStyle(program.badge.color.map { Color(hex: $0) } ?? .primary)
+                                    .transition(.scale(scale: 0.3).combined(with: .opacity))
+                            }
+                            SparkleBurst(trigger: finished)
+                        }
+                        .frame(width: 14, height: 14)
+                        .animation(.spring(duration: 0.4, bounce: 0.5), value: live)
                         if live {
-                            TimelineView(.periodic(from: .now, by: 1)) { ctx in Text(liveTitle(ctx.date)) }
+                            TimelineView(.periodic(from: .now, by: 1)) { ctx in Text(liveTitle(ctx.date)).contentTransition(.numericText()) }
+                                .shimmer()
                         } else {
                             Text(title)
                         }
@@ -516,7 +534,7 @@ private struct PhoneTurn: View {
                 .disabled(turn.work.isEmpty)
                 if shown {
                     VStack(alignment: .leading, spacing: 6) {
-                        ForEach(turn.work) { PhoneWorkRow(item: $0) }
+                        ForEach(turn.work) { PhoneWorkRow(item: $0).transition(.rise) }
                     }
                     .padding(.leading, 10)
                     .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(0.15)).frame(width: 1) }
@@ -535,6 +553,7 @@ private struct PhoneTurn: View {
             let changed = turn.changedFiles
             if !changed.isEmpty { PhoneChangedFiles(files: changed, edits: turn.work.filter(\.ok).flatMap(\.edits), dir: dir) }
         }
+        .onChange(of: live) { was, now in if was && !now { finished += 1 } }
     }
 
     private var title: String {
@@ -569,7 +588,7 @@ private struct PhoneWorkRow: View {
                             Text("+\(lines.filter { $0.mark == .added }.count)").foregroundStyle(.green).font(.caption.monospaced())
                             Text("−\(lines.filter { $0.mark == .removed }.count)").foregroundStyle(.red).font(.caption.monospaced())
                         }
-                        if item.result == nil { ProgressView().controlSize(.mini) }
+                        if item.result == nil { HopDots() }
                         else if !item.ok { Image(systemName: "xmark").font(.caption2.weight(.bold)).foregroundStyle(.red) }
                     }
                     .font(.footnote)

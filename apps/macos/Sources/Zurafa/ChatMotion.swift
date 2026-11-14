@@ -10,6 +10,12 @@ enum Iris {
     static let colors = [pink, lavender, sky, peach]
 }
 
+#if os(macOS)
+private let starImage = zurafaStar.map { Image(nsImage: $0) }
+#else
+private let starImage = UIImage(named: "zurafa-star").map { Image(uiImage: $0) }
+#endif
+
 /// Zurafa's star as the mark of a turn in progress: it turns and breathes while the agent works,
 /// and gives a little wiggle every so often while it waits on you.
 struct WorkingStar: View {
@@ -24,7 +30,7 @@ struct WorkingStar: View {
 
     var body: some View {
         let star = Group {
-            if let zurafaStar { Image(nsImage: zurafaStar).resizable().scaledToFit() }
+            if let starImage { starImage.resizable().scaledToFit() }
             else { Image(systemName: "sparkle").foregroundStyle(Iris.lavender) }
         }
         .frame(width: size, height: size)
