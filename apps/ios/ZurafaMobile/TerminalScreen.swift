@@ -122,7 +122,11 @@ struct TerminalScreen: View {
             .environment(\.colorScheme, mac.appearance == nil ? .dark : scheme)
             .sheet(isPresented: $overview, onDismiss: { if leaving { dismiss() } }) {
                 NavigationStack {
-                    SessionsList(current: id, pick: { id = $0; overview = false }, open: { id = $0; overview = false })
+                    SessionsList(current: id, pick: { id = $0; overview = false }, open: { id = $0; overview = false }) { gone in
+                        // The tab on screen was closed: on to another tab of its workspace, or back to Sessions.
+                        guard gone.contains(id) else { return }
+                        if let next = session?.windows.first(where: { $0.panes.allSatisfy { !gone.contains($0) } })?.selectedBlock { id = next } else { leaving = true; overview = false }
+                    }
                         .navigationTitle("Workspaces")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
@@ -495,5 +499,17 @@ extension View {
         } else {
             background(.ultraThinMaterial, in: shape)
         }
+    }
+}
+
+/// Keeps the edge swipe back on screens that hide the back button, as the pane screen does.
+extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
+    override open func viewDidLoad() {
+        super.viewDidLoad()
+        interactivePopGestureRecognizer?.delegate = self
+    }
+
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        viewControllers.count > 1
     }
 }

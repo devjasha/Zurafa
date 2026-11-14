@@ -70,6 +70,8 @@ struct SessionsList: View {
     var pick: ((String) -> Void)? = nil
     /// Opens a pane that was just created.
     let open: (String) -> Void
+    /// Told the panes of a tab once it is closed.
+    var closed: (([String]) -> Void)? = nil
     @ObservedObject private var mac = MacClient.shared
     @AppStorage("macAddress") private var address = ""
     @State private var error: String?
@@ -98,7 +100,7 @@ struct SessionsList: View {
                         .swipeActions {
                             Button("Close", role: .destructive) {
                                 // Floating panes first, so none is docked in place of a closed one.
-                                run { for pane in (window.floating ?? []).map(\.blockID) + window.layout.panes { try await mac.close(pane, in: session.sessionID) } }
+                                run { for pane in (window.floating ?? []).map(\.blockID) + window.layout.panes { try await mac.close(pane, in: session.sessionID) }; closed?(window.panes) }
                             }
                         }
                     }
