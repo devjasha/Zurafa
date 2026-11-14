@@ -167,8 +167,8 @@ struct PhoneChat: View {
     }
 
     private var composer: some View {
-        PhoneComposer(draft: $draft, focus: $composing, agent: agent, dir: block?.foreground?.cwd ?? block?.pwd, send: send) {
-            AgentMenus(agent: agent, program: program, settings: settings, change: agent == "claude" ? apply : nil)
+        PhoneComposer(draft: $draft, focus: $composing, agent: agent, dir: block?.foreground?.cwd ?? block?.pwd, send: send) { compact in
+            AgentMenus(agent: agent, program: program, settings: settings, change: agent == "claude" ? apply : nil, compact: compact)
         }
     }
 
@@ -240,7 +240,8 @@ struct PhoneComposer<Menus: View>: View {
     var agent = ""
     var dir: String?
     let send: () -> Void
-    @ViewBuilder let menus: Menus
+    /// The chips; `true` asks for their narrow form, used when the full one does not fit.
+    @ViewBuilder let menus: (Bool) -> Menus
     @ObservedObject private var catalog = CompletionCatalog.shared
     @State private var photos = false
     @State private var files = false
@@ -270,7 +271,13 @@ struct PhoneComposer<Menus: View>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Attach")
-                ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { menus } }
+                // Full chips, else narrow ones, else narrow ones that scroll: never one cut off under Send.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) { menus(false) }
+                    HStack(spacing: 6) { menus(true) }
+                    ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { menus(true) } }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: send) {
                     Image(systemName: "chevron.up").font(.system(size: 15, weight: .semibold))
                         .frame(width: 34, height: 34)
@@ -336,6 +343,8 @@ struct AgentMenus: View {
     let program: Program
     let settings: AgentSettings
     let change: ((AgentSettings) -> Void)?
+    /// Narrow chips: access as its icon alone, no chevrons.
+    var compact = false
     /// New Chat: the agents to choose from.
     var pickAgent: ((String) -> Void)? = nil
     @ObservedObject private var models = PhoneModels.shared
@@ -375,7 +384,7 @@ struct AgentMenus: View {
                         .foregroundStyle(program.badge.color.map { Color(hex: $0) } ?? .primary)
                     Text(settings.model.map { models.name(agent, $0) } ?? "Default model")
                     if let effort = settings.effort { Text(effort.capitalized).foregroundStyle(.secondary) }
-                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    if !compact { Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary) }
                 }
             }
         }
@@ -391,10 +400,13 @@ struct AgentMenus: View {
             } label: {
                 chip {
                     Image(systemName: mode?.icon ?? "lock").foregroundStyle(settings.mode == "bypassPermissions" ? Color.yellow : .primary)
-                    Text(mode?.title ?? "Default access")
-                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    if !compact {
+                        Text(mode?.title ?? "Default access")
+                        Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    }
                 }
             }
+            .accessibilityLabel(mode?.title ?? "Default access")
         }
     }
 
@@ -707,8 +719,8 @@ struct PhoneNewChat: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                PhoneComposer(draft: $draft, focus: $composing, agent: agent, dir: folder, send: start) {
-                    AgentMenus(agent: agent, program: ["claude": Program.claude, "codex": .codex, "pi": .pi][agent] ?? .shell, settings: settings, change: { settings.merge($0) },
+                PhoneComposer(draft: $draft, focus: $composing, agent: agent, dir: folder, send: start) { compact in
+                    AgentMenus(agent: agent, program: ["claude": Program.claude, "codex": .codex, "pi": .pi][agent] ?? .shell, settings: settings, change: { settings.merge($0) }, compact: compact,
                                pickAgent: { agent = $0; settings = AgentSettings() })
                 }
                 Menu {
