@@ -326,31 +326,18 @@ struct KeyBar: View {
     @State private var keyboardUp = false
     @State private var photos = false
     @State private var files = false
+    @State private var commands = false
+    /// A command picked in the popover, run once it has closed so a picker can open.
+    @State private var pending: (() -> Void)?
+    @AppStorage(QuickActions.key) private var quickRaw = ""
 
     var body: some View {
         HStack(spacing: 10) {
-            Menu {
-                Button("Paste", systemImage: "doc.on.clipboard") { view.paste(nil) }
-                Section("Attach") {
-                    Button("Photo Library", systemImage: "photo.on.rectangle") { photos = true }
-                    Button("Files", systemImage: "folder") { files = true }
-                }
-                Section {
-                    Button("Interrupt  ⌃C") { key([0x03]) }
-                    Button("End of Input  ⌃D") { key([0x04]) }
-                    Button("Suspend  ⌃Z") { key([0x1a]) }
-                    Button("Clear  ⌃L") { key([0x0c]) }
-                    Button("Search History  ⌃R") { key([0x12]) }
-                }
-                Section {
-                    Button("Up", systemImage: "arrow.up") { view.sendKeyUp() }
-                    Button("Down", systemImage: "arrow.down") { view.sendKeyDown() }
-                    Button("Left", systemImage: "arrow.left") { view.sendKeyLeft() }
-                    Button("Right", systemImage: "arrow.right") { view.sendKeyRight() }
-                }
-            } label: {
-                Image(systemName: "command").frame(width: 52, height: 44)
+            Button(keyboardUp ? "Hide Keyboard" : "Show Keyboard", systemImage: keyboardUp ? "keyboard.chevron.compact.down" : "keyboard") {
+                _ = keyboardUp ? view.resignFirstResponder() : view.becomeFirstResponder()
             }
+            .labelStyle(.iconOnly)
+            .frame(width: 52, height: 44)
             .glass(in: Capsule())
 
             HStack(spacing: 0) {
@@ -365,12 +352,24 @@ struct KeyBar: View {
             }
             .glass(in: Capsule())
 
-            Button(keyboardUp ? "Hide Keyboard" : "Show Keyboard", systemImage: keyboardUp ? "keyboard.chevron.compact.down" : "keyboard") {
-                _ = keyboardUp ? view.resignFirstResponder() : view.becomeFirstResponder()
+            // On the right, under the thumb: a tap opens the commands, a hold the quick actions from Settings.
+            Menu {
+                let quick = QuickActions.decode(quickRaw)
+                if quick.isEmpty { Text("Add quick actions in Settings") }
+                ForEach(quick) { action in
+                    Button(action.title) { run(action) }
+                }
+            } label: {
+                Image(systemName: "command").frame(width: 52, height: 44)
+            } primaryAction: {
+                commands = true
             }
-            .labelStyle(.iconOnly)
-            .frame(width: 52, height: 44)
             .glass(in: Capsule())
+            .accessibilityLabel("Commands")
+            .accessibilityHint("Hold for quick actions")
+            .popover(isPresented: $commands) {
+                commandList.presentationCompactAdaptation(.popover)
+            }
         }
         .font(.title3)
         .foregroundStyle(.primary)
@@ -379,6 +378,56 @@ struct KeyBar: View {
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewMetaModifierReset, object: view)) { _ in alt = false }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
+    }
+
+    private var commandList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                command("Paste", "doc.on.clipboard") { view.paste(nil) }
+                command("Photo Library", "photo.on.rectangle") { photos = true }
+                command("Files", "folder") { files = true }
+                Divider()
+                command("Interrupt  ⌃C", "xmark.octagon") { key([0x03]) }
+                command("End of Input  ⌃D", "eject") { key([0x04]) }
+                command("Suspend  ⌃Z", "pause") { key([0x1a]) }
+                command("Clear  ⌃L", "clear") { key([0x0c]) }
+                command("Search History  ⌃R", "clock.arrow.circlepath") { key([0x12]) }
+                Divider()
+                HStack(spacing: 0) {
+                    arrow("Up", "arrow.up") { view.sendKeyUp() }
+                    arrow("Down", "arrow.down") { view.sendKeyDown() }
+                    arrow("Left", "arrow.left") { view.sendKeyLeft() }
+                    arrow("Right", "arrow.right") { view.sendKeyRight() }
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .frame(width: 260, height: 400)
+        .onDisappear { pending?(); pending = nil }
+    }
+
+    private func command(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button { pending = action; commands = false } label: {
+            Label(title, systemImage: symbol).frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16).frame(minHeight: 40).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .font(.body)
+    }
+
+    /// Arrows keep the popover open: they are often pressed a few times in a row.
+    private func arrow(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(title, systemImage: symbol, action: action)
+            .labelStyle(.iconOnly)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+    }
+
+    /// A quick action: its text as typed, then Return if it runs.
+    private func run(_ action: QuickAction) {
+        key(Array(action.text.utf8))
+        if action.enter { view.send([0x0d]) }
     }
 
     /// Sends bytes the way a typed key would: a pending Alt prefixes Escape, and both modifiers clear.
