@@ -472,7 +472,7 @@ private struct PhoneTurn: View {
                 }
             }
             if let answer = turn.answer {
-                Text(markdown(answer.text)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                PhoneMarkdown(text: answer.text).equatable()
                 HStack(spacing: 10) {
                     Button { UIPasteboard.general.string = answer.text } label: { Image(systemName: "doc.on.doc") }
                         .buttonStyle(.plain).accessibilityLabel("Copy the answer")
@@ -508,6 +508,7 @@ private struct PhoneWorkRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Button { open.toggle() } label: {
                     HStack(spacing: 6) {
+                        Image(systemName: Self.icon(item.tool)).frame(width: 16).foregroundStyle(item.ok ? Color.secondary : .red)
                         Text(item.tool).foregroundStyle(item.ok ? Color.secondary : .red)
                         Text(item.input.hasPrefix("/") && !item.input.contains(" ") ? URL(fileURLWithPath: item.input).lastPathComponent : item.input)
                             .font(.footnote.monospaced()).lineLimit(1)
@@ -520,6 +521,8 @@ private struct PhoneWorkRow: View {
                         else if !item.ok { Image(systemName: "xmark").font(.caption2.weight(.bold)).foregroundStyle(.red) }
                     }
                     .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 if open {
@@ -532,7 +535,22 @@ private struct PhoneWorkRow: View {
                 }
             }
         } else {
-            Text(markdown(item.text)).font(.subheadline).foregroundStyle(.secondary)
+            // What the agent says between its steps: its own words, so as readable as its answer, a shade quieter.
+            PhoneMarkdown(text: item.text, ink: Color.primary.opacity(0.8)).equatable()
+        }
+    }
+
+    /// Work reads as activity, not conversation: each tool by its kind.
+    static func icon(_ tool: String) -> String {
+        switch tool.lowercased() {
+        case "bash", "shell", "exec", "exec_command", "local_shell", "bashoutput": "terminal"
+        case "read", "view", "notebookread": "doc.text"
+        case "edit", "write", "multiedit", "notebookedit", "apply_patch", "patch": "pencil"
+        case "grep", "glob", "search", "find", "ls": "magnifyingglass"
+        case "webfetch", "websearch", "web_search", "fetch": "globe"
+        case "task", "agent": "person.2"
+        case "todowrite", "update_plan": "checklist"
+        default: "wrench.and.screwdriver"
         }
     }
 }
@@ -701,8 +719,65 @@ private struct PhoneEditDiff: View {
     }
 }
 
-/// Bold, italics, code and links; headings and lists stay as written.
-// shortcut: inline Markdown only (no package in the phone app); add MarkdownUI if answers need block layout.
+/// The agent's Markdown laid out as on the Mac (`ChatMarkdown`): headings, lists, quotes, code and tables,
+/// at the phone's body size so it follows the Text Size setting.
+private struct PhoneMarkdown: View, Equatable {
+    let text: String
+    var ink = Color.primary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(MarkdownBlock.parse(text).enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .heading(let level, let t):
+                    Text(markdown(t)).font(level == 1 ? .title3.weight(.semibold) : level == 2 ? .headline : .body.weight(.semibold))
+                        .padding(.top, level <= 2 ? 4 : 0)
+                case .paragraph(let t):
+                    Text(markdown(t))
+                case .list(let items):
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(item.marker).foregroundStyle(ink.opacity(0.7)).monospacedDigit()
+                                Text(markdown(item.text))
+                            }
+                            .padding(.leading, CGFloat(item.depth) * 16)
+                        }
+                    }
+                case .quote(let t):
+                    Text(markdown(t)).foregroundStyle(ink.opacity(0.7))
+                        .padding(.leading, 12)
+                        .overlay(alignment: .leading) { Rectangle().fill(ink.opacity(0.2)).frame(width: 3) }
+                case .code(_, let code):
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Text(code).font(.footnote.monospaced()).fixedSize().padding(10)
+                    }
+                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                case .table(let rows):
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                            ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                                GridRow { ForEach(Array(row.enumerated()), id: \.offset) { _, cell in Text(markdown(cell)).fontWeight(i == 0 ? .semibold : nil) } }
+                                if i == 0 { Divider() }
+                            }
+                        }
+                        .font(.subheadline)
+                        .padding(10)
+                    }
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                case .rule:
+                    Divider()
+                }
+            }
+        }
+        .font(.body)
+        .foregroundStyle(ink)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Bold, italics, code and links within a line.
 private func markdown(_ text: String) -> AttributedString {
     (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
 }
