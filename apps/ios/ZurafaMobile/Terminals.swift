@@ -80,9 +80,11 @@ import UIKit
             }
             for (data, end) in queued { receive(id, data, end) }
             // A size change makes a full-screen program redraw for the phone. Only for one: a shell redraws
-            // its prompt on every resize and leaves a line break behind, on the Mac too.
+            // its prompt on every resize and leaves a line break behind, on the Mac too. And only when the
+            // phone's copy may be partial (first open, or output it missed): otherwise it already has the
+            // screen, and the two redraws over the network show as a jump on every pane switch.
             let size = view.gridSize
-            if view.laidOut, view.engine.alternateScreen {
+            if view.laidOut, view.engine.alternateScreen, request.since == nil || reply?.gap == true {
                 mac.send(Msg(type: "resize", cols: size.cols, rows: max(size.rows - 1, 1), terminal: id))
                 mac.send(Msg(type: "resize", cols: size.cols, rows: size.rows, terminal: id))
             }
