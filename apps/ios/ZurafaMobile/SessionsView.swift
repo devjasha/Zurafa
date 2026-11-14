@@ -87,14 +87,22 @@ struct SessionsList: View {
             if mac.state != .connected { Section { status } }
             ForEach(sessions, id: \.sessionID) { session in
                 Section {
-                    // One row per Mac tab; its panes are switched inside the terminal screen.
-                    ForEach(session.windows, id: \.windowID) { window in
+                    // One row per Mac tab; its panes are switched inside the terminal screen. A tab whose agent
+                    // spawned others is a card with them nested under it, as in the Mac's sidebar.
+                    let family = AgentFamily(tabs: session.tabs, meta: session.meta)
+                    ForEach(session.windows.filter { !family.isNested(session.tab($0)) }, id: \.windowID) { window in
                         let id = window.selectedBlock
+                        let tab = session.tab(window)
+                        let agents = family.agents(of: tab), natives = family.natives(of: tab)
                         link(id) {
-                            PaneRow(label: window.label, block: session.blocks[id], remote: session.remote,
-                                    behind: window.panes.filter { $0 != id }.prefix(2)
-                                        .map { session.blocks[$0]?.program(remote: session.remote) ?? .shell },
-                                    agentStates: window.panes.flatMap { session.blocks[$0]?.statuses.agentStates ?? [] })
+                            if agents.isEmpty && natives.isEmpty {
+                                PaneRow(label: window.label, block: session.blocks[id], remote: session.remote,
+                                        behind: window.panes.filter { $0 != id }.prefix(2)
+                                            .map { session.blocks[$0]?.program(remote: session.remote) ?? .shell },
+                                        agentStates: window.panes.flatMap { session.blocks[$0]?.statuses.agentStates ?? [] })
+                            } else {
+                                AgentCardRow(meta: session.meta(id), agents: agents.map(session.meta), natives: natives)
+                            }
                         }
                         .listRowBackground(current.map(window.panes.contains) == true ? Color.accentColor.opacity(0.25) : rowBackground)
                         .swipeActions {
@@ -102,6 +110,17 @@ struct SessionsList: View {
                                 // Floating panes first, so none is docked in place of a closed one.
                                 run { for pane in (window.floating ?? []).map(\.blockID) + window.layout.panes { try await mac.close(pane, in: session.sessionID) }; closed?(window.panes) }
                             }
+                        }
+                        ForEach(agents, id: \.self) { pane in
+                            link(pane) { AgentChildRow(label: family.label(of: pane), meta: session.meta(pane)) }
+                                .listRowBackground(pane == current ? Color.accentColor.opacity(0.25) : rowBackground)
+                        }
+                        // A native subagent has no terminal: tapping it opens the agent that runs it.
+                        ForEach(natives) { agent in
+                            link(agent.pane) {
+                                AgentChildRow(label: agent.label, meta: PaneMeta(program: session.meta(agent.pane).program, statuses: ["": agent.record], shown: ""))
+                            }
+                            .listRowBackground(rowBackground)
                         }
                     }
                     // Running in no tab on the Mac, which lists them under its tabs too.
@@ -153,6 +172,78 @@ struct SessionsList: View {
 
     private func run(_ action: @escaping () async throws -> Void) {
         Task { do { try await action() } catch { self.error = error.localizedDescription } }
+    }
+}
+
+extension SessionSnapshot {
+    /// The tabs and pane details the Mac's sidebar builds from the same snapshot.
+    var tabs: [Tab] { windows.map(tab) }
+    func tab(_ w: WindowSnapshot) -> Tab {
+        Tab(id: w.windowID, label: w.label, layout: w.layout, focus: w.selectedBlock, zoomed: w.zoomedBlock != nil, floating: w.floating ?? [])
+    }
+    func meta(_ pane: String) -> PaneMeta {
+        guard let block = blocks[pane] else { return PaneMeta() }
+        var m = PaneMeta(program: block.program(remote: remote), title: block.title ?? "Shell",
+                         ended: block.running ? nil : "exited", parent: block.parent,
+                         started: block.started.map { Date(timeIntervalSince1970: $0 / 1000) })
+        for (key, record) in block.statuses.records { m.setStatus(key, record) }
+        m.shown = block.statuses.shown
+        return m
+    }
+}
+
+/// A tab whose agent spawned others: the agent, its task, and how many of its agents are done.
+private struct AgentCardRow: View {
+    let meta: PaneMeta, agents: [PaneMeta], natives: [NativeAgent]
+
+    var body: some View {
+        let total = agents.count + natives.count
+        let done = agents.filter { $0.status == "completed" }.count + natives.filter { $0.record.state == "done" }.count
+        HStack {
+            PaneStack(front: meta.program, behind: [], size: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(meta.program.title)
+                    if let started = meta.started {
+                        Text(Calendar.current.isDateInToday(started)
+                             ? started.formatted(date: .omitted, time: .shortened)
+                             : started.formatted(.dateTime.month(.abbreviated).day()))
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
+                Text(meta.label ?? meta.title).fontWeight(.semibold).lineLimit(1)
+                Text("\(total == 1 ? "1 agent" : "\(total) agents") · \(done)/\(total) done")
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
+            Spacer()
+            // The Mac's orchestrator mark.
+            Image(systemName: "point.3.connected.trianglepath.dotted")
+                .foregroundStyle(.purple)
+                .accessibilityLabel("Orchestrating agents")
+        }
+    }
+}
+
+/// One agent in a card, indented under it, with what it is doing in the Mac's words.
+private struct AgentChildRow: View {
+    let label: String, meta: PaneMeta
+
+    var body: some View {
+        let (state, color): (String, Color) = if meta.ended != nil { ("Exited", .secondary) } else {
+            switch meta.status {
+            case "blocked": (meta.statuses.values.contains { $0.state == "error" } ? "Failed" : "Needs you", .pink)
+            case "working": ("Working", .orange)
+            case "completed": ("Done", .green)
+            default: ("Idle", .secondary)
+            }
+        }
+        HStack {
+            PaneStack(front: meta.program, behind: [], size: 20)
+            Text(label).lineLimit(1)
+            Spacer()
+            Text(state).font(.caption).foregroundStyle(color)
+        }
+        .padding(.leading, 24)
     }
 }
 

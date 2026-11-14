@@ -25,47 +25,11 @@ struct Toast: Identifiable, Equatable {
     let blocked, permission: Bool
 }
 
-struct PaneMeta: Equatable {
-    var program: Program = .shell
-    var title = "Shell"
-    var cwd = "~"
-    var pwd: String?
-    var label: String?
-    var ended: String?
-    var statuses: [String: ProgramStatus] = [:]
-    /// The pane that spawned this one, and when this one started.
-    var parent: String?
-    var started: Date?
-    /// The agent conversation running in the pane, as its agent reported it.
-    var thread: AgentThread?
-    /// A pane whose program reports its status is an agent the chat view can show: the full
-    /// conversation for agents zurafa-orch can read (Claude Code, Codex, Pi), its answers for any other.
-    var hasChat: Bool { thread != nil || !statuses.isEmpty }
-    var agentName: String {
-        switch thread?.agent { case "claude": "Claude"; case "codex": "Codex"; case "pi": "Pi"
-        default: record?.app.flatMap { $0.isEmpty ? nil : $0.capitalized } ?? "the agent" }
-    }
-    /// Native subagents of the pane's agent, reported as "agent/<id>". They run inside it with no
-    /// pane of their own, so they show in its agent card and never stand for the pane's own state.
-    var subagents: [String: ProgramStatus] = [:]
-    /// The id of the record that stands for the pane, as the daemon picks it.
-    var shown: String?
-    var record: ProgramStatus? { shown.flatMap { statuses[$0] } }
-    mutating func setStatus(_ key: String, _ record: ProgramStatus?) {
-        if key.hasPrefix("agent/") { subagents[key] = record } else { statuses[key] = record }
-    }
+extension PaneMeta {
     var statusItems: [StatusItem] {
         statuses.map { StatusItem(id: $0.key, record: $0.value) }
             .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
     }
-    var status: String? {
-        record.map { $0.state == "done" ? "completed" : $0.state == "error" ? "blocked" : $0.state }
-    }
-    /// Claude Code blocked on a permission prompt: the only prompt whose keys Zurafa knows.
-    var waitingForPermission: Bool {
-        program == .claude && record?.state == "blocked" && record?.kind == "permission"
-    }
-    var statusMessage: String? { record?.msg }
 }
 
 struct StatusItem: Identifiable {
@@ -86,18 +50,6 @@ struct StatusItem: Identifiable {
         if let progress = record.progress { return "\(state) \(progress)%" }
         return state
     }
-}
-
-struct Tab: Identifiable {
-    var id: String
-    var label: String
-    var layout: Layout
-    var focus: String
-    var zoomed: Bool
-    var floating: [FloatingPane] = []
-    /// Docked panes in layout order, then floating ones.
-    var panes: [String] { layout.panes + floating.map(\.blockID) }
-    func isFloating(_ pane: String) -> Bool { floating.contains { $0.blockID == pane } }
 }
 
 enum EditorKind: String, Identifiable {

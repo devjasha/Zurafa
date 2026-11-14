@@ -1,84 +1,11 @@
 import SwiftUI
 
-/// Which panes in a workspace were spawned by which, so the tab of an agent that
-/// spawned others shows them as one card.
-struct AgentFamily {
-    let tabs: [Tab]
-    let meta: (String) -> PaneMeta
-    private let tabOfPane: [String: Tab]
-
-    init(tabs: [Tab], meta: @escaping (String) -> PaneMeta) {
-        self.tabs = tabs
-        self.meta = meta
-        var map: [String: Tab] = [:]
-        for tab in tabs { for pane in tab.panes { map[pane] = tab } }
-        tabOfPane = map
-    }
-
-    /// Every pane spawned from this tab, including ones its agents spawned in turn, oldest first.
-    func agents(of tab: Tab) -> [String] {
-        var found: [String] = []
-        var parents = Set(tab.panes)
-        while true {
-            let next = tabOfPane.keys
-                .filter { pane in meta(pane).parent.map(parents.contains) == true && !found.contains(pane) }
-                .sorted { (meta($0).started ?? .distantPast, $0) < (meta($1).started ?? .distantPast, $1) }
-            if next.isEmpty { return found }
-            found += next
-            parents = Set(next)
-        }
-    }
-
-    /// A tab made only of panes spawned from another tab here: it is shown inside that tab's card.
-    func isNested(_ tab: Tab) -> Bool {
-        tab.panes.allSatisfy { pane in
-            guard let parent = meta(pane).parent, let home = tabOfPane[parent] else { return false }
-            return home.id != tab.id
-        }
-    }
-
-    /// Native subagents of this tab's agents and the agents they spawned, while those agents run.
-    func natives(of tab: Tab) -> [NativeAgent] {
-        // An agent split beside its parent is in both lists.
-        (tab.panes + agents(of: tab).filter { !tab.panes.contains($0) }).flatMap { pane -> [NativeAgent] in
-            let m = meta(pane)
-            // Finished subagents outlive the agent that ran them; the daemon clears only working records.
-            guard m.ended == nil, m.program != .shell else { return [] }
-            return m.subagents.map { key, record in
-                // Claude Code reports a running subagent itself, under its bare id and with its task as title.
-                var record = record
-                if let own = m.statuses[String(key.dropFirst("agent/".count))]?.title, !own.isEmpty { record.title = own }
-                return NativeAgent(pane: pane, key: key, record: record)
-            }
-                // shortcut: records carry no start time, so they sort by id to hold still; add one if order matters.
-                .sorted { $0.key < $1.key }
-        }
-    }
-
-    /// A spawned tab is named "agent: task" or by its -l label; the row's icon already shows the agent.
-    func label(of pane: String) -> String {
-        if let tab = tabOfPane[pane], tab.layout.panes.first == pane {
-            if let colon = tab.label.range(of: ": "), !tab.label[..<colon.lowerBound].contains(" ") {
-                return String(tab.label[colon.upperBound...])
-            }
-            return tab.label
-        }
-        let m = meta(pane)
-        return m.label ?? m.title
-    }
-
+extension AgentFamily {
     /// The branch an agent works on, when it is not `head`, the "repo/branch" its card already shows.
     func branch(of pane: String, besides head: String?) -> String? {
         guard let own = GitHead.describe(meta(pane).pwd), own != head else { return nil }
         return own.split(separator: "/", maxSplits: 1).last.map(String.init)
     }
-}
-
-/// A subagent an agent runs inside itself, like Claude's Agent tool: a status record on its pane.
-struct NativeAgent: Identifiable {
-    let pane: String, key: String, record: ProgramStatus
-    var id: String { "\(pane) \(key)" }
-    var label: String { record.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Subagent" }
 }
 
 /// One row per spawned agent, shared by the sidebar card and the tab bar's hover popover.
