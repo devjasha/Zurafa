@@ -333,22 +333,21 @@ struct PhoneComposer<Menus: View>: View {
             if !attached.isEmpty { draft = (attached.map { "@" + $0.path } + [draft]).joined(separator: " "); attached = [] }
         }
         .attachments(photos: $photos, files: $files) { attached += $0 }
-        // Floats above the composer, so the text stays put while the list comes and goes.
-        .overlay(alignment: .top) {
+        // Above the composer in the layout, so the keyboard lifts it too; the composer stays at the bottom.
+        .safeAreaInset(edge: .top, spacing: 6) {
             if !shown.isEmpty {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(shown) { s in
                             Button { draft = Completion.accept(s, in: draft) } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: s.icon).foregroundStyle(.secondary).frame(width: 18)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(s.title).font(.subheadline.weight(.medium)).lineLimit(1)
-                                        if !s.detail.isEmpty { Text(s.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-                                    }
+                                // One line a row: the name, then its description as room allows.
+                                HStack(spacing: 8) {
+                                    Image(systemName: s.icon).font(.footnote).foregroundStyle(.secondary).frame(width: 16)
+                                    Text(s.title).font(.subheadline.weight(.medium)).lineLimit(1).layoutPriority(1)
+                                    if !s.detail.isEmpty { Text(s.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                                     Spacer(minLength: 0)
                                 }
-                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .padding(.horizontal, 12).frame(height: 34)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -357,9 +356,8 @@ struct PhoneComposer<Menus: View>: View {
                     .padding(.vertical, 4)
                 }
                 .scrollIndicators(.never)
-                .frame(height: min(CGFloat(shown.count) * 46 + 8, 260))
-                .glass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: false)
-                .alignmentGuide(.top) { $0[.bottom] + 8 }
+                .frame(height: min(CGFloat(shown.count) * 34 + 8, 152))
+                .glass(in: RoundedRectangle(cornerRadius: 14, style: .continuous), interactive: false)
                 .transition(.opacity.combined(with: .offset(y: 8)))
             }
         }
