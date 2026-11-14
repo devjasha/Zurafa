@@ -65,7 +65,10 @@ import Network
         drop(conn, reason: nil)
         let (host, port) = Self.endpoint(address)
         guard !host.isEmpty, let nwPort = NWEndpoint.Port(rawValue: port) else { return state = .failed("Enter your Mac's Tailscale name.") }
-        let c = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: port == 443 ? .tls : .tcp)
+        // Keystrokes go out at once: with Nagle each one waits a round trip for the last, which stutters over mobile data.
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        let c = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: NWParameters(tls: port == 443 ? NWProtocolTLS.Options() : nil, tcp: tcp))
         (conn, upgraded, head, decoder, state) = (c, false, Data(), FrameDecoder(), .connecting)
         c.stateUpdateHandler = { [weak self] s in
             MainActor.assumeIsolated {
