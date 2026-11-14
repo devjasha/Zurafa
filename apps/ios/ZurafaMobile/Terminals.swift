@@ -113,6 +113,12 @@ import UIKit
     /// Panes the Mac closed are forgotten.
     func sync(blocks: Set<String>) {
         for id in views.keys where !blocks.contains(id) { views[id] = nil; shown[id] = nil; grids[id] = nil }
+        // Unsent chat drafts of panes gone from the Mac; not while disconnected, when no panes are known.
+        guard !blocks.isEmpty else { return }
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(PhoneChat.draftKey) && !blocks.contains(String(key.dropFirst(PhoneChat.draftKey.count))) {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     private func receive(_ id: String, _ data: Data, _ end: UInt64?) {

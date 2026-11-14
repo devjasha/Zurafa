@@ -90,7 +90,8 @@ struct PhoneChat: View {
     @Binding var composerHeight: CGFloat
     @StateObject private var feed = PhoneChatFeed()
     @ObservedObject private var models = PhoneModels.shared
-    @State private var draft = ""
+    /// Kept per pane, so it waits through leaving, flipping and relaunching; SessionsView drops gone panes'.
+    @AppStorage private var draft: String
     @State private var changed = AgentSettings()
     @State private var problem: String?
     /// Questions answered here, hidden until the agent's transcript shows the answer.
@@ -98,6 +99,15 @@ struct PhoneChat: View {
     @FocusState private var composing: Bool
     /// How many of the newest turns are laid out.
     @State private var shown = 30
+
+    init(pane: String, block: BlockSnapshot?, remote: RemoteHost?, composerHeight: Binding<CGFloat>) {
+        self.pane = pane
+        self.block = block
+        self.remote = remote
+        _composerHeight = composerHeight
+        _draft = AppStorage(wrappedValue: "", PhoneChat.draftKey + pane)
+    }
+    static let draftKey = "draft."
 
     private var program: Program { block?.program(remote: remote) ?? .shell }
     private var agent: String { block?.agent(remote: remote) ?? "" }
@@ -318,6 +328,10 @@ struct PhoneComposer<Menus: View>: View {
         .padding(12)
         .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), interactive: false)
         .animation(.snappy(duration: 0.16), value: attached)
+        // The picks are already on the Mac: kept as the @-mentions they are sent as, so the saved draft holds them.
+        .onDisappear {
+            if !attached.isEmpty { draft = (attached.map { "@" + $0.path } + [draft]).joined(separator: " "); attached = [] }
+        }
         .attachments(photos: $photos, files: $files) { attached += $0 }
         // Floats above the composer, so the text stays put while the list comes and goes.
         .overlay(alignment: .top) {
@@ -902,7 +916,7 @@ struct PhoneNewChat: View {
     let session: String
     let started: (String) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var draft = ""
+    @AppStorage("newChatDraft") private var draft = ""
     @State private var agent = "claude"
     @State private var settings = AgentSettings()
     @State private var folders: [String] = []
@@ -957,6 +971,7 @@ struct PhoneNewChat: View {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 starting = false
                 guard !pane.isEmpty else { problem = "Could not start \(agent)"; return }
+                draft = ""
                 started(pane)
                 dismiss()
             } catch {
