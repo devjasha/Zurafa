@@ -318,6 +318,20 @@ struct PaneMap: View {
     }
 }
 
+/// The control keys both ⌘ buttons offer, the key bar's and the chat composer's.
+struct ControlKey {
+    let title: String
+    let symbol: String
+    let byte: UInt8
+    static let all = [
+        ControlKey(title: "Interrupt  ⌃C", symbol: "xmark.octagon", byte: 0x03),
+        ControlKey(title: "End of Input  ⌃D", symbol: "eject", byte: 0x04),
+        ControlKey(title: "Suspend  ⌃Z", symbol: "pause", byte: 0x1a),
+        ControlKey(title: "Clear  ⌃L", symbol: "clear", byte: 0x0c),
+        ControlKey(title: "Search History  ⌃R", symbol: "clock.arrow.circlepath", byte: 0x12),
+    ]
+}
+
 struct KeyBar: View {
     let view: PhoneTerminal
     @State private var ctrl = false
@@ -387,11 +401,7 @@ struct KeyBar: View {
                 command("Photo Library", "photo.on.rectangle") { photos = true }
                 command("Files", "folder") { files = true }
                 Divider()
-                command("Interrupt  ⌃C", "xmark.octagon") { key([0x03]) }
-                command("End of Input  ⌃D", "eject") { key([0x04]) }
-                command("Suspend  ⌃Z", "pause") { key([0x1a]) }
-                command("Clear  ⌃L", "clear") { key([0x0c]) }
-                command("Search History  ⌃R", "clock.arrow.circlepath") { key([0x12]) }
+                ForEach(ControlKey.all, id: \.title) { k in command(k.title, k.symbol) { key([k.byte]) } }
                 Divider()
                 HStack(spacing: 0) {
                     arrow("Up", "arrow.up") { view.sendKeyUp() }

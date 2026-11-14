@@ -175,13 +175,19 @@ struct PhoneChat: View {
     }
 
     private var composer: some View {
-        PhoneComposer(draft: $draft, focus: $composing, agent: agent, dir: block?.foreground?.cwd ?? block?.pwd, send: send) { compact in
+        PhoneComposer(draft: $draft, focus: $composing, agent: agent, dir: block?.foreground?.cwd ?? block?.pwd,
+                      keys: { MacClient.shared.send(Msg(type: "input", terminal: pane, data: Data([$0]))) },
+                      quick: { action in
+                          // One that runs is sent as a message; one that doesn't is left in the composer to finish.
+                          if action.enter { send(action.text) } else { draft = action.text; composing = true }
+                      },
+                      send: { send(draft) }) { compact in
             AgentMenus(agent: agent, program: program, settings: settings, change: agent == "claude" ? apply : nil, compact: compact)
         }
     }
 
-    private func send() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func send(_ message: String) {
+        let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         // A paste, bracketed as `zurafa send` does, so a multi-line message arrives whole; then Enter.
         MacClient.shared.send(Msg(type: "input", terminal: pane, data: Data("\u{1b}[200~\(text.replacingOccurrences(of: "\u{1b}", with: ""))\u{1b}[201~".utf8)))
@@ -190,7 +196,7 @@ struct PhoneChat: View {
             MacClient.shared.send(Msg(type: "input", terminal: pane, data: Data("\r".utf8)))
         }
         feed.log.sent(text)
-        draft = ""
+        if message == draft { draft = "" } // a quick action leaves what is being typed alone
     }
 
     /// Keys for the agent's prompt, spaced as the Mac's Workspace.press spaces them so each step lands.
@@ -247,6 +253,9 @@ struct PhoneComposer<Menus: View>: View {
     /// The agent and Mac folder whose commands, skills and files the composer suggests.
     var agent = ""
     var dir: String?
+    /// The pane's ⌘: a tap sends a control key, a hold runs a quick action. Nil hides it (no pane yet).
+    var keys: ((UInt8) -> Void)?
+    var quick: ((QuickAction) -> Void)?
     let send: () -> Void
     /// The chips; `true` asks for their narrow form, used when the full one does not fit.
     @ViewBuilder let menus: (Bool) -> Menus
@@ -256,6 +265,8 @@ struct PhoneComposer<Menus: View>: View {
     /// Picks going with the next message, as thumbnails above the text, as on the Mac.
     @State private var attached: [Attached] = []
     @State private var sent = 0
+    @State private var commands = false
+    @AppStorage(QuickActions.key) private var quickRaw = ""
 
     private var suggestions: [Suggestion] {
         guard let word = Completion.token(draft), let dir else { return [] }
@@ -290,6 +301,7 @@ struct PhoneComposer<Menus: View>: View {
                     ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { menus(true) } }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                if let keys { commandButton(keys) }
                 Button(action: submit) {
                     Image(systemName: "chevron.up").font(.system(size: 15, weight: .semibold))
                         .symbolEffect(.bounce.up, value: sent)
@@ -349,6 +361,38 @@ struct PhoneComposer<Menus: View>: View {
 }
 
 extension PhoneComposer {
+    /// As on the key bar: a tap lists the control keys, a hold the quick actions from Settings.
+    func commandButton(_ keys: @escaping (UInt8) -> Void) -> some View {
+        Menu {
+            let actions = QuickActions.decode(quickRaw)
+            if actions.isEmpty { Text("Add quick actions in Settings") }
+            ForEach(actions) { action in Button(action.title) { quick?(action) } }
+        } label: {
+            Image(systemName: "command").font(.system(size: 15, weight: .semibold))
+                .frame(width: 34, height: 34)
+                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        } primaryAction: {
+            commands = true
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Commands")
+        .accessibilityHint("Hold for quick actions")
+        .popover(isPresented: $commands) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach([ControlKey(title: "Escape", symbol: "escape", byte: 0x1b)] + ControlKey.all, id: \.title) { k in
+                    Button { keys(k.byte); commands = false } label: {
+                        Label(k.title, systemImage: k.symbol).frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16).frame(minHeight: 40).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 6)
+            .frame(width: 240)
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
     /// Sends the picks as @-mentions ahead of the text, as the Mac does.
     func submit() {
         sent += 1
