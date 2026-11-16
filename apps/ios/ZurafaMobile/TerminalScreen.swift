@@ -136,10 +136,6 @@ struct TerminalScreen: View {
                         .navigationTitle("Workspaces")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
-                            ToolbarItem(placement: .topBarLeading) {
-                                Button("Sessions", systemImage: "chevron.backward") { leaving = true; overview = false }
-                                    .labelStyle(.titleAndIcon)
-                            }
                             ToolbarItem(placement: .confirmationAction) { Button("Done") { overview = false } }
                         }
                 }

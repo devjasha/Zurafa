@@ -102,6 +102,8 @@ import UIKit
     /// Makes the phone size the terminal: it is on screen here.
     func claim(_ id: String) {
         guard let view = views[id] else { return }
+        // Back within the grace period, the Mac still has the phone's size: the claim below changes nothing.
+        releasing.removeValue(forKey: id)?.cancel()
         grids[id] = nil
         place(id)
         let size = view.gridSize
@@ -110,7 +112,17 @@ import UIKit
     }
 
     /// Off screen, the phone's size stops counting and the terminal goes back to the Mac's.
-    func release(_ id: String) { mac.send(Msg(type: "release", terminal: id)) }
+    /// Held a while, so switching back and forth between panes doesn't resize (and redraw) them over the network each time.
+    func release(_ id: String) {
+        releasing[id]?.cancel()
+        releasing[id] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled, let self else { return }
+            self.releasing[id] = nil
+            self.mac.send(Msg(type: "release", terminal: id))
+        }
+    }
+    private var releasing: [String: Task<Void, Never>] = [:]
 
     /// Panes the Mac closed are forgotten.
     func sync(blocks: Set<String>) {
