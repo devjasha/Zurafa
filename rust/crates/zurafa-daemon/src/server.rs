@@ -222,6 +222,15 @@ enum Request {
         #[serde(default)]
         from: usize,
     },
+    /// Hermes' URL and key: saved when given (`key: ""` clears it), then checked (see hermes.rs).
+    #[serde(rename = "ui.hermes.config")]
+    UiHermesConfig { id: u64, url: Option<String>, key: Option<String> },
+    /// A message to Hermes; its answer arrives in the chat of block "hermes".
+    #[serde(rename = "ui.hermes.send")]
+    UiHermesSend { id: u64, text: String },
+    /// Starts a new Hermes chat.
+    #[serde(rename = "ui.hermes.new")]
+    UiHermesNew { id: u64 },
     /// One zurafa-orch command run on this machine (set, spawn, threads) and its output.
     #[serde(rename = "ui.orch")]
     UiOrch { id: u64, args: Vec<String> },
@@ -547,6 +556,29 @@ async fn request(
             let known = terms.actions.answer(late, call, if ok { Ok(message) } else { Err(message) });
             return id.map(|id| if known { json!({"id":id,"type":"ok"}) } else { error(id, "unknown call") });
         }
+        Request::UiChatRead { id, ref block, from } if block == crate::hermes::BLOCK => match tokio::task::spawn_blocking(move || crate::hermes::read(from)).await {
+            Ok(Ok((lines, next, busy))) => json!({"id":id,"type":"ui.chat","lines":lines,"next":next,"busy":busy}),
+            Ok(Err(e)) => error(id, e),
+            Err(e) => error(id, e),
+        },
+        Request::UiHermesConfig { id, url, key } => match tokio::task::spawn_blocking(move || crate::hermes::config(url, key)).await {
+            Ok(Ok(mut v)) => {
+                v["id"] = json!(id);
+                v["type"] = json!("ui.hermes.config");
+                v
+            }
+            Ok(Err(e)) => error(id, e),
+            Err(e) => error(id, e),
+        },
+        Request::UiHermesSend { id, text } => match tokio::task::spawn_blocking(move || crate::hermes::send(text)).await {
+            Ok(Ok(())) => json!({"id":id,"type":"ui.hermes.send"}),
+            Ok(Err(e)) => error(id, e),
+            Err(e) => error(id, e),
+        },
+        Request::UiHermesNew { id } => match crate::hermes::new_chat() {
+            Ok(()) => json!({"id":id,"type":"ui.hermes.new"}),
+            Err(e) => error(id, e),
+        },
         Request::UiChatRead { id, block, from } => {
             // A remote pane's agent runs on its host: the chat comes from the daemon there.
             let snapshot = terms.dispatcher.snapshot();

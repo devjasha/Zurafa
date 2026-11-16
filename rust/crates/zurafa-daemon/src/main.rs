@@ -1,6 +1,7 @@
 mod actions;
 mod awake;
 mod chat;
+mod hermes;
 mod hosts;
 mod input;
 mod listen;
