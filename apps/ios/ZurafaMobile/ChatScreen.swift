@@ -538,7 +538,7 @@ struct AgentMenus: View {
 }
 
 /// One exchange: the user's bubble, the folded work, and the answer.
-private struct PhoneTurn: View {
+struct PhoneTurn: View {
     let turn: ChatTurn
     let name: String
     let program: Program

@@ -34,6 +34,7 @@ struct TerminalScreen: View {
     /// Agent panes the user switched away from the setting: to their terminal, or to a chat.
     @State private var flipped: Set<String> = []
     @State private var newChat = false
+    @State private var hermes = false
     /// The overview of every workspace, in place of the back button; `leaving` goes back to the list once it closes.
     @State private var overview = false
     @State private var leaving = false
@@ -110,6 +111,7 @@ struct TerminalScreen: View {
                     Button("Workspaces", systemImage: "sidebar.left") { overview = true }
                 }
                 ToolbarItem(placement: .principal) { header }
+                ToolbarItem(placement: .topBarTrailing) { HermesButton(shown: $hermes) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis") {
                         Button("New Chat", systemImage: "bubble.left.and.text.bubble.right") { newChat = true }
@@ -140,6 +142,7 @@ struct TerminalScreen: View {
                         }
                 }
             }
+            .sheet(isPresented: $hermes) { HermesScreen() }
             .sheet(isPresented: $newChat) {
                 PhoneNewChat(session: session?.sessionID ?? "default") { pane in id = pane }
             }

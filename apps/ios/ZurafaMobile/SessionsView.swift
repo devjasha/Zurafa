@@ -76,6 +76,7 @@ struct SessionsList: View {
     @AppStorage("macAddress") private var address = ""
     @State private var error: String?
     @State private var deleting: SessionSnapshot?
+    @State private var hermes = false
     @Environment(\.colorScheme) private var scheme
 
     private var sessions: [SessionSnapshot] { mac.sessions }
@@ -85,6 +86,8 @@ struct SessionsList: View {
     var body: some View {
         List {
             if mac.state != .connected { Section { status } }
+            // The sessions screen only: a pane has its own Hermes button, so ⌘⇧H is never claimed twice.
+            if current == nil { Section { HermesButton(shown: $hermes).listRowBackground(rowBackground) } }
             ForEach(sessions, id: \.sessionID) { session in
                 Section {
                     // One row per Mac tab; its panes are switched inside the terminal screen. A tab whose agent
@@ -145,6 +148,7 @@ struct SessionsList: View {
             }
         }
         .modifier(MacLook())
+        .sheet(isPresented: $hermes) { HermesScreen() }
         .confirmationDialog("Delete \(deleting?.label ?? "")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                             titleVisibility: .visible, presenting: deleting) { session in
             Button("Delete Workspace", role: .destructive) { run { try await mac.deleteSession(session.sessionID) } }
