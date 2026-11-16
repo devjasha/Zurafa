@@ -1,0 +1,2 @@
+- **Hermes chat (experimental).** Connect your Hermes agent under Settings → Hermes (its API server's address and key), then open a chat with it beside your panes with ⇧⌘H. The Zurafa iPhone app can chat with it too, through your Mac.
+- **Remote chats.** The chat of an agent on a remote host picks up where it left off after a dropped connection, and stops following when nobody looks at it.

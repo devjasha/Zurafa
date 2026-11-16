@@ -2,6 +2,13 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.42
+
+**November 16, 2026**
+
+- **Hermes chat (experimental).** Connect your Hermes agent under Settings → Hermes (its API server's address and key), then open a chat with it beside your panes with ⇧⌘H. The Zurafa iPhone app can chat with it too, through your Mac.
+- **Remote chats.** The chat of an agent on a remote host picks up where it left off after a dropped connection, and stops following when nobody looks at it.
+
 ## 0.1.41
 
 **November 13, 2026**
