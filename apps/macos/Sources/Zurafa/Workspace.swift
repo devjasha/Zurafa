@@ -76,6 +76,7 @@ enum EditorKind: String, Identifiable {
     @Published var paletteOpen = false
     @Published var sidebarHidden = false
     @Published var fileTreeOpen = false
+    @Published var hermesOpen = false
     @Published var sessionPickerOpen = false
     @Published var editor: EditorKind?
     @Published private(set) var editingHost: RemoteHost?
@@ -970,6 +971,7 @@ struct Command: Identifiable {
         Command(title: "Float or Dock Pane", key: "f", mods: [.command, .option]) { $0.toggleFloating() },
         Command(title: "Chat or Terminal", key: "c", mods: [.command, .option]) { $0.toggleChatFocused() },
         Command(title: "New Chat", key: "o", mods: [.command, .shift]) { $0.newChatOpen = true },
+        Command(title: "Hermes Chat", key: "h", mods: [.command, .shift]) { $0.hermesOpen.toggle() },
         Command(title: "Hide Pane", key: "h", mods: [.command, .control]) { $0.hideFocused() },
         Command(title: "Show Hidden Pane", key: "h", mods: [.command, .control, .shift]) { $0.showHidden() },
         Command(title: "Next Pane", key: "]") { $0.focusStep(1) },

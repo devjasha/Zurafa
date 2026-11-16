@@ -19,7 +19,7 @@ struct PaneMeta: Equatable {
     /// conversation for agents zurafa-orch can read (Claude Code, Codex, Pi), its answers for any other.
     var hasChat: Bool { thread != nil || !statuses.isEmpty }
     var agentName: String {
-        switch thread?.agent { case "claude": "Claude"; case "codex": "Codex"; case "pi": "Pi"
+        switch thread?.agent { case "claude": "Claude"; case "codex": "Codex"; case "pi": "Pi"; case "hermes": "Hermes"
         default: record?.app.flatMap { $0.isEmpty ? nil : $0.capitalized } ?? "the agent" }
     }
     /// Native subagents of the pane's agent, reported as "agent/<id>". They run inside it with no

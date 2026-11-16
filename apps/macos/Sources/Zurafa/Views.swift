@@ -337,6 +337,9 @@ struct RootView: View {
                         .overlay { FloatingPanes(tab: ws.tab) }
                 }
             }
+            if ws.hermesOpen {
+                HermesChat().frame(minWidth: 320, idealWidth: 420, maxWidth: 560)
+            }
             if let peek = ws.peek {
                 AgentPeek(pane: peek)
                     .frame(minWidth: 320, idealWidth: 480, maxWidth: 640)

@@ -31,6 +31,7 @@ struct SettingsView: View {
                 case .integrations: IntegrationsPane()
                 case .notifications: NotificationsPane()
                 case .connections: ConnectionsPane()
+                case .hermes: HermesPane()
                 }
             }
             .formStyle(.grouped)
@@ -48,7 +49,7 @@ struct SettingsView: View {
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, server, appearance, themes, terminal, shortcuts, integrations, notifications, connections
+    case general, server, appearance, themes, terminal, shortcuts, integrations, notifications, connections, hermes
     var id: Self { self }
     var title: String {
         switch self {
@@ -61,6 +62,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .integrations: "Integrations"
         case .notifications: "Notifications"
         case .connections: "Remote"
+        case .hermes: "Hermes"
         }
     }
     var symbol: String {
@@ -74,6 +76,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .integrations: "puzzlepiece.extension"
         case .notifications: "bell.badge"
         case .connections: "globe"
+        case .hermes: "bubble.left.and.text.bubble.right"
         }
     }
 }

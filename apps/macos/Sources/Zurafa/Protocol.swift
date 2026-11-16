@@ -35,6 +35,12 @@ struct Msg: Codable {
     var path: String? // ui.paste_image: where the Mac saved the phone's image
     var lines: [String]? // ui.chat: `zurafa-orch follow` lines of a pane's chat
     var next: Int? // ui.chat: the index to read from next
+    var busy: Bool? // ui.chat for block "hermes": a Hermes run is streaming
+    // ui.hermes.config
+    var url: String?
+    var hasKey: Bool?
+    var connected: Bool?
+    var error: String?
     var out: String? // ui.orch: what zurafa-orch printed
     // ui.action, which the daemon sends the Mac app for an agent, and the app's ui.action.result
     var call: Int?

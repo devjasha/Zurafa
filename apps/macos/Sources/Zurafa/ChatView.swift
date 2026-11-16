@@ -4,6 +4,8 @@ import SwiftUI
 @MainActor final class ChatFeed: ObservableObject {
     @Published var log = ChatLog() { didSet { cached = nil } }
     @Published private(set) var problem: String?
+    /// Hermes only: a run is streaming its answer.
+    @Published private(set) var busy = false
     /// The chat redraws on every workspace change; rebuild its turns only when the log changes.
     private var cached: (live: Bool, turns: [ChatTurn])?
 
@@ -64,6 +66,7 @@ import SwiftUI
                         self.publish(log)
                     }
                     next = reply.next ?? next
+                    if let busy = reply.busy, busy != self.busy { self.busy = busy }
                 } catch {
                     self?.problem = error.localizedDescription
                 }
