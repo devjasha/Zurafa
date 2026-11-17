@@ -111,7 +111,6 @@ struct TerminalScreen: View {
                     Button("Workspaces", systemImage: "sidebar.left") { overview = true }
                 }
                 ToolbarItem(placement: .principal) { header }
-                ToolbarItem(placement: .topBarTrailing) { HermesButton(shown: $hermes) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis") {
                         Button("New Chat", systemImage: "bubble.left.and.text.bubble.right") { newChat = true }
@@ -209,6 +208,11 @@ struct TerminalScreen: View {
             )
             .sensoryFeedback(.selection, trigger: id)
             Button("New Pane", systemImage: "plus", action: newPane)
+                .labelStyle(.iconOnly)
+                .frame(width: 40, height: 40)
+                .foregroundStyle(.primary)
+                .glass(in: Capsule())
+            HermesButton(shown: $hermes)
                 .labelStyle(.iconOnly)
                 .frame(width: 40, height: 40)
                 .foregroundStyle(.primary)
