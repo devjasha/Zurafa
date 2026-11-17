@@ -267,13 +267,19 @@ struct PhoneComposer<Menus: View>: View {
     var keys: ((UInt8) -> Void)?
     var quick: ((QuickAction) -> Void)?
     let send: () -> Void
+    /// The caller's picks, which it sends itself (Hermes, as images); nil folds them into the draft as @-mentions.
+    var images: Binding<[Attached]>? = nil
     /// The chips; `true` asks for their narrow form, used when the full one does not fit.
     @ViewBuilder let menus: (Bool) -> Menus
     @ObservedObject private var catalog = CompletionCatalog.shared
     @State private var photos = false
     @State private var files = false
     /// Picks going with the next message, as thumbnails above the text, as on the Mac.
-    @State private var attached: [Attached] = []
+    @State private var own: [Attached] = []
+    private var attached: [Attached] {
+        get { images?.wrappedValue ?? own }
+        nonmutating set { if let images { images.wrappedValue = newValue } else { own = newValue } }
+    }
     @State private var sent = 0
     @State private var commands = false
     @AppStorage(QuickActions.key) private var quickRaw = ""
@@ -289,7 +295,7 @@ struct PhoneComposer<Menus: View>: View {
         let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty
         let shown = suggestions
         VStack(alignment: .leading, spacing: 10) {
-            if !attached.isEmpty { AttachedStrip(attached: $attached) }
+            if !attached.isEmpty { AttachedStrip(attached: images ?? $own) }
             TextField("Ask, build, / for commands, @ for references…", text: $draft, axis: .vertical)
                 .lineLimit(1...6)
                 .focused(focus)
@@ -330,7 +336,7 @@ struct PhoneComposer<Menus: View>: View {
         .animation(.snappy(duration: 0.16), value: attached)
         // The picks are already on the Mac: kept as the @-mentions they are sent as, so the saved draft holds them.
         .onDisappear {
-            if !attached.isEmpty { draft = (attached.map { "@" + $0.path } + [draft]).joined(separator: " "); attached = [] }
+            if images == nil, !attached.isEmpty { draft = (attached.map { "@" + $0.path } + [draft]).joined(separator: " "); attached = [] }
         }
         .attachments(photos: $photos, files: $files) { attached += $0 }
         // Above the composer in the layout, so the keyboard lifts it too; the composer stays at the bottom.
@@ -408,7 +414,7 @@ extension PhoneComposer {
     /// Sends the picks as @-mentions ahead of the text, as the Mac does.
     func submit() {
         sent += 1
-        if !attached.isEmpty {
+        if images == nil, !attached.isEmpty {
             draft = (attached.map { "@" + $0.path } + [draft]).joined(separator: " ")
             attached = []
         }

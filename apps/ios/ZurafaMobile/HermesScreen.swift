@@ -38,8 +38,10 @@ import SwiftUI
         task = nil
     }
 
-    func send(_ text: String) async throws {
-        _ = try await MacClient.shared.request(["type": .string("ui.hermes.send"), "text": .string(text)])
+    func send(_ text: String, images: [String]) async throws {
+        var request: [String: JSONValue] = ["type": .string("ui.hermes.send"), "text": .string(text)]
+        if !images.isEmpty { request["images"] = .array(images.map { .string($0) }) }
+        _ = try await MacClient.shared.request(request)
         busy = true
     }
 
@@ -57,6 +59,8 @@ struct HermesScreen: View {
     @AppStorage("draft.hermes") private var draft = ""
     @FocusState private var composing: Bool
     @State private var problem: String?
+    /// Photos and image files already on the Mac, sent as `images` with the next message.
+    @State private var images: [Attached] = []
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -82,7 +86,7 @@ struct HermesScreen: View {
             .safeAreaInset(edge: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
                     if let problem { Text(problem).font(.footnote).foregroundStyle(.red).padding(.horizontal, 10) }
-                    PhoneComposer(draft: $draft, focus: $composing, send: send) { _ in EmptyView() }
+                    PhoneComposer(draft: $draft, focus: $composing, send: send, images: $images) { _ in EmptyView() }
                         .disabled(feed.busy)
                 }
                 .padding(.horizontal, 12).padding(.bottom, 8)
@@ -107,10 +111,13 @@ struct HermesScreen: View {
 
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let picks = images
+        guard !text.isEmpty || !picks.isEmpty else { return }
         draft = ""
+        images = []
         Task {
-            do { try await feed.send(text); problem = nil } catch { problem = error.localizedDescription; draft = text }
+            // Kept on failure, so the user can send again.
+            do { try await feed.send(text, images: picks.map(\.path)); problem = nil } catch { problem = error.localizedDescription; draft = text; images = picks }
         }
     }
 }
