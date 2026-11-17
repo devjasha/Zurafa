@@ -227,7 +227,14 @@ enum Request {
     UiHermesConfig { id: u64, url: Option<String>, key: Option<String> },
     /// A message to Hermes; its answer arrives in the chat of block "hermes".
     #[serde(rename = "ui.hermes.send")]
-    UiHermesSend { id: u64, text: String },
+    UiHermesSend {
+        id: u64,
+        #[serde(default)]
+        text: String,
+        /// Image files on this machine to send with it.
+        #[serde(default)]
+        images: Vec<String>,
+    },
     /// Starts a new Hermes chat.
     #[serde(rename = "ui.hermes.new")]
     UiHermesNew { id: u64 },
@@ -570,7 +577,7 @@ async fn request(
             Ok(Err(e)) => error(id, e),
             Err(e) => error(id, e),
         },
-        Request::UiHermesSend { id, text } => match tokio::task::spawn_blocking(move || crate::hermes::send(text)).await {
+        Request::UiHermesSend { id, text, images } => match tokio::task::spawn_blocking(move || crate::hermes::send(text, images)).await {
             Ok(Ok(())) => json!({"id":id,"type":"ui.hermes.send"}),
             Ok(Err(e)) => error(id, e),
             Err(e) => error(id, e),

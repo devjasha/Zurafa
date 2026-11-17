@@ -2,6 +2,7 @@
 //! daemon alone talks to Hermes, so its key never leaves this machine; clients read the chat as
 //! `ui.chat.read` block "hermes", in the same JSON lines as `zurafa-orch follow` (see chat.rs).
 //! HTTP goes through curl, with the key passed on its stdin, never on its command line.
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -9,7 +10,7 @@ use std::{
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, Write},
     os::unix::fs::{DirBuilderExt, OpenOptionsExt},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
     sync::{Arc, Mutex, OnceLock},
 };
@@ -171,25 +172,33 @@ fn load(s: &Shared) -> Result<(), String> {
 }
 
 /// `ui.hermes.send`: adds the user's line and streams Hermes' answer in the background.
-pub fn send(text: String) -> Result<(), String> {
-    send_in(state(), text)
+/// `images` are files on this machine (a phone's go through `ui.paste_image` first).
+pub fn send(text: String, images: Vec<String>) -> Result<(), String> {
+    send_in(state(), text, &images)
 }
 
-fn send_in(s: &Shared, text: String) -> Result<(), String> {
+fn send_in(s: &Shared, text: String, images: &[String]) -> Result<(), String> {
     load(s)?;
+    let parts = image_parts(images)?;
+    // Hermes takes text and images as parts, like OpenAI's chat content; text alone as a string.
+    let input = if parts.is_empty() { json!(text) } else { Value::Array([json!({"type":"text","text":text})].into_iter().filter(|_| !text.is_empty()).chain(parts).collect()) };
+    let shown = images.iter().fold(text.clone(), |t, p| {
+        let name = Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
+        if t.is_empty() { format!("🖼 {name}") } else { format!("{t}\n🖼 {name}") }
+    });
     let generation = {
         let mut st = s.lock().unwrap();
         if st.busy {
             return Err("Hermes is still answering".into());
         }
         st.busy = true;
-        let line = json!({"kind":"user","id":st.id(),"text":text,"at":now()}).to_string();
+        let line = json!({"kind":"user","id":st.id(),"text":shown,"at":now()}).to_string();
         st.lines.push(line);
         st.generation
     };
     let s = s.clone();
     std::thread::spawn(move || {
-        let result = stream(&s, generation, &text);
+        let result = stream(&s, generation, &input);
         let mut st = s.lock().unwrap();
         if st.generation == generation {
             if let Err(e) = result {
@@ -211,7 +220,7 @@ pub fn new_chat() -> Result<(), String> {
 }
 
 /// Runs one turn: creates the session if there is none, then turns Hermes' SSE events into lines.
-fn stream(s: &Shared, generation: u64, text: &str) -> Result<(), String> {
+fn stream(s: &Shared, generation: u64, input: &Value) -> Result<(), String> {
     let cfg = s.lock().unwrap().cfg.clone();
     let session = match cfg.session.clone() {
         Some(id) => id,
@@ -230,7 +239,7 @@ fn stream(s: &Shared, generation: u64, text: &str) -> Result<(), String> {
             id
         }
     };
-    let mut child = curl(&cfg, "POST", &format!("/api/sessions/{session}/chat/stream"), Some(&json!({"input":text})), true).map_err(|e| e.to_string())?;
+    let (mut child, _body) = curl(&cfg, "POST", &format!("/api/sessions/{session}/chat/stream"), Some(&json!({"input":input})), true).map_err(|e| e.to_string())?;
     let out = child.stdout.take().ok_or("no output")?;
     let mut turn = Turn::default();
     let (mut event, mut data) = (String::new(), String::new());
@@ -342,7 +351,9 @@ fn text(v: &Value) -> String {
     for k in ["delta", "text", "content"] {
         match &v[k] {
             Value::String(s) => return s.clone(),
-            Value::Array(parts) => return parts.iter().filter_map(|p| p["text"].as_str().or(p.as_str())).collect::<Vec<_>>().join(""),
+            Value::Array(parts) => {
+                return parts.iter().filter_map(|p| p["text"].as_str().or(p.as_str()).or(p.get("image_url").map(|_| "\n🖼 image\n"))).collect::<Vec<_>>().join("").trim().to_owned()
+            }
             _ => {}
         }
     }
@@ -388,16 +399,58 @@ fn history_lines(st: &mut State, h: &Value) -> Vec<String> {
     out
 }
 
-/// Starts curl for one request. Everything, the key included, goes in its config on stdin.
-fn curl(cfg: &Config, method: &str, path: &str, body: Option<&Value>, stream: bool) -> std::io::Result<Child> {
+/// The images of one message as Hermes' `image_url` parts with data URLs. Hermes takes images only,
+/// and at most 10 MB per request: base64 makes 7 MiB of images about 9.8 MB.
+fn image_parts(paths: &[String]) -> Result<Vec<Value>, String> {
+    let mut total = 0;
+    paths
+        .iter()
+        .map(|p| {
+            let name = Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
+            let bytes = fs::read(p).map_err(|e| format!("Cannot read {name}: {e}"))?;
+            let mime = match bytes.as_slice() {
+                [0x89, b'P', b'N', b'G', ..] => "image/png",
+                [0xFF, 0xD8, 0xFF, ..] => "image/jpeg",
+                [b'G', b'I', b'F', b'8', ..] => "image/gif",
+                [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => "image/webp",
+                _ => return Err(format!("Hermes takes images only (PNG, JPEG, GIF or WebP), and {name} is not one.")),
+            };
+            total += bytes.len();
+            if total > 7 << 20 {
+                return Err("The images are too large for Hermes, which takes up to 7 MB of images per message.".into());
+            }
+            Ok(json!({"type":"image_url","image_url":{"url":format!("data:{mime};base64,{}", B64.encode(&bytes))}}))
+        })
+        .collect()
+}
+
+/// A request body curl reads from a file: an image message is too long for a config line. Removed when dropped.
+struct BodyFile(PathBuf);
+impl Drop for BodyFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
+/// Starts curl for one request. Everything, the key included, goes in its config on stdin; a body goes
+/// in a private file, kept until the returned guard drops (after curl is done).
+fn curl(cfg: &Config, method: &str, path: &str, body: Option<&Value>, stream: bool) -> std::io::Result<(Child, Option<BodyFile>)> {
     let q = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
     let mut conf = format!("url = {}\nrequest = {method}\nconnect-timeout = 5\n", q(&format!("{}{path}", cfg.url)));
     if !cfg.key.is_empty() {
         conf += &format!("header = {}\n", q(&format!("Authorization: Bearer {}", cfg.key)));
     }
-    if let Some(b) = body {
-        conf += &format!("header = \"Content-Type: application/json\"\ndata-binary = {}\n", q(&b.to_string()));
-    }
+    let file = match body {
+        Some(b) => {
+            static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!("zurafa-hermes-{}-{}.json", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+            let file = BodyFile(path);
+            OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&file.0)?.write_all(b.to_string().as_bytes())?;
+            conf += &format!("header = \"Content-Type: application/json\"\ndata-binary = {}\n", q(&format!("@{}", file.0.display())));
+            Some(file)
+        }
+        None => None,
+    };
     conf += if stream { "no-buffer\nheader = \"Accept: text/event-stream\"\n" } else { "max-time = 20\n" };
     let mut child = Command::new("curl")
         .args(["--silent", "--show-error", "--fail-with-body", "--config", "-"])
@@ -406,12 +459,12 @@ fn curl(cfg: &Config, method: &str, path: &str, body: Option<&Value>, stream: bo
         .stderr(Stdio::piped())
         .spawn()?;
     child.stdin.take().unwrap().write_all(conf.as_bytes())?;
-    Ok(child)
+    Ok((child, file))
 }
 
 /// One request's JSON answer.
 fn call(cfg: &Config, method: &str, path: &str, body: Option<&Value>) -> Result<Value, String> {
-    let out = curl(cfg, method, path, body, false).and_then(Child::wait_with_output).map_err(|e| format!("cannot run curl: {e}"))?;
+    let out = curl(cfg, method, path, body, false).and_then(|(c, _body)| c.wait_with_output()).map_err(|e| format!("cannot run curl: {e}"))?;
     if !out.status.success() {
         return Err(failure(cfg, &out));
     }
@@ -495,7 +548,8 @@ class H(http.server.BaseHTTPRequestHandler):
             ev("assistant.commentary", {"message_id": "m1", "text": "Let me look.", "already_streamed": True})
             ev("tool.started", {"tool_call_id": "t1", "tool": "terminal", "preview": "ls"})
             ev("tool.completed", {"tool_call_id": "t1", "preview": "a.txt"})
-            ev("assistant.delta", {"delta": "You said: " + body["input"]})
+            i = body["input"]
+            ev("assistant.delta", {"delta": "You said: " + (i if isinstance(i, str) else " + ".join(p.get("text") or p["image_url"]["url"][:22] for p in i))})
             ev("run.completed", {})
         else: self.send_error(404)
     def log_message(self, *a): pass
@@ -544,8 +598,8 @@ s.serve_forever()
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(fs::metadata(&s.lock().unwrap().path).unwrap().permissions().mode() & 0o777, 0o600);
 
-        send_in(&s, "hello".into()).unwrap();
-        assert!(send_in(&s, "again".into()).is_err(), "busy");
+        send_in(&s, "hello".into(), &[]).unwrap();
+        assert!(send_in(&s, "again".into(), &[]).is_err(), "busy");
         let (lines, next, _) = (0..100)
             .map(|_| {
                 std::thread::sleep(std::time::Duration::from_millis(50));
@@ -573,6 +627,33 @@ s.serve_forever()
         assert_eq!(kinds(&lines), ["mode", "user", "tool", "result", "assistant"], "{lines:?}");
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn sends_images_as_data_urls_and_refuses_other_files() {
+        let f = fake();
+        let s = temp("images");
+        config_in(&s, Some(f.1.clone()), Some("s3\"cr\\et".into())).unwrap();
+        let dir = s.lock().unwrap().path.parent().unwrap().to_owned();
+        let (png, txt) = (dir.join("shot.png"), dir.join("notes.txt"));
+        fs::write(&png, b"\x89PNG\r\n\x1a\nrest").unwrap();
+        fs::write(&txt, b"hello").unwrap();
+        let err = send_in(&s, "look".into(), &[txt.display().to_string()]).unwrap_err();
+        assert!(err.contains("notes.txt is not one"), "{err}");
+        assert!(!s.lock().unwrap().busy, "a refused message starts no run");
+
+        send_in(&s, "look".into(), &[png.display().to_string()]).unwrap();
+        let (lines, _, _) = (0..100)
+            .map(|_| {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                read_in(&s, 0).unwrap()
+            })
+            .find(|r| !r.2)
+            .expect("the run ends");
+        let v: Vec<Value> = lines.iter().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(v[1]["text"], "look\n🖼 shot.png");
+        assert_eq!(v.last().unwrap()["text"], "You said: look + data:image/png;base64,");
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
