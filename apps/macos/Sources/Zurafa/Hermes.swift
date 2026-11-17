@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // Experimental: a chat with the user's Hermes Agent (Nous Research). The daemon talks to Hermes and keeps
 // the API key; this file is the whole Mac side, so removing the feature starts here.
@@ -10,6 +11,8 @@ struct HermesChat: View {
     /// Its own feed, not `ChatFeed.of`: `ChatFeed.keep` stops feeds whose pane is gone, and Hermes has no pane.
     @StateObject private var feed = ChatFeed()
     @State private var draft = ""
+    /// Image files going with the next message; the daemon reads them, so they stay paths on this Mac.
+    @State private var images: [URL] = []
     @State private var problem: String?
     @State private var pinned = true
     @FocusState private var composing: Bool
@@ -43,7 +46,9 @@ struct HermesChat: View {
                      },
                      earlier: nil, feed: feed, ws: ws, pinned: $pinned)
             VStack(spacing: 0) {
-                Composer(draft: $draft, placeholder: "Message Hermes…", focus: $composing, send: send) { EmptyView() }
+                Composer(draft: $draft, placeholder: "Message Hermes…", focus: $composing, attached: $images, send: send) {
+                    IconButton(symbol: "photo.badge.plus", help: "Attach Images") { pickImages() }
+                }
                 HStack {
                     Spacer()
                     if feed.busy { ProgressView().controlSize(.small) }
@@ -51,6 +56,11 @@ struct HermesChat: View {
                 .frame(height: 24)
             }
             .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            let dropped = urls.filter { NSImage(contentsOf: $0) != nil }
+            images += dropped
+            return !dropped.isEmpty
         }
         .onAppear {
             feed.start(remotePane: "hermes")
@@ -61,18 +71,31 @@ struct HermesChat: View {
 
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !feed.busy else { return }
+        let files = images
+        guard !text.isEmpty || !files.isEmpty, !feed.busy else { return }
         draft = ""
+        images = []
         pinned = true
+        var request: [String: JSONValue] = ["type": .string("ui.hermes.send"), "text": .string(text)]
+        if !files.isEmpty { request["images"] = .array(files.map { .string($0.path) }) }
         Task {
             do {
-                _ = try await DaemonClient.shared.request(["type": .string("ui.hermes.send"), "text": .string(text)])
+                _ = try await DaemonClient.shared.request(request)
                 problem = nil
             } catch {
                 problem = error.localizedDescription
                 if draft.isEmpty { draft = text }
+                if images.isEmpty { images = files }
             }
         }
+    }
+
+    /// Only the image types Hermes takes; the daemon still checks them and their size.
+    private func pickImages() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.png, .jpeg, .gif, .webP]
+        if panel.runModal() == .OK { images += panel.urls }
     }
 
     private func newChat() {

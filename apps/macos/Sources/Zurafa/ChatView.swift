@@ -894,6 +894,8 @@ struct Composer<Chips: View>: View {
     /// The agent and folder whose commands, skills and files the composer suggests.
     var agent = ""
     var dir: String?
+    /// Set when the sender takes the images itself, as files rather than @-mentions (Hermes).
+    var attached: Binding<[URL]>?
     let send: () -> Void
     @ViewBuilder let chips: Chips
     @ObservedObject private var catalog = CompletionCatalog.shared
@@ -901,7 +903,8 @@ struct Composer<Chips: View>: View {
     /// The word the suggestions were closed for (Esc), so they stay closed until it changes.
     @State private var closed: Substring?
     /// Pasted or dropped images, shown above the text and sent ahead of it.
-    @State private var images: [URL] = []
+    @State private var ownImages: [URL] = []
+    private var images: Binding<[URL]> { attached ?? $ownImages }
     @State private var pasteMonitor: Any?
     /// Messages sent from here, for the send button's hop.
     @State private var sent = 0
@@ -914,10 +917,10 @@ struct Composer<Chips: View>: View {
     }
 
     var body: some View {
-        let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty
+        let ready = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.wrappedValue.isEmpty
         let shown = suggestions
         VStack(alignment: .leading, spacing: 12) {
-            if !images.isEmpty { ImageStrip(images: $images) }
+            if !images.wrappedValue.isEmpty { ImageStrip(images: images) }
             TextField(placeholder, text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
@@ -962,11 +965,11 @@ struct Composer<Chips: View>: View {
             }
         }
         .animation(.snappy(duration: 0.16), value: shown.isEmpty)
-        .animation(.snappy(duration: 0.16), value: images)
+        .animation(.snappy(duration: 0.16), value: images.wrappedValue)
         .zIndex(1)
         .dropDestination(for: URL.self) { urls, _ in
             let dropped = urls.filter { NSImage(contentsOf: $0) != nil }
-            images += dropped
+            images.wrappedValue += dropped
             return !dropped.isEmpty
         }
         // The text field takes ⌘V itself and drops images, so an image paste is caught before it.
@@ -976,7 +979,7 @@ struct Composer<Chips: View>: View {
                       event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else { return event }
                 let pasted = ImagePaste.imageFiles()
                 guard !pasted.isEmpty else { return event }
-                images += pasted
+                images.wrappedValue += pasted
                 return nil
             }
         }
@@ -991,10 +994,10 @@ struct Composer<Chips: View>: View {
 
     /// Sends the images as @-mentions ahead of the text, the way the attach button adds files.
     private func submit() {
-        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty { sent += 1 }
-        if !images.isEmpty {
-            draft = (images.map { "@" + $0.path } + [draft]).joined(separator: " ")
-            images = []
+        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.wrappedValue.isEmpty { sent += 1 }
+        if attached == nil, !ownImages.isEmpty {
+            draft = (ownImages.map { "@" + $0.path } + [draft]).joined(separator: " ")
+            ownImages = []
         }
         send()
     }
