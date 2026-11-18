@@ -16,17 +16,17 @@ struct HermesChat: View {
     @State private var problem: String?
     @State private var pinned = true
     @FocusState private var composing: Bool
-    private static let meta = PaneMeta(title: "Hermes", thread: AgentThread(agent: "hermes", session: ""))
-
     var body: some View {
+        let name = feed.name ?? "Hermes"
+        let meta = PaneMeta(title: name, thread: AgentThread(agent: "hermes", session: ""), customName: name)
         let turns = feed.turns(live: feed.busy)
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "bubble.left.and.text.bubble.right")
-                Text("Hermes").font(.system(size: 13, weight: .semibold))
+                Text(name).font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 0)
                 IconButton(symbol: "square.and.pencil", help: "New Chat") { newChat() }
-                IconButton(symbol: "xmark", help: "Close Hermes (⇧⌘H)") { ws.hermesOpen = false }
+                IconButton(symbol: "xmark", help: "Close \(name) (⇧⌘H)") { ws.hermesOpen = false }
             }
             .foregroundStyle(Theme.ink)
             .padding(.leading, 14).padding(.trailing, 8).frame(height: 44)
@@ -42,11 +42,11 @@ struct HermesChat: View {
                 .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             }
             ChatList(turns: turns.indices.map { i in
-                         TurnView(turn: turns[i], pane: "hermes", meta: Self.meta, live: feed.busy && i == turns.count - 1, last: i == turns.count - 1)
+                         TurnView(turn: turns[i], pane: "hermes", meta: meta, live: feed.busy && i == turns.count - 1, last: i == turns.count - 1)
                      },
                      earlier: nil, feed: feed, ws: ws, pinned: $pinned)
             VStack(spacing: 0) {
-                Composer(draft: $draft, placeholder: "Message Hermes…", focus: $composing, attached: $images, send: send) {
+                Composer(draft: $draft, placeholder: "Message \(name)…", focus: $composing, attached: $images, send: send) {
                     IconButton(symbol: "photo.badge.plus", help: "Attach Images") { pickImages() }
                 }
                 HStack {
@@ -117,6 +117,7 @@ struct HermesChat: View {
 struct HermesPane: View {
     @State private var url = "http://127.0.0.1:8642"
     @State private var key = ""
+    @State private var name = ""
     @State private var status: Msg?
     @State private var error: String?
     @State private var connecting = false
@@ -124,6 +125,7 @@ struct HermesPane: View {
     var body: some View {
         Form {
             Section {
+                TextField("Name", text: $name, prompt: Text("Hermes"))
                 TextField("Server URL", text: $url)
                 SecureField("API Key", text: $key, prompt: Text(status?.hasKey == true ? "Saved" : "API_SERVER_KEY"))
                 LabeledContent {
@@ -140,7 +142,7 @@ struct HermesPane: View {
                     .font(.callout).foregroundStyle(.secondary)
                 }
             } footer: {
-                Text("Enable Hermes' API server (API_SERVER_ENABLED=true and API_SERVER_KEY in ~/.hermes/.env), then run `hermes gateway`. Open the chat with ⇧⌘H. Experimental.")
+                Text("Enable Hermes' API server (API_SERVER_ENABLED=true and API_SERVER_KEY in ~/.hermes/.env), then run `hermes gateway`. Open the chat with ⇧⌘H. The name is what Zurafa calls your agent, on this Mac and your iPhone. Experimental.")
             }
         }
         .task { await config(save: false) }
@@ -152,6 +154,7 @@ struct HermesPane: View {
         if save {
             request["url"] = .string(url.trimmingCharacters(in: .whitespaces))
             if !key.isEmpty { request["key"] = .string(key) }
+            request["name"] = .string(name.trimmingCharacters(in: .whitespaces))
         }
         connecting = true
         defer { connecting = false }
@@ -160,6 +163,7 @@ struct HermesPane: View {
             status = reply
             error = nil
             if let saved = reply.url, !saved.isEmpty { url = saved }
+            if let saved = reply.name { name = saved == "Hermes" ? "" : saved }
             if save { key = "" }
         } catch {
             self.error = error.localizedDescription

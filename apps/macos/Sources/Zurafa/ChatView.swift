@@ -6,6 +6,8 @@ import SwiftUI
     @Published private(set) var problem: String?
     /// Hermes only: a run is streaming its answer.
     @Published private(set) var busy = false
+    /// What the user calls their Hermes, from the daemon's chat reads.
+    @Published private(set) var name: String?
     /// The chat redraws on every workspace change; rebuild its turns only when the log changes.
     private var cached: (live: Bool, turns: [ChatTurn])?
 
@@ -67,6 +69,7 @@ import SwiftUI
                     }
                     next = reply.next ?? next
                     if let busy = reply.busy, busy != self.busy { self.busy = busy }
+                    if let name = reply.name, name != self.name { self.name = name }
                 } catch {
                     self?.problem = error.localizedDescription
                 }

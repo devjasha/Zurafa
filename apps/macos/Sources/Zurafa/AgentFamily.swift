@@ -18,8 +18,11 @@ struct PaneMeta: Equatable {
     /// A pane whose program reports its status is an agent the chat view can show: the full
     /// conversation for agents zurafa-orch can read (Claude Code, Codex, Pi), its answers for any other.
     var hasChat: Bool { thread != nil || !statuses.isEmpty }
+    /// A name the user gave the agent (Hermes), over the program's.
+    var customName: String?
     var agentName: String {
-        switch thread?.agent { case "claude": "Claude"; case "codex": "Codex"; case "pi": "Pi"; case "hermes": "Hermes"
+        if let customName { return customName }
+        return switch thread?.agent { case "claude": "Claude"; case "codex": "Codex"; case "pi": "Pi"; case "hermes": "Hermes"
         default: record?.app.flatMap { $0.isEmpty ? nil : $0.capitalized } ?? "the agent" }
     }
     /// Native subagents of the pane's agent, reported as "agent/<id>". They run inside it with no

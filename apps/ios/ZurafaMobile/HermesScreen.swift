@@ -23,6 +23,8 @@ import SwiftUI
                     if !lines.isEmpty { withAnimation(.snappy(duration: 0.3)) { self.log = log } }
                     next = reply.next ?? next
                     busy = reply.busy ?? false
+                    // Kept for the Hermes buttons, which show it before the chat opens.
+                    if let name = reply.name, name != UserDefaults.standard.string(forKey: HermesButton.nameKey) { UserDefaults.standard.set(name, forKey: HermesButton.nameKey) }
                     error = nil
                 } catch {
                     self.error = error.localizedDescription
@@ -56,6 +58,7 @@ import SwiftUI
 /// A plain chat with Hermes, presented as a sheet from the sessions list and from a pane.
 struct HermesScreen: View {
     @StateObject private var feed = HermesFeed()
+    @AppStorage(HermesButton.nameKey) private var name = "Hermes"
     @AppStorage("draft.hermes") private var draft = ""
     @FocusState private var composing: Bool
     @State private var problem: String?
@@ -70,13 +73,13 @@ struct HermesScreen: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let error = feed.error, turns.isEmpty {
                         ContentUnavailableView {
-                            Label("Hermes", systemImage: "sparkles")
+                            Label(name, systemImage: "sparkles")
                         } description: {
                             Text(error + "\n" + "Set up Hermes in Zurafa's Settings on your Mac.")
                         }
                     }
                     ForEach(Array(turns.enumerated()), id: \.element.id) { i, turn in
-                        PhoneTurn(turn: turn, name: "Hermes", program: .shell, live: feed.busy && i == turns.count - 1, record: nil, dir: nil)
+                        PhoneTurn(turn: turn, name: name, program: .shell, live: feed.busy && i == turns.count - 1, record: nil, dir: nil)
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
@@ -91,7 +94,7 @@ struct HermesScreen: View {
                 }
                 .padding(.horizontal, 12).padding(.bottom, 8)
             }
-            .navigationTitle("Hermes")
+            .navigationTitle(name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
@@ -124,9 +127,11 @@ struct HermesScreen: View {
 
 /// Opens Hermes: the button on the sessions screen and in a pane's toolbar, with ⌘⇧H on a hardware keyboard.
 struct HermesButton: View {
+    static let nameKey = "hermesName"
     @Binding var shown: Bool
+    @AppStorage(nameKey) private var name = "Hermes"
     var body: some View {
-        Button("Hermes", systemImage: "sparkles") { shown = true }
+        Button(name, systemImage: "sparkles") { shown = true }
             .keyboardShortcut("h", modifiers: [.command, .shift])
     }
 }

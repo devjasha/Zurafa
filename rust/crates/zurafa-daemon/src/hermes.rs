@@ -26,11 +26,14 @@ struct Config {
     key: String,
     #[serde(default)]
     session: Option<String>,
+    /// What the user calls their agent; empty is "Hermes".
+    #[serde(default)]
+    name: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { url: "http://127.0.0.1:8642".into(), key: String::new(), session: None }
+        Self { url: "http://127.0.0.1:8642".into(), key: String::new(), session: None, name: String::new() }
     }
 }
 
@@ -92,13 +95,30 @@ fn open(path: PathBuf) -> Shared {
 
 /// `ui.hermes.config`: saves `url` and `key` when given (`key: ""` clears it), then checks them.
 /// The answer never holds the key.
-pub fn config(url: Option<String>, key: Option<String>) -> Result<Value, String> {
-    config_in(state(), url, key)
+pub fn config(url: Option<String>, key: Option<String>, name: Option<String>) -> Result<Value, String> {
+    config_in(state(), url, key, name)
 }
 
-fn config_in(s: &Shared, url: Option<String>, key: Option<String>) -> Result<Value, String> {
+/// What the user calls their agent, for clients to show: read with every chat read.
+pub fn name() -> String {
+    shown_name(&state().lock().unwrap().cfg)
+}
+
+fn shown_name(cfg: &Config) -> String {
+    if cfg.name.is_empty() { "Hermes".into() } else { cfg.name.clone() }
+}
+
+fn config_in(s: &Shared, url: Option<String>, key: Option<String>, name: Option<String>) -> Result<Value, String> {
     let cfg = {
         let mut st = s.lock().unwrap();
+        if let Some(name) = name {
+            let name = name.trim();
+            if name.chars().count() > 40 || name.chars().any(char::is_control) {
+                return Err("The name must be one line of at most 40 characters".into());
+            }
+            st.cfg.name = name.to_owned();
+            st.save()?;
+        }
         if url.is_some() || key.is_some() {
             if let Some(url) = url {
                 let url = url.trim().trim_end_matches('/').to_owned();
@@ -123,7 +143,7 @@ fn config_in(s: &Shared, url: Option<String>, key: Option<String>) -> Result<Val
         st.cfg.clone()
     };
     let check = if cfg.key.is_empty() { Err(None) } else { call(&cfg, "GET", "/v1/models", None).map_err(Some) };
-    let mut v = json!({"url":cfg.url,"hasKey":!cfg.key.is_empty(),"connected":check.is_ok()});
+    let mut v = json!({"url":cfg.url,"hasKey":!cfg.key.is_empty(),"connected":check.is_ok(),"name":shown_name(&cfg)});
     if let Err(Some(e)) = check {
         v["error"] = e.into();
     }
@@ -587,10 +607,10 @@ s.serve_forever()
         let f = fake();
         let s = temp("chat");
         assert_eq!(read_in(&s, 0).unwrap_err(), NOT_CONNECTED);
-        let bad = config_in(&s, Some(f.1.clone()), Some("wrong".into())).unwrap();
+        let bad = config_in(&s, Some(f.1.clone()), Some("wrong".into()), None).unwrap();
         assert_eq!((bad["connected"].as_bool(), bad["hasKey"].as_bool()), (Some(false), Some(true)));
         assert!(bad["error"].as_str().unwrap().contains("bad key"), "{bad}");
-        let good = config_in(&s, None, Some("s3\"cr\\et".into())).unwrap();
+        let good = config_in(&s, None, Some("s3\"cr\\et".into()), None).unwrap();
         assert_eq!(good["connected"], true, "{good}");
         assert!(good.get("key").is_none());
         let saved = fs::read_to_string(&s.lock().unwrap().path).unwrap();
@@ -633,7 +653,7 @@ s.serve_forever()
     fn sends_images_as_data_urls_and_refuses_other_files() {
         let f = fake();
         let s = temp("images");
-        config_in(&s, Some(f.1.clone()), Some("s3\"cr\\et".into())).unwrap();
+        config_in(&s, Some(f.1.clone()), Some("s3\"cr\\et".into()), None).unwrap();
         let dir = s.lock().unwrap().path.parent().unwrap().to_owned();
         let (png, txt) = (dir.join("shot.png"), dir.join("notes.txt"));
         fs::write(&png, b"\x89PNG\r\n\x1a\nrest").unwrap();
@@ -659,10 +679,14 @@ s.serve_forever()
     #[test]
     fn unreachable_hermes_says_so() {
         let s = temp("down");
-        let v = config_in(&s, Some("http://127.0.0.1:9".into()), Some("k".into())).unwrap();
+        let v = config_in(&s, Some("http://127.0.0.1:9".into()), Some("k".into()), None).unwrap();
         assert_eq!(v["connected"], false);
         assert!(v["error"].as_str().unwrap().contains("Cannot reach Hermes"), "{v}");
-        assert!(config_in(&s, Some("file:///etc/passwd".into()), None).is_err());
+        assert!(config_in(&s, Some("file:///etc/passwd".into()), None, None).is_err());
+        assert_eq!(v["name"], "Hermes", "no name set");
+        assert_eq!(config_in(&s, None, None, Some("  Jarvis ".into())).unwrap()["name"], "Jarvis");
+        assert!(config_in(&s, None, None, Some("two\nlines".into())).is_err());
+        assert_eq!(config_in(&s, None, None, Some("".into())).unwrap()["name"], "Hermes", "cleared");
         let _ = fs::remove_dir_all(s.lock().unwrap().path.parent().unwrap());
     }
 }

@@ -36,6 +36,7 @@ struct Msg: Codable {
     var lines: [String]? // ui.chat: `zurafa-orch follow` lines of a pane's chat
     var next: Int? // ui.chat: the index to read from next
     var busy: Bool? // ui.chat for block "hermes": a Hermes run is streaming
+    var name: String? // ui.chat for block "hermes", ui.hermes.config: what the user calls their Hermes
     // ui.hermes.config
     var url: String?
     var hasKey: Bool?
