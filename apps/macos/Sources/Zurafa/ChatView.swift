@@ -8,6 +8,9 @@ import SwiftUI
     @Published private(set) var busy = false
     /// What the user calls their Hermes, from the daemon's chat reads.
     @Published private(set) var name: String?
+    /// Its pixel avatar and color ids, read with the name.
+    @Published private(set) var avatar: String?
+    @Published private(set) var color: String?
     /// The chat redraws on every workspace change; rebuild its turns only when the log changes.
     private var cached: (live: Bool, turns: [ChatTurn])?
 
@@ -70,6 +73,8 @@ import SwiftUI
                     next = reply.next ?? next
                     if let busy = reply.busy, busy != self.busy { self.busy = busy }
                     if let name = reply.name, name != self.name { self.name = name }
+                    if reply.avatar != self.avatar { self.avatar = reply.avatar }
+                    if reply.color != self.color { self.color = reply.color }
                 } catch {
                     self?.problem = error.localizedDescription
                 }
@@ -388,6 +393,7 @@ struct TurnView: View, Equatable {
     private let ink = Theme.ink
     @State private var open: Bool?
     @State private var hover = false
+    @Environment(\.pixelAvatar) private var avatar
 
     /// A finished turn shows only the agent's name and glyph from its pane; the live one also its status.
     static func == (a: Self, b: Self) -> Bool {
@@ -404,7 +410,8 @@ struct TurnView: View, Equatable {
                 UserBubble(text: user.text)
                     .transition(.asymmetric(insertion: .scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity), removal: .opacity))
             }
-            if live || !turn.work.isEmpty {
+            // With an avatar (Hermes) every answer shows it, work or not.
+            if live || !turn.work.isEmpty || (avatar != nil && turn.answer != nil) {
                 FoldLine(meta: meta, title: title, live: live, start: turn.start,
                          open: Binding(get: { shown }, set: { open = $0 }), expandable: !turn.work.isEmpty)
                 if shown {
@@ -461,6 +468,7 @@ private struct FoldLine: View {
     let expandable: Bool
     @State private var hover = false
     @State private var finished = 0
+    @Environment(\.pixelAvatar) private var avatar
 
     var body: some View {
         Button { if expandable { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } } label: {
@@ -470,7 +478,10 @@ private struct FoldLine: View {
                         if live {
                             WorkingStar(waiting: meta.record?.state == "blocked").transition(.scale(scale: 0.3).combined(with: .opacity))
                         } else {
-                            AgentGlyph(program: meta.program).transition(.scale(scale: 0.3).combined(with: .opacity))
+                            Group {
+                                if let avatar { PixelAvatarView(avatar: avatar.avatar, color: avatar.color) } else { AgentGlyph(program: meta.program) }
+                            }
+                            .transition(.scale(scale: 0.3).combined(with: .opacity))
                         }
                     }
                     .opacity(open || (expandable && hover) ? 0 : 1)

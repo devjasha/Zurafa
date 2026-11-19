@@ -29,11 +29,16 @@ struct Config {
     /// What the user calls their agent; empty is "Hermes".
     #[serde(default)]
     name: String,
+    /// Its pixel-art avatar and color ids (PixelAvatar.swift); empty is the clients' default.
+    #[serde(default)]
+    avatar: String,
+    #[serde(default)]
+    color: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { url: "http://127.0.0.1:8642".into(), key: String::new(), session: None, name: String::new() }
+        Self { url: "http://127.0.0.1:8642".into(), key: String::new(), session: None, name: String::new(), avatar: String::new(), color: String::new() }
     }
 }
 
@@ -95,22 +100,44 @@ fn open(path: PathBuf) -> Shared {
 
 /// `ui.hermes.config`: saves `url` and `key` when given (`key: ""` clears it), then checks them.
 /// The answer never holds the key.
-pub fn config(url: Option<String>, key: Option<String>, name: Option<String>) -> Result<Value, String> {
-    config_in(state(), url, key, name)
+pub fn config(url: Option<String>, key: Option<String>, name: Option<String>, look: Look) -> Result<Value, String> {
+    config_in(state(), url, key, name, look)
 }
 
-/// What the user calls their agent, for clients to show: read with every chat read.
-pub fn name() -> String {
-    shown_name(&state().lock().unwrap().cfg)
+/// `ui.hermes.config`'s avatar and color ids; the clients know the sets, so the daemon only checks their form.
+#[derive(Default)]
+pub struct Look {
+    pub avatar: Option<String>,
+    pub color: Option<String>,
+}
+
+/// What the user calls their agent and its avatar, for clients to show: read with every chat read.
+pub fn identity() -> Value {
+    identity_of(&state().lock().unwrap().cfg)
+}
+
+fn identity_of(cfg: &Config) -> Value {
+    json!({"name":shown_name(cfg),"avatar":cfg.avatar,"color":cfg.color})
 }
 
 fn shown_name(cfg: &Config) -> String {
     if cfg.name.is_empty() { "Hermes".into() } else { cfg.name.clone() }
 }
 
-fn config_in(s: &Shared, url: Option<String>, key: Option<String>, name: Option<String>) -> Result<Value, String> {
+fn config_in(s: &Shared, url: Option<String>, key: Option<String>, name: Option<String>, look: Look) -> Result<Value, String> {
     let cfg = {
         let mut st = s.lock().unwrap();
+        if look.avatar.is_some() || look.color.is_some() {
+            let cfg = &mut st.cfg;
+            for (given, field) in [(look.avatar, &mut cfg.avatar), (look.color, &mut cfg.color)] {
+                let Some(id) = given else { continue };
+                if id.len() > 20 || !id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
+                    return Err("Avatar and color ids are short lowercase words".into());
+                }
+                *field = id;
+            }
+            st.save()?;
+        }
         if let Some(name) = name {
             let name = name.trim();
             if name.chars().count() > 40 || name.chars().any(char::is_control) {
@@ -143,7 +170,10 @@ fn config_in(s: &Shared, url: Option<String>, key: Option<String>, name: Option<
         st.cfg.clone()
     };
     let check = if cfg.key.is_empty() { Err(None) } else { call(&cfg, "GET", "/v1/models", None).map_err(Some) };
-    let mut v = json!({"url":cfg.url,"hasKey":!cfg.key.is_empty(),"connected":check.is_ok(),"name":shown_name(&cfg)});
+    let mut v = identity_of(&cfg);
+    v["url"] = cfg.url.clone().into();
+    v["hasKey"] = (!cfg.key.is_empty()).into();
+    v["connected"] = check.is_ok().into();
     if let Err(Some(e)) = check {
         v["error"] = e.into();
     }
@@ -607,10 +637,10 @@ s.serve_forever()
         let f = fake();
         let s = temp("chat");
         assert_eq!(read_in(&s, 0).unwrap_err(), NOT_CONNECTED);
-        let bad = config_in(&s, Some(f.1.clone()), Some("wrong".into()), None).unwrap();
+        let bad = config_in(&s, Some(f.1.clone()), Some("wrong".into()), None, Look::default()).unwrap();
         assert_eq!((bad["connected"].as_bool(), bad["hasKey"].as_bool()), (Some(false), Some(true)));
         assert!(bad["error"].as_str().unwrap().contains("bad key"), "{bad}");
-        let good = config_in(&s, None, Some("s3\"cr\\et".into()), None).unwrap();
+        let good = config_in(&s, None, Some("s3\"cr\\et".into()), None, Look::default()).unwrap();
         assert_eq!(good["connected"], true, "{good}");
         assert!(good.get("key").is_none());
         let saved = fs::read_to_string(&s.lock().unwrap().path).unwrap();
@@ -653,7 +683,7 @@ s.serve_forever()
     fn sends_images_as_data_urls_and_refuses_other_files() {
         let f = fake();
         let s = temp("images");
-        config_in(&s, Some(f.1.clone()), Some("s3\"cr\\et".into()), None).unwrap();
+        config_in(&s, Some(f.1.clone()), Some("s3\"cr\\et".into()), None, Look::default()).unwrap();
         let dir = s.lock().unwrap().path.parent().unwrap().to_owned();
         let (png, txt) = (dir.join("shot.png"), dir.join("notes.txt"));
         fs::write(&png, b"\x89PNG\r\n\x1a\nrest").unwrap();
@@ -679,14 +709,20 @@ s.serve_forever()
     #[test]
     fn unreachable_hermes_says_so() {
         let s = temp("down");
-        let v = config_in(&s, Some("http://127.0.0.1:9".into()), Some("k".into()), None).unwrap();
+        let v = config_in(&s, Some("http://127.0.0.1:9".into()), Some("k".into()), None, Look::default()).unwrap();
         assert_eq!(v["connected"], false);
         assert!(v["error"].as_str().unwrap().contains("Cannot reach Hermes"), "{v}");
-        assert!(config_in(&s, Some("file:///etc/passwd".into()), None, None).is_err());
+        assert!(config_in(&s, Some("file:///etc/passwd".into()), None, None, Look::default()).is_err());
         assert_eq!(v["name"], "Hermes", "no name set");
-        assert_eq!(config_in(&s, None, None, Some("  Jarvis ".into())).unwrap()["name"], "Jarvis");
-        assert!(config_in(&s, None, None, Some("two\nlines".into())).is_err());
-        assert_eq!(config_in(&s, None, None, Some("".into())).unwrap()["name"], "Hermes", "cleared");
+        assert_eq!(config_in(&s, None, None, Some("  Jarvis ".into()), Look::default()).unwrap()["name"], "Jarvis");
+        assert!(config_in(&s, None, None, Some("two\nlines".into()), Look::default()).is_err());
+        assert_eq!(config_in(&s, None, None, Some("".into()), Look::default()).unwrap()["name"], "Hermes", "cleared");
+        assert_eq!(v["avatar"], "", "no avatar set");
+        let look = Look { avatar: Some("fox".into()), color: Some("teal".into()) };
+        let v = config_in(&s, None, None, None, look).unwrap();
+        assert_eq!((v["avatar"].as_str(), v["color"].as_str()), (Some("fox"), Some("teal")));
+        assert_eq!(identity_of(&open(s.lock().unwrap().path.clone()).lock().unwrap().cfg)["avatar"], "fox", "kept in hermes.json");
+        assert!(config_in(&s, None, None, None, Look { avatar: Some("../x".into()), color: None }).is_err());
         let _ = fs::remove_dir_all(s.lock().unwrap().path.parent().unwrap());
     }
 }

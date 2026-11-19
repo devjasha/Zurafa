@@ -37,6 +37,8 @@ struct Msg: Codable {
     var next: Int? // ui.chat: the index to read from next
     var busy: Bool? // ui.chat for block "hermes": a Hermes run is streaming
     var name: String? // ui.chat for block "hermes", ui.hermes.config: what the user calls their Hermes
+    var avatar: String? // the same two: its PixelAvatar id, and that avatar's color id
+    var color: String?
     // ui.hermes.config
     var url: String?
     var hasKey: Bool?

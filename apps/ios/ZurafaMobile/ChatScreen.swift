@@ -554,6 +554,7 @@ struct PhoneTurn: View {
     let dir: String?
     @State private var open: Bool?
     @State private var finished = 0
+    @Environment(\.pixelAvatar) private var avatar
 
     var body: some View {
         let shown = open ?? live
@@ -567,7 +568,8 @@ struct PhoneTurn: View {
                 }
                 .transition(.asymmetric(insertion: .scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity), removal: .opacity))
             }
-            if live || !turn.work.isEmpty {
+            // With an avatar (Hermes) every answer shows it, work or not.
+            if live || !turn.work.isEmpty || (avatar != nil && turn.answer != nil) {
                 Button { withAnimation(.snappy) { open = !shown } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: shown ? "chevron.down" : "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(.secondary).frame(width: 14)
@@ -576,8 +578,11 @@ struct PhoneTurn: View {
                             if live {
                                 WorkingStar(waiting: record?.state == "blocked").transition(.scale(scale: 0.3).combined(with: .opacity))
                             } else {
-                                ProgramGlyph(program: program).foregroundStyle(program.badge.color.map { Color(hex: $0) } ?? .primary)
-                                    .transition(.scale(scale: 0.3).combined(with: .opacity))
+                                Group {
+                                    if let avatar { PixelAvatarView(avatar: avatar.avatar, color: avatar.color) }
+                                    else { ProgramGlyph(program: program).foregroundStyle(program.badge.color.map { Color(hex: $0) } ?? .primary) }
+                                }
+                                .transition(.scale(scale: 0.3).combined(with: .opacity))
                             }
                             SparkleBurst(trigger: finished)
                         }

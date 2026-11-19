@@ -22,7 +22,7 @@ struct HermesChat: View {
         let turns = feed.turns(live: feed.busy)
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Image(systemName: "bubble.left.and.text.bubble.right")
+                PixelAvatarView(avatar: feed.avatar, color: feed.color).frame(width: 18, height: 18)
                 Text(name).font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 0)
                 IconButton(symbol: "square.and.pencil", help: "New Chat") { newChat() }
@@ -45,6 +45,7 @@ struct HermesChat: View {
                          TurnView(turn: turns[i], pane: "hermes", meta: meta, live: feed.busy && i == turns.count - 1, last: i == turns.count - 1)
                      },
                      earlier: nil, feed: feed, ws: ws, pinned: $pinned)
+                .environment(\.pixelAvatar, (feed.avatar ?? "", feed.color ?? ""))
             VStack(spacing: 0) {
                 Composer(draft: $draft, placeholder: "Message \(name)…", focus: $composing, attached: $images, send: send) {
                     IconButton(symbol: "photo.badge.plus", help: "Attach Images") { pickImages() }
@@ -118,6 +119,8 @@ struct HermesPane: View {
     @State private var url = "http://127.0.0.1:8642"
     @State private var key = ""
     @State private var name = ""
+    @State private var avatar = ""
+    @State private var color = ""
     @State private var status: Msg?
     @State private var error: String?
     @State private var connecting = false
@@ -126,6 +129,11 @@ struct HermesPane: View {
         Form {
             Section {
                 TextField("Name", text: $name, prompt: Text("Hermes"))
+                LabeledContent("Avatar") {
+                    // A pick saves at once, without Connect.
+                    PixelAvatarPicker(avatar: Binding(get: { avatar }, set: { avatar = $0; look() }),
+                                      color: Binding(get: { color }, set: { color = $0; look() }))
+                }
                 TextField("Server URL", text: $url)
                 SecureField("API Key", text: $key, prompt: Text(status?.hasKey == true ? "Saved" : "API_SERVER_KEY"))
                 LabeledContent {
@@ -142,7 +150,7 @@ struct HermesPane: View {
                     .font(.callout).foregroundStyle(.secondary)
                 }
             } footer: {
-                Text("Enable Hermes' API server (API_SERVER_ENABLED=true and API_SERVER_KEY in ~/.hermes/.env), then run `hermes gateway`. Open the chat with ⇧⌘H. The name is what Zurafa calls your agent, on this Mac and your iPhone. Experimental.")
+                Text("Enable Hermes' API server (API_SERVER_ENABLED=true and API_SERVER_KEY in ~/.hermes/.env), then run `hermes gateway`. Open the chat with ⇧⌘H. The name and avatar are how Zurafa shows your agent, on this Mac and your iPhone. Experimental.")
             }
         }
         .task { await config(save: false) }
@@ -164,9 +172,17 @@ struct HermesPane: View {
             error = nil
             if let saved = reply.url, !saved.isEmpty { url = saved }
             if let saved = reply.name { name = saved == "Hermes" ? "" : saved }
+            if !save { avatar = PixelAvatar.of(reply.avatar).id; color = reply.color ?? "" }
             if save { key = "" }
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    private func look() {
+        let request: [String: JSONValue] = ["type": .string("ui.hermes.config"), "avatar": .string(avatar), "color": .string(color)]
+        Task {
+            do { _ = try await DaemonClient.shared.request(request) } catch { self.error = error.localizedDescription }
         }
     }
 }

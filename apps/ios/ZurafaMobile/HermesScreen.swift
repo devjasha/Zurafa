@@ -24,7 +24,9 @@ import SwiftUI
                     next = reply.next ?? next
                     busy = reply.busy ?? false
                     // Kept for the Hermes buttons, which show it before the chat opens.
-                    if let name = reply.name, name != UserDefaults.standard.string(forKey: HermesButton.nameKey) { UserDefaults.standard.set(name, forKey: HermesButton.nameKey) }
+                    for (key, value) in [(HermesButton.nameKey, reply.name), (HermesButton.avatarKey, reply.avatar), (HermesButton.colorKey, reply.color)] {
+                        if let value, value != UserDefaults.standard.string(forKey: key) { UserDefaults.standard.set(value, forKey: key) }
+                    }
                     error = nil
                 } catch {
                     self.error = error.localizedDescription
@@ -59,6 +61,8 @@ import SwiftUI
 struct HermesScreen: View {
     @StateObject private var feed = HermesFeed()
     @AppStorage(HermesButton.nameKey) private var name = "Hermes"
+    @AppStorage(HermesButton.avatarKey) private var avatar = ""
+    @AppStorage(HermesButton.colorKey) private var color = ""
     @AppStorage("draft.hermes") private var draft = ""
     @FocusState private var composing: Bool
     @State private var problem: String?
@@ -73,7 +77,7 @@ struct HermesScreen: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let error = feed.error, turns.isEmpty {
                         ContentUnavailableView {
-                            Label(name, systemImage: "sparkles")
+                            Label { Text(name) } icon: { PixelAvatarView(avatar: avatar, color: color).frame(width: 48, height: 48) }
                         } description: {
                             Text(error + "\n" + "Set up Hermes in Zurafa's Settings on your Mac.")
                         }
@@ -83,6 +87,7 @@ struct HermesScreen: View {
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
+                .environment(\.pixelAvatar, (avatar, color))
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
@@ -97,6 +102,12 @@ struct HermesScreen: View {
             .navigationTitle(name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 6) {
+                        PixelAvatarView(avatar: avatar, color: color).frame(width: 20, height: 20)
+                        Text(name).font(.headline)
+                    }
+                }
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Button("New Chat", systemImage: "square.and.pencil") {
@@ -128,10 +139,16 @@ struct HermesScreen: View {
 /// Opens Hermes: the button on the sessions screen and in a pane's toolbar, with ⌘⇧H on a hardware keyboard.
 struct HermesButton: View {
     static let nameKey = "hermesName"
+    static let avatarKey = "hermesAvatar"
+    static let colorKey = "hermesColor"
     @Binding var shown: Bool
     @AppStorage(nameKey) private var name = "Hermes"
+    @AppStorage(avatarKey) private var avatar = ""
+    @AppStorage(colorKey) private var color = ""
     var body: some View {
-        Button(name, systemImage: "sparkles") { shown = true }
+        Button { shown = true } label: {
+            Label { Text(name) } icon: { PixelAvatarView(avatar: avatar, color: color).frame(width: 20, height: 20) }
+        }
             .keyboardShortcut("h", modifiers: [.command, .shift])
     }
 }

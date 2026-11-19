@@ -224,7 +224,7 @@ enum Request {
     },
     /// Hermes' URL and key: saved when given (`key: ""` clears it), then checked (see hermes.rs).
     #[serde(rename = "ui.hermes.config")]
-    UiHermesConfig { id: u64, url: Option<String>, key: Option<String>, name: Option<String> },
+    UiHermesConfig { id: u64, url: Option<String>, key: Option<String>, name: Option<String>, avatar: Option<String>, color: Option<String> },
     /// A message to Hermes; its answer arrives in the chat of block "hermes".
     #[serde(rename = "ui.hermes.send")]
     UiHermesSend {
@@ -564,11 +564,19 @@ async fn request(
             return id.map(|id| if known { json!({"id":id,"type":"ok"}) } else { error(id, "unknown call") });
         }
         Request::UiChatRead { id, ref block, from } if block == crate::hermes::BLOCK => match tokio::task::spawn_blocking(move || crate::hermes::read(from)).await {
-            Ok(Ok((lines, next, busy))) => json!({"id":id,"type":"ui.chat","lines":lines,"next":next,"busy":busy,"name":crate::hermes::name()}),
+            Ok(Ok((lines, next, busy))) => {
+                let mut v = crate::hermes::identity();
+                v["id"] = json!(id);
+                v["type"] = json!("ui.chat");
+                v["lines"] = json!(lines);
+                v["next"] = json!(next);
+                v["busy"] = json!(busy);
+                v
+            }
             Ok(Err(e)) => error(id, e),
             Err(e) => error(id, e),
         },
-        Request::UiHermesConfig { id, url, key, name } => match tokio::task::spawn_blocking(move || crate::hermes::config(url, key, name)).await {
+        Request::UiHermesConfig { id, url, key, name, avatar, color } => match tokio::task::spawn_blocking(move || crate::hermes::config(url, key, name, crate::hermes::Look { avatar, color })).await {
             Ok(Ok(mut v)) => {
                 v["id"] = json!(id);
                 v["type"] = json!("ui.hermes.config");
