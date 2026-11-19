@@ -25,11 +25,21 @@ struct HermesChat: View {
                 PixelAvatarView(avatar: feed.avatar, color: feed.color).frame(width: 18, height: 18)
                 Text(name).font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 0)
-                IconButton(symbol: "square.and.pencil", help: "New Chat") { newChat() }
                 IconButton(symbol: "xmark", help: "Close \(name) (⇧⌘H)") { ws.hermesOpen = false }
             }
             .foregroundStyle(Theme.ink)
             .padding(.leading, 14).padding(.trailing, 8).frame(height: 44)
+            HStack(spacing: 2) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        ForEach(feed.chats) { chat in
+                            HermesTab(chat: chat, on: chat.id == feed.chat) { feed.show(chat: chat.id, pane: "hermes") } close: { close(chat.id) }
+                        }
+                    }
+                }
+                IconButton(symbol: "plus", help: "New Chat") { newChat() }
+            }
+            .padding(.horizontal, 8).padding(.bottom, 6)
             Divider().opacity(0.35)
             if let problem = feed.problem ?? problem {
                 VStack(alignment: .leading, spacing: 8) {
@@ -78,6 +88,7 @@ struct HermesChat: View {
         images = []
         pinned = true
         var request: [String: JSONValue] = ["type": .string("ui.hermes.send"), "text": .string(text)]
+        if let chat = feed.chat { request["chat"] = .string(chat) }
         if !files.isEmpty { request["images"] = .array(files.map { .string($0.path) }) }
         Task {
             do {
@@ -102,15 +113,64 @@ struct HermesChat: View {
     private func newChat() {
         Task {
             do {
-                _ = try await DaemonClient.shared.request(["type": .string("ui.hermes.new")])
-                // The daemon restarts its lines past the old ones, so the next read brings only the new chat.
-                feed.log = ChatLog()
-                feed.heights = [:]
+                let reply = try await DaemonClient.shared.request(["type": .string("ui.hermes.new")])
+                feed.show(chat: reply.chat, pane: "hermes")
                 problem = nil
             } catch {
                 problem = error.localizedDescription
             }
         }
+    }
+
+    /// Forgets the chat, showing its neighbour when it was the one shown, as a browser closes a tab.
+    private func close(_ chat: String) {
+        Task {
+            do {
+                _ = try await DaemonClient.shared.request(["type": .string("ui.hermes.close"), "chat": .string(chat)])
+                let i = feed.chats.firstIndex { $0.id == chat }
+                feed.chats.removeAll { $0.id == chat }
+                if chat == feed.chat {
+                    let next = i.flatMap { feed.chats.indices.contains($0) ? feed.chats[$0] : feed.chats.last }
+                    feed.show(chat: next?.id, pane: "hermes")
+                }
+                problem = nil
+            } catch {
+                problem = error.localizedDescription
+            }
+        }
+    }
+}
+
+/// One chat in the Hermes panel's tab strip: its title, a spinner while Hermes answers, close on hover.
+private struct HermesTab: View {
+    let chat: HermesChatTab, on: Bool
+    let select: () -> Void, close: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(action: select) {
+                HStack(spacing: 4) {
+                    if chat.busy { Spinner().frame(width: 11, height: 11) }
+                    Text(chat.title).lineLimit(1).truncationMode(.tail)
+                        .foregroundStyle(on ? Theme.ink : Theme.inkSoft)
+                }
+                .padding(.leading, 10).frame(height: 24).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(on ? .isSelected : [])
+            Button(action: close) {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .medium))
+                    .frame(width: 14, height: 14).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.inkSoft).help("Close Chat")
+            .opacity(on || hovering ? 1 : 0)
+        }
+        .font(.system(size: 12, weight: on ? .medium : .regular))
+        .padding(.trailing, 4).frame(maxWidth: 170)
+        .background(on ? Theme.activeTab.opacity(0.12) : .clear, in: Capsule())
+        .onHover { hovering = $0 }
+        .help(chat.title)
     }
 }
 

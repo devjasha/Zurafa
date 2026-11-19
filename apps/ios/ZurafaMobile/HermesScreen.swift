@@ -6,6 +6,10 @@ import SwiftUI
     @Published var busy = false
     /// The daemon's error, e.g. Hermes not set up on the Mac.
     @Published var error: String?
+    /// The chat shown; nil shows the newest, which the first read names. The Mac may show another.
+    @Published private(set) var chat: String?
+    /// Every chat, newest first.
+    @Published var chats: [HermesChatTab] = []
     private var next = 0
     private var task: Task<Void, Never>?
 
@@ -15,9 +19,17 @@ import SwiftUI
             while !Task.isCancelled {
                 guard let self else { return }
                 do {
-                    let reply = try await MacClient.shared.request(["type": .string("ui.chat.read"), "block": .string("hermes"), "from": .number(Double(next))])
+                    var request: [String: JSONValue] = ["type": .string("ui.chat.read"), "block": .string("hermes"), "from": .number(Double(next))]
+                    let asked = chat
+                    if let asked { request["chat"] = .string(asked) }
+                    let reply = try await MacClient.shared.request(request)
+                    // Another chat was picked meanwhile: this read is of the old one.
+                    guard asked == chat else { continue }
+                    // A chat asked for that was closed reads as the newest, from its start.
+                    chat = reply.chat ?? chat
+                    if let chats = reply.chats, chats != self.chats { self.chats = chats }
                     let lines = reply.lines ?? []
-                    // A `mode` line opens a follow: after New Chat the daemon starts over.
+                    // A `mode` line opens a follow: another chat starts over.
                     var log = lines.contains { $0.contains("\"kind\":\"mode\"") } ? ChatLog() : self.log
                     lines.forEach { log.add(Data($0.utf8)) }
                     if !lines.isEmpty { withAnimation(.snappy(duration: 0.3)) { self.log = log } }
@@ -44,16 +56,32 @@ import SwiftUI
 
     func send(_ text: String, images: [String]) async throws {
         var request: [String: JSONValue] = ["type": .string("ui.hermes.send"), "text": .string(text)]
+        if let chat { request["chat"] = .string(chat) }
         if !images.isEmpty { request["images"] = .array(images.map { .string($0) }) }
         _ = try await MacClient.shared.request(request)
         busy = true
     }
 
     func newChat() async throws {
-        _ = try await MacClient.shared.request(["type": .string("ui.hermes.new")])
+        let reply = try await MacClient.shared.request(["type": .string("ui.hermes.new")])
+        show(reply.chat)
+    }
+
+    /// Reads another chat from its start; the next read brings its lines.
+    func show(_ chat: String?) {
+        self.chat = chat
         log = ChatLog()
         next = 0
         busy = false
+    }
+
+    /// Forgets the chat shown and shows its neighbour.
+    func close() async throws {
+        guard let chat else { return }
+        _ = try await MacClient.shared.request(["type": .string("ui.hermes.close"), "chat": .string(chat)])
+        let i = chats.firstIndex { $0.id == chat }
+        chats.removeAll { $0.id == chat }
+        show(i.flatMap { chats.indices.contains($0) ? chats[$0] : chats.last }?.id)
     }
 }
 
@@ -101,6 +129,20 @@ struct HermesScreen: View {
             }
             .navigationTitle(name)
             .navigationBarTitleDisplayMode(.inline)
+            // The chats, switched from the title as the Mac does with its tabs.
+            .toolbarTitleMenu {
+                Picker("Chats", selection: Binding(get: { feed.chat }, set: { feed.show($0) })) {
+                    ForEach(feed.chats) { chat in
+                        Label(chat.title, systemImage: chat.busy ? "ellipsis.bubble" : "bubble.left").tag(Optional(chat.id))
+                    }
+                }
+                Button("Close This Chat", systemImage: "xmark", role: .destructive) {
+                    Task {
+                        do { try await feed.close(); problem = nil } catch { problem = error.localizedDescription }
+                    }
+                }
+                .disabled(feed.chat == nil)
+            }
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 6) {
@@ -115,7 +157,6 @@ struct HermesScreen: View {
                             do { try await feed.newChat(); problem = nil } catch { problem = error.localizedDescription }
                         }
                     }
-                    .disabled(feed.busy)
                 }
             }
         }

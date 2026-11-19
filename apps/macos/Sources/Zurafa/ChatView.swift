@@ -11,6 +11,10 @@ import SwiftUI
     /// Its pixel avatar and color ids, read with the name.
     @Published private(set) var avatar: String?
     @Published private(set) var color: String?
+    /// Hermes only: the chat read, chosen by `show`; nil reads the newest, which the first read names.
+    @Published private(set) var chat: String?
+    /// Hermes only: every chat, newest first, for the tabs.
+    @Published var chats: [HermesChatTab] = []
     /// The chat redraws on every workspace change; rebuild its turns only when the log changes.
     private var cached: (live: Bool, turns: [ChatTurn])?
 
@@ -60,11 +64,21 @@ import SwiftUI
         poll = Task { [weak self] in
             var next = 0
             while !Task.isCancelled {
-                let request: [String: JSONValue] = ["type": .string("ui.chat.read"), "block": .string(pane), "from": .number(Double(next))]
+                var request: [String: JSONValue] = ["type": .string("ui.chat.read"), "block": .string(pane), "from": .number(Double(next))]
+                let asked = self?.chat
+                if let asked { request["chat"] = .string(asked) }
                 do {
                     let reply = try await DaemonClient.shared.request(request)
-                    guard let self else { return }
+                    guard let self, !Task.isCancelled else { return }
                     self.problem = nil
+                    if let chats = reply.chats, chats != self.chats { self.chats = chats }
+                    if let shown = reply.chat, shown != asked {
+                        // The chat asked for was closed: show the one the daemon read instead, from its start.
+                        if asked == nil { self.chat = shown } else {
+                            self.show(chat: shown, pane: pane)
+                            return
+                        }
+                    }
                     if let lines = reply.lines, !lines.isEmpty {
                         var log = self.log
                         lines.forEach { log.add(Data($0.utf8)) }
@@ -82,6 +96,17 @@ import SwiftUI
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+    }
+
+    /// Hermes only: reads another chat from its start.
+    func show(chat: String?, pane: String) {
+        poll?.cancel()
+        poll = nil
+        self.chat = chat
+        log = ChatLog()
+        heights = [:]
+        busy = false
+        start(remotePane: pane)
     }
 
     func start(pane: String) {

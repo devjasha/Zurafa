@@ -221,6 +221,9 @@ enum Request {
         block: String,
         #[serde(default)]
         from: usize,
+        /// Block "hermes": which chat; none is the newest.
+        #[serde(default)]
+        chat: Option<String>,
     },
     /// Hermes' URL and key: saved when given (`key: ""` clears it), then checked (see hermes.rs).
     #[serde(rename = "ui.hermes.config")]
@@ -229,15 +232,21 @@ enum Request {
     #[serde(rename = "ui.hermes.send")]
     UiHermesSend {
         id: u64,
+        /// Which chat; none is the newest. The reply names it.
+        #[serde(default)]
+        chat: Option<String>,
         #[serde(default)]
         text: String,
         /// Image files on this machine to send with it.
         #[serde(default)]
         images: Vec<String>,
     },
-    /// Starts a new Hermes chat.
+    /// Starts a new Hermes chat; the reply names it.
     #[serde(rename = "ui.hermes.new")]
     UiHermesNew { id: u64 },
+    /// Forgets a Hermes chat (its session stays in Hermes).
+    #[serde(rename = "ui.hermes.close")]
+    UiHermesClose { id: u64, chat: String },
     /// One zurafa-orch command run on this machine (set, spawn, threads) and its output.
     #[serde(rename = "ui.orch")]
     UiOrch { id: u64, args: Vec<String> },
@@ -563,14 +572,10 @@ async fn request(
             let known = terms.actions.answer(late, call, if ok { Ok(message) } else { Err(message) });
             return id.map(|id| if known { json!({"id":id,"type":"ok"}) } else { error(id, "unknown call") });
         }
-        Request::UiChatRead { id, ref block, from } if block == crate::hermes::BLOCK => match tokio::task::spawn_blocking(move || crate::hermes::read(from)).await {
-            Ok(Ok((lines, next, busy))) => {
-                let mut v = crate::hermes::identity();
+        Request::UiChatRead { id, ref block, from, chat } if block == crate::hermes::BLOCK => match tokio::task::spawn_blocking(move || crate::hermes::read(chat, from)).await {
+            Ok(Ok(mut v)) => {
                 v["id"] = json!(id);
                 v["type"] = json!("ui.chat");
-                v["lines"] = json!(lines);
-                v["next"] = json!(next);
-                v["busy"] = json!(busy);
                 v
             }
             Ok(Err(e)) => error(id, e),
@@ -585,16 +590,20 @@ async fn request(
             Ok(Err(e)) => error(id, e),
             Err(e) => error(id, e),
         },
-        Request::UiHermesSend { id, text, images } => match tokio::task::spawn_blocking(move || crate::hermes::send(text, images)).await {
-            Ok(Ok(())) => json!({"id":id,"type":"ui.hermes.send"}),
+        Request::UiHermesSend { id, chat, text, images } => match tokio::task::spawn_blocking(move || crate::hermes::send(chat, text, images)).await {
+            Ok(Ok(chat)) => json!({"id":id,"type":"ui.hermes.send","chat":chat}),
             Ok(Err(e)) => error(id, e),
             Err(e) => error(id, e),
         },
         Request::UiHermesNew { id } => match crate::hermes::new_chat() {
-            Ok(()) => json!({"id":id,"type":"ui.hermes.new"}),
+            Ok(chat) => json!({"id":id,"type":"ui.hermes.new","chat":chat}),
             Err(e) => error(id, e),
         },
-        Request::UiChatRead { id, block, from } => {
+        Request::UiHermesClose { id, chat } => match crate::hermes::close(chat) {
+            Ok(()) => json!({"id":id,"type":"ui.hermes.close"}),
+            Err(e) => error(id, e),
+        },
+        Request::UiChatRead { id, block, from, .. } => {
             // A remote pane's agent runs on its host: the chat comes from the daemon there.
             let snapshot = terms.dispatcher.snapshot();
             let Some((pid, remote)) = snapshot.sessions.values().find_map(|s| {

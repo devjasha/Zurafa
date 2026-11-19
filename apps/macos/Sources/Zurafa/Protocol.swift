@@ -39,6 +39,8 @@ struct Msg: Codable {
     var name: String? // ui.chat for block "hermes", ui.hermes.config: what the user calls their Hermes
     var avatar: String? // the same two: its PixelAvatar id, and that avatar's color id
     var color: String?
+    var chat: String? // ui.chat for block "hermes", ui.hermes.send, ui.hermes.new: which Hermes chat
+    var chats: [HermesChatTab]? // ui.chat for block "hermes": every chat, newest first
     // ui.hermes.config
     var url: String?
     var hasKey: Bool?
@@ -50,6 +52,13 @@ struct Msg: Codable {
     var action: String?
     var args: [String: JSONValue]?
     var ok: Bool?
+}
+
+/// One Hermes chat, a tab in the chat panel.
+struct HermesChatTab: Codable, Equatable, Identifiable {
+    var id: String
+    var title: String
+    var busy: Bool
 }
 
 /// Zurafa's own Tailscale device (`zurafa-tailscale`), as `server.status` reports it.
