@@ -247,6 +247,14 @@ enum Request {
     /// Forgets a Hermes chat (its session stays in Hermes).
     #[serde(rename = "ui.hermes.close")]
     UiHermesClose { id: u64, chat: String },
+    /// Hermes' MCP access to Zurafa (mcp.rs): turns it on or off, makes a new token; answers its settings.
+    #[serde(rename = "ui.hermes.control")]
+    UiHermesControl {
+        id: u64,
+        enabled: Option<bool>,
+        #[serde(default)]
+        new_token: bool,
+    },
     /// One zurafa-orch command run on this machine (set, spawn, threads) and its output.
     #[serde(rename = "ui.orch")]
     UiOrch { id: u64, args: Vec<String> },
@@ -601,6 +609,15 @@ async fn request(
         },
         Request::UiHermesClose { id, chat } => match crate::hermes::close(chat) {
             Ok(()) => json!({"id":id,"type":"ui.hermes.close"}),
+            Err(e) => error(id, e),
+        },
+        Request::UiHermesControl { id, enabled, new_token } => match tokio::task::spawn_blocking(move || crate::mcp::control(enabled, new_token)).await {
+            Ok(Ok(mut v)) => {
+                v["id"] = json!(id);
+                v["type"] = json!("ui.hermes.control");
+                v
+            }
+            Ok(Err(e)) => error(id, e),
             Err(e) => error(id, e),
         },
         Request::UiChatRead { id, block, from, .. } => {

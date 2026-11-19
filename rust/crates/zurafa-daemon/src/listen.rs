@@ -253,10 +253,17 @@ where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let mut stream = BufReader::new(stream);
-    let Ok(Some(headers)) = read_upgrade(&mut stream).await else {
-        let _ = respond(&mut stream, UPGRADE_REQUIRED).await;
+    let Ok((line, headers)) = read_head(&mut stream).await else {
         return;
     };
+    // Hermes' MCP client: it authenticates with its own token, as tagged servers carry no login.
+    if matches!(target, Target::Daemon(_)) && crate::mcp::wants(&line) {
+        return crate::mcp::serve(stream, &line, &headers).await;
+    }
+    if !is_upgrade(&line, &headers) {
+        let _ = respond(&mut stream, UPGRADE_REQUIRED).await;
+        return;
+    }
     let login = headers.iter().find(|(name, _)| name == "tailscale-user-login").map(|(_, v)| v.as_str());
     let owner = owner.lock().unwrap().clone();
     match admit_serve(login, owner.as_deref(), allow_identified) {
@@ -316,10 +323,21 @@ pub async fn respond<S: AsyncWrite + Unpin>(stream: &mut S, response: &str) -> i
 /// Reads an HTTP/1.1 request head (at most 8 KiB). Its headers, names lowercased, when it is a
 /// `GET` with `Upgrade: zurafa`; `None` for any other request.
 async fn read_upgrade<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> io::Result<Option<Vec<(String, String)>>> {
+    let (line, headers) = read_head(stream).await?;
+    Ok(is_upgrade(&line, &headers).then_some(headers))
+}
+
+fn is_upgrade(line: &str, headers: &[(String, String)]) -> bool {
+    let get = line.starts_with("GET /") && line.trim_end().ends_with(" HTTP/1.1");
+    get && headers.iter().any(|(name, value)| name == "upgrade" && value.eq_ignore_ascii_case("zurafa"))
+}
+
+/// Reads an HTTP/1.1 request head (at most 8 KiB): its request line and headers, names lowercased.
+async fn read_head<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> io::Result<(String, Vec<(String, String)>)> {
     let mut head = (&mut *stream).take(8192);
     let mut line = String::new();
     head.read_line(&mut line).await?;
-    let get = line.starts_with("GET /") && line.trim_end().ends_with(" HTTP/1.1");
+    let request = line.trim_end().to_owned();
     let mut headers = Vec::new();
     loop {
         line.clear();
@@ -334,8 +352,7 @@ async fn read_upgrade<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> io::Re
             headers.push((name.trim().to_ascii_lowercase(), value.trim().to_owned()));
         }
     }
-    let wants_zurafa = headers.iter().any(|(name, value)| name == "upgrade" && value.eq_ignore_ascii_case("zurafa"));
-    Ok((get && wants_zurafa).then_some(headers))
+    Ok((request, headers))
 }
 
 #[cfg(test)]

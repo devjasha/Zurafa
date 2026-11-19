@@ -46,6 +46,9 @@ struct Msg: Codable {
     var hasKey: Bool?
     var connected: Bool?
     var error: String?
+    // ui.hermes.control: Hermes' MCP access to Zurafa, its token; `url` is its endpoint
+    var enabled: Bool?
+    var token: String?
     var out: String? // ui.orch: what zurafa-orch printed
     // ui.action, which the daemon sends the Mac app for an agent, and the app's ui.action.result
     var call: Int?

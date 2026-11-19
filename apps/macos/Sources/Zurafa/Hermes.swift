@@ -184,8 +184,10 @@ struct HermesPane: View {
     @State private var status: Msg?
     @State private var error: String?
     @State private var connecting = false
+    @State private var control: Msg?
 
     var body: some View {
+        let agent = status?.name ?? "Hermes"
         Form {
             Section {
                 TextField("Name", text: $name, prompt: Text("Hermes"))
@@ -212,8 +214,56 @@ struct HermesPane: View {
             } footer: {
                 Text("Enable Hermes' API server (API_SERVER_ENABLED=true and API_SERVER_KEY in ~/.hermes/.env), then run `hermes gateway`. Open the chat with ⇧⌘H. The name and avatar are how Zurafa shows your agent, on this Mac and your iPhone. Experimental.")
             }
+            Section {
+                Toggle("Let \(agent) see and control Zurafa", isOn: Binding(get: { control?.enabled == true }, set: { on in Task { await setControl(["enabled": .bool(on)]) } }))
+                if control?.enabled == true, let token = control?.token {
+                    let url = control?.url ?? "https://YOUR-ZURAFA-ADDRESS/mcp"
+                    LabeledContent {
+                        copyButton(url, help: "Copy URL").disabled(control?.url == nil)
+                    } label: {
+                        Text("Endpoint")
+                        Text(control?.url ?? "Turn on Serve over Tailscale to get an address.").textSelection(.enabled)
+                    }
+                    LabeledContent {
+                        copyButton(token, help: "Copy Token")
+                        Button("New Token") { Task { await setControl(["new_token": .bool(true)]) } }
+                    } label: {
+                        Text("Token")
+                        Text(token).monospaced().textSelection(.enabled)
+                    }
+                    let yaml = "mcp_servers:\n  zurafa:\n    url: \"\(url)\"\n    headers:\n      Authorization: \"Bearer \(token)\""
+                    LabeledContent {
+                        copyButton(yaml, help: "Copy Config")
+                    } label: {
+                        Text("Add to ~/.hermes/config.yaml")
+                        Text(yaml).monospaced().textSelection(.enabled)
+                    }
+                }
+            } footer: {
+                Text("\(agent) can list your terminals, read them, type into them, and open, rename and close tabs and panes, without asking each time. It reaches this Mac over Tailscale, so Settings → Server → Serve over Tailscale must be on. A new token locks out the old one.")
+            }
         }
-        .task { await config(save: false) }
+        .task {
+            await config(save: false)
+            await setControl([:])
+        }
+    }
+
+    private func copyButton(_ text: String, help: String) -> some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        } label: { Image(systemName: "doc.on.doc") }
+            .help(help)
+    }
+
+    /// Changes Hermes' control of Zurafa (nothing, to only read it): `enabled`, `new_token`.
+    private func setControl(_ change: [String: JSONValue]) async {
+        do {
+            control = try await DaemonClient.shared.request(change.merging(["type": .string("ui.hermes.control")]) { $1 })
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     /// Without `save` only asks how things stand; with it saves the URL, and the key when one was typed.

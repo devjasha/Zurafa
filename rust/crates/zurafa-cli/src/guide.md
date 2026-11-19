@@ -48,6 +48,8 @@ terminal.
 | Show me this file | `zurafa preview FILE` |
 | Float it, put it out of the way | `zurafa float PANE`, `zurafa hide PANE` |
 | Bring it back | `zurafa show PANE`, or docked: `zurafa show PANE --split right -b t2` |
+| Show me that pane, rename its tab | `zurafa focus PANE`, `zurafa rename -b PANE LABEL` |
+| Close it | `zurafa close PANE` (ends its program) |
 
 Targets match a pane id (`t7`), a tab or workspace label (case-insensitive), a
 position (`1`), or the end of an id. A workspace means its focused pane. Prefer

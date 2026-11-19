@@ -6,6 +6,7 @@ mod hosts;
 mod input;
 mod listen;
 mod login;
+mod mcp;
 mod osc7501;
 mod protocol;
 mod pty;

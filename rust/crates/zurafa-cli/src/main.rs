@@ -185,7 +185,8 @@ fn run(global: Global, args: Vec<String>) -> Result<(), (i32, String)> {
         }
         "tab" if args.get(1).is_some_and(|s| s == "new") => cmd_tab(&mut client, &args[2..]),
         "split" => cmd_split(&mut client, &args[1..]),
-        "float" | "hide" | "show" => cmd_place(&mut client, &args[0], &args[1..]),
+        "float" | "hide" | "show" | "focus" | "close" => cmd_place(&mut client, &args[0], &args[1..]),
+        "rename" => cmd_rename(&mut client, &args[1..]),
         "preview" => cmd_preview(&mut client, &args[1..]),
         "send" => cmd_send(&mut client, &args[1..]),
         "key" => cmd_key(&mut client, &args[1..]),
@@ -322,6 +323,7 @@ fn cmd_split(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> 
 }
 
 /// `float`, `hide` and `show`: moves a running pane over its tab, out of every tab, or back.
+/// `focus` selects a pane and its tab; `close` closes it, ending its program.
 fn cmd_place(client: &mut Client, verb: &str, args: &[String]) -> Result<(), (i32, String)> {
     let snapshot = client.snapshot().map_err(|e| (1, e))?;
     // The pane is the positional or this pane; `show`'s -b names the pane to dock beside.
@@ -330,7 +332,7 @@ fn cmd_place(client: &mut Client, verb: &str, args: &[String]) -> Result<(), (i3
     let (session, pane) = target_pane(&snapshot, &scope, target)?;
     let split = option_value(args, &["--split"]).filter(|_| verb == "show");
     let command = match split {
-        None if verb == "hide" => json!({"op":"hide","session":session,"block":pane}),
+        None if verb == "hide" || verb == "focus" || verb == "close" => json!({"op":verb,"session":session,"block":pane}),
         None => json!({"op":"float","session":session,"block":pane}),
         Some(dir) => {
             let axis = match dir.as_str() {
@@ -345,6 +347,32 @@ fn cmd_place(client: &mut Client, verb: &str, args: &[String]) -> Result<(), (i3
     };
     client.request(json!({"type":"layout.command","command":command})).map_err(|e| (1, e))?;
     Ok(())
+}
+
+/// `rename [-b PANE] LABEL`: renames the tab that holds the pane.
+fn cmd_rename(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
+    let label = command_after_double_dash(args)
+        .map(|words| words.join(" "))
+        .or_else(|| first_positional(args))
+        .filter(|l| !l.trim().is_empty())
+        .ok_or((2, "new tab label required".into()))?;
+    let snapshot = client.snapshot().map_err(|e| (1, e))?;
+    let (session, pane) = target_pane(&snapshot, args, None)?;
+    let window = tab_of(&resolve_session(&snapshot, &session)?, &pane).ok_or((3, format!("pane {pane} is not in a tab")))?;
+    client
+        .request(json!({"type":"layout.command","command":{"op":"label","session":session,"window":window,"label":label}}))
+        .map_err(|e| (1, e))?;
+    Ok(())
+}
+
+/// The id of the tab holding a docked or floating pane.
+fn tab_of(session: &Value, pane: &str) -> Option<String> {
+    session["windows"].as_array()?.iter().find_map(|tab| {
+        let mut ids = vec![];
+        layout_panes(&tab["layout"], &mut ids);
+        ids.extend(tab["floating"].as_array().into_iter().flatten().map(|f| strv(&f["block_id"])));
+        ids.iter().any(|id| id == pane).then(|| strv(&tab["window_id"]))
+    })
 }
 
 fn cmd_preview(client: &mut Client, args: &[String]) -> Result<(), (i32, String)> {
@@ -1068,6 +1096,7 @@ fn cmd_panes(client: &mut Client, as_json: bool) -> Result<(), (i32, String)> {
                 "tab": tab,
                 "place": place,
                 "program": strv(&pane["foreground"]["name"]),
+                "title": strv(&pane["title"]),
                 "status": status,
                 "message": message,
                 "cwd": match cwd.strip_prefix(&home) { Some(rest) if !home.is_empty() => format!("~{rest}"), _ => cwd },
@@ -1157,7 +1186,8 @@ fn layout_panes(layout: &Value, out: &mut Vec<String>) {
 const MCP_INSTRUCTIONS: &str = "Zurafa is the terminal workspace you are running in. Its panes are terminals; \
 other coding agents may run in them. Use these tools to see every pane and \
 whether it is idle, working, blocked (waiting on a person), done, error or exited (list_panes), type into a \
-pane (send, key), read its screen (read), and wait for it to finish (wait, prompt). Statuses come from agents \
+pane (send, key), read its screen (read), wait for it to finish (wait, prompt), and open, focus, rename or \
+close tabs and panes (new_tab, split, focus, rename_tab, close). Statuses come from agents \
 that report them, so a pane whose program reports nothing stays idle. Pane targets are ids like t3, a tab or \
 session label, or a session (meaning its focused pane). If the user allows it, the app's own view can be \
 changed too: switch workspace, select a tab, focus or zoom a pane, open a preview (list_actions, do_action).";
@@ -1165,23 +1195,37 @@ changed too: switch workspace, select a tab, focus or zoom a pane, open a previe
 fn mcp_tools() -> Value {
     let pane = json!({"type":"string","description":"Pane id (like t3), label, or session. Defaults to your own pane where that makes sense."});
     let timeout = json!({"type":"string","description":"How long to wait, like 30s, 10m or 1h. Default 10m."});
+    let cwd = json!({"type":"string","description":"Absolute directory to start in. Default: the home folder."});
+    let command = json!({"type":"string","description":"Shell command to type into the new shell and run, like `npm test`; the shell stays open after it ends. Default: just a shell."});
+    let read_only = json!({"readOnlyHint":true});
     json!([
-        {"name":"list_panes","description":"List every pane in every Zurafa session with its tab, program, status (idle, working, blocked, done, error, exited), status message and directory. Your own pane is marked current.",
-         "inputSchema":{"type":"object","properties":{}}},
+        {"name":"list_panes","description":"List every pane in every Zurafa session as JSON: pane id, session, tab, place (docked, floating, hidden), program, terminal title, status (idle, working, blocked, done, error, exited), status message and directory. Your own pane, if any, is marked current.",
+         "inputSchema":{"type":"object","properties":{}},"annotations":read_only},
         {"name":"send","description":"Type text into a pane, then press Enter unless enter is false. To answer another agent, send your message to its pane.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"enter":{"type":"boolean","description":"Press Enter after the text. Default true."}},"required":["pane","text"]}},
         {"name":"key","description":"Press keys in a pane: enter, tab, escape, up, down, left, right, backspace, ctrl+c and other ctrl+letter keys.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"keys":{"type":"array","items":{"type":"string"}}},"required":["pane","keys"]}},
         {"name":"read","description":"Read a pane's screen as text, or its last N lines including scrollback. A full-screen app that isn't working, such as Claude Code, is scrolled up and back to read its history.",
-         "inputSchema":{"type":"object","properties":{"pane":pane,"lines":{"type":"integer","minimum":1}},"required":["pane"]}},
+         "inputSchema":{"type":"object","properties":{"pane":pane,"lines":{"type":"integer","minimum":1}},"required":["pane"]},"annotations":read_only},
         {"name":"wait","description":"Wait until a pane stops working, or reaches one of the given statuses, and return its pane, status, kind (what a blocked pane waits for), message (a finished agent's final answer, or an error or question) and turn as JSON. A pane whose program has not reported a status yet is starting, and is waited on.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"for":{"type":"array","items":{"type":"string","enum":STATES}},
             "next":{"type":"boolean","description":"Ignore a status left from an earlier turn: wait for the current or next turn to end, e.g. right after send."},
-            "timeout":timeout}}},
+            "timeout":timeout}},"annotations":read_only},
         {"name":"prompt","description":"Send text and Enter to a pane, wait until its agent finishes, and return the screen. The quickest way to ask another agent something.",
          "inputSchema":{"type":"object","properties":{"pane":pane,"text":{"type":"string"},"timeout":timeout},"required":["pane","text"]}},
         {"name":"list_actions","description":"List the actions the Zurafa app offers agents (switch workspace, select a tab, focus or zoom a pane, open a preview, toggle the sidebar, change the font size), with their arguments. Empty until the user turns on Settings > Integrations > Allow agents to control Zurafa.",
-         "inputSchema":{"type":"object","properties":{}}},
+         "inputSchema":{"type":"object","properties":{}},"annotations":read_only},
+        {"name":"new_tab","description":"Open a new tab with a shell, optionally running a command in it, and return its pane id.",
+         "inputSchema":{"type":"object","properties":{"label":{"type":"string","description":"Tab label. Default Terminal."},"cwd":cwd,"command":command,
+            "session":{"type":"string","description":"Session (workspace) id or label. Default: default."}}}},
+        {"name":"split","description":"Split a pane, opening a new shell beside it (right) or below it (down), optionally running a command, and return the new pane id.",
+         "inputSchema":{"type":"object","properties":{"pane":pane,"direction":{"type":"string","enum":["right","down"],"description":"Default right."},"cwd":cwd,"command":command},"required":["pane"]}},
+        {"name":"focus","description":"Select a pane and switch to its tab, so the user sees it.",
+         "inputSchema":{"type":"object","properties":{"pane":pane},"required":["pane"]}},
+        {"name":"rename_tab","description":"Rename the tab that holds a pane.",
+         "inputSchema":{"type":"object","properties":{"pane":pane,"label":{"type":"string"}},"required":["pane","label"]}},
+        {"name":"close","description":"Close a pane, ending the program running in it. Closing a tab's last pane closes the tab. Cannot be undone.",
+         "inputSchema":{"type":"object","properties":{"pane":pane},"required":["pane"]}},
         {"name":"do_action","description":"Ask the Zurafa app to perform one of its actions (see list_actions) and return its result.",
          "inputSchema":{"type":"object","properties":{"action":{"type":"string","description":"Action name, like tab.select."},
             "args":{"type":"object","description":"The action's arguments, like {\"tab\":\"2\"}.","additionalProperties":{"type":["string","number","boolean"]}},
@@ -1195,7 +1239,7 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
     let need = |k: &str| s(k).filter(|v| !v.is_empty()).ok_or(format!("{k} is required"));
     let timeout = || s("timeout").unwrap_or_else(|| "10m".into());
     Ok(match name {
-        "list_panes" => vec!["panes".into()],
+        "list_panes" => vec!["--json".into(), "panes".into()],
         "send" => {
             let mut v = vec!["send".into(), need("pane")?];
             if a["enter"] != false {
@@ -1228,6 +1272,19 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
         }
         "prompt" => vec!["prompt".into(), need("pane")?, "-t".into(), timeout(), "--".into(), need("text")?],
         "list_actions" => vec!["actions".into()],
+        "new_tab" => {
+            let mut v = vec!["tab".into(), "new".into(), "-l".into(), s("label").filter(|l| !l.is_empty()).unwrap_or_else(|| "Terminal".into())];
+            if let Some(session) = s("session") {
+                v.extend(["-s".into(), session]);
+            }
+            [v, place(a)].concat()
+        }
+        "split" => {
+            let axis = if a["direction"] == "down" { "vertical" } else { "horizontal" };
+            [vec!["split".into(), "-b".into(), need("pane")?, "--axis".into(), axis.into()], place(a)].concat()
+        }
+        "focus" | "close" => vec![name.into(), need("pane")?],
+        "rename_tab" => vec!["rename".into(), "-b".into(), need("pane")?, "--".into(), need("label")?],
         "do_action" => {
             let mut v = vec!["do".into()];
             if let Some(c) = s("client") {
@@ -1243,10 +1300,15 @@ fn tool_args(name: &str, a: &Value) -> Result<Vec<String>, String> {
     })
 }
 
+/// The `--cwd` of a new pane.
+fn place(a: &Value) -> Vec<String> {
+    a["cwd"].as_str().filter(|c| !c.is_empty()).map(|cwd| vec!["--cwd".into(), cwd.into()]).unwrap_or_default()
+}
+
 /// Runs a tool by running this same binary, so tools behave exactly like the commands
 /// and nothing they print can reach the MCP stream.
 fn call_tool(params: &Value, socket: &Option<String>) -> Value {
-    let result = tool_args(&strv(&params["name"]), &params["arguments"]).and_then(|args| {
+    let run = |args: Vec<String>| -> Result<String, String> {
         let mut cmd = process::Command::new(env::current_exe().map_err(|e| e.to_string())?);
         if let Some(s) = socket {
             cmd.args(["--socket", s]);
@@ -1258,6 +1320,15 @@ fn call_tool(params: &Value, socket: &Option<String>) -> Value {
             (true, true) => Ok("done".to_owned()),
             (true, false) => Ok(text),
             (false, _) => Err(text),
+        }
+    };
+    let (name, a) = (strv(&params["name"]), &params["arguments"]);
+    let result = tool_args(&name, a).and_then(run).and_then(|text| {
+        // A new pane's command is typed into its shell, so the shell stays when the command ends or is interrupted.
+        let command = a["command"].as_str().filter(|c| !c.trim().is_empty() && (name == "new_tab" || name == "split"));
+        match (command, text.strip_prefix("created pane ")) {
+            (Some(command), Some(pane)) => run(vec!["send".into(), pane.into(), "--enter".into(), "--".into(), command.into()]).map(|_| text),
+            _ => Ok(text),
         }
     });
     let (text, is_error) = match result {
@@ -1299,6 +1370,7 @@ fn cmd_mcp(socket: Option<String>) -> Result<(), (i32, String)> {
         let mut o = out.lock().unwrap();
         let _ = writeln!(o, "{v}").and_then(|_| o.flush());
     };
+    let mut calls = vec![];
     for line in std::io::stdin().lock().lines() {
         let line = line.map_err(|e| (1, e.to_string()))?;
         if line.trim().is_empty() {
@@ -1312,11 +1384,15 @@ fn cmd_mcp(socket: Option<String>) -> Result<(), (i32, String)> {
             }
         };
         let (out, socket) = (out.clone(), socket.clone());
-        std::thread::spawn(move || {
+        calls.push(std::thread::spawn(move || {
             if let Some(reply) = mcp_reply(&msg, &socket) {
                 write(&out, reply);
             }
-        });
+        }));
+    }
+    // Answer every message before exiting: the daemon's HTTP endpoint sends one and closes stdin.
+    for call in calls {
+        let _ = call.join();
     }
     Ok(())
 }
@@ -2136,7 +2212,10 @@ fn command_after_double_dash(args: &[String]) -> Option<Vec<String>> {
 }
 
 fn print_help() {
-    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  float [TARGET]             Float a pane over its tab (a hidden one over the tab in view)\n  hide [TARGET]              Take a pane out of every tab; it keeps running\n  show [TARGET] [--float | --split right|down -b PANE]\n                             Bring a hidden or floating pane back: floating, or docked beside PANE\n  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAPP:\n  actions                              List the actions connected Zurafa apps offer, per client\n  do ACTION [KEY=VALUE...] [-C CLIENT] [-t D]\n                                       Ask the app to do one (default timeout 10s); -C picks\n                                       the app when several are connected. Off until Settings →\n                                       Integrations → Allow agents to control Zurafa is on\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  skill setup|remove|status|show      Teach Claude Code, Codex, OpenCode and Pi to use Zurafa:\n                                       a skill, status hooks and session-start context\n  hook claude|codex                    Run by the agent's hooks: status and subagents\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n\nSpawning agents into panes and collecting their results is zurafa-orch's job.");
+    println!("zurafa is the command-line interface to Zurafa.\n\nUSAGE:\n  zurafa [--socket PATH] [--json] <command>\n\nCOMMANDS:\n  ls                         List sessions\n  session inspect [TARGET]   Show session details\n  pane inspect [TARGET]      Show pane details\n  tab new [OPTIONS] [-- CMD] Create a tab\n  split [OPTIONS] [-- CMD]   Split a pane\n  float [TARGET]             Float a pane over its tab (a hidden one over the tab in view)\n  hide [TARGET]              Take a pane out of every tab; it keeps running\n  show [TARGET] [--float | --split right|down -b PANE]\n                             Bring a hidden or floating pane back: floating, or docked beside PANE\n  focus [TARGET]             Select a pane and its tab
+  close [TARGET]             Close a pane, ending its program
+  rename [-b PANE] LABEL     Rename the tab that holds a pane
+  preview [OPTIONS] FILE     Open FILE in the preview beside a pane\n  panes                      List every pane with its tab, program and status\n\nAPP:\n  actions                              List the actions connected Zurafa apps offer, per client\n  do ACTION [KEY=VALUE...] [-C CLIENT] [-t D]\n                                       Ask the app to do one (default timeout 10s); -C picks\n                                       the app when several are connected. Off until Settings →\n                                       Integrations → Allow agents to control Zurafa is on\n\nAGENTS:\n  send TARGET TEXT [--enter] [-e]      Paste TEXT into a pane; --enter submits (-e: raw \\n \\r \\t \\e \\xHH)\n  key TARGET KEY...                    Press keys: enter, tab, escape, up, ctrl+c, ...\n  read [TARGET] [-n N]                 Print the screen, or its last N lines with scrollback\n                                       (scrolls an idle full-screen app to read its history)\n  wait [TARGET] [--for S,..] [-t D]    Wait until it stops working, or reaches a status; prints\n                                       the status and its message (--json: pane, state, kind, msg, turn)\n    [--next]                           ...ignoring a status left from an earlier turn\n  prompt TARGET TEXT [-t D]            Send TEXT and Enter, wait, print the screen\n    (put -- before a TEXT that starts with '-')\n  events [TARGET] [--for S,..] [--once] Print events as they happen\n  report STATE [MSG] [--progress N] [--kind K] [--id ID] [--app A] [--title T]\n                                       Report this pane's status (OSC 7501)\n  setup claude|codex|pi                Make the agent report its status to Zurafa\n  skill setup|remove|status|show      Teach Claude Code, Codex, OpenCode and Pi to use Zurafa:\n                                       a skill, status hooks and session-start context\n  hook claude|codex                    Run by the agent's hooks: status and subagents\n  mcp                                  Serve these commands as MCP tools on stdin/stdout\n\n  Statuses: starting (no status reported yet), idle, working, blocked, done, error, exited. Durations: 30s, 10m.\n  wait, prompt and events exit 5 when --timeout passes.\n\nTARGETS:\n  Targets match a full ID, case-insensitive label, one-based position, or ID suffix.\n  Agent commands also accept a session, meaning its focused pane, and search every\n  session unless -s is given.\n\nENVIRONMENT:\n  ZURAFA_SOCKET, ZURAFA_SESSION, and ZURAFA_PANE provide defaults inside Zurafa terminals.\n\nSpawning agents into panes and collecting their results is zurafa-orch's job.");
 }
 
 #[cfg(test)]
@@ -2335,6 +2414,13 @@ mod tests {
         assert_eq!(args("wait", json!({"pane":"t3","next":true})), ["wait", "--json", "t3", "-t", "10m", "--next"]);
         assert_eq!(args("key", json!({"pane":"t3","keys":["escape","enter"]})), ["key", "t3", "escape", "enter"]);
         assert_eq!(args("do_action", json!({"action":"pane.zoom","client":"c2","args":{"pane":"t3","enabled":true}})), ["do", "-C", "c2", "pane.zoom", "enabled=true", "pane=t3"]);
+        assert_eq!(args("list_panes", json!({})), ["--json", "panes"]);
+        assert_eq!(args("new_tab", json!({"cwd":"/tmp"})), ["tab", "new", "-l", "Terminal", "--cwd", "/tmp"]);
+        assert_eq!(args("split", json!({"pane":"t3","direction":"down","command":"make"})), ["split", "-b", "t3", "--axis", "vertical"]);
+        assert_eq!(args("focus", json!({"pane":"t3"})), ["focus", "t3"]);
+        assert_eq!(args("close", json!({"pane":"t3"})), ["close", "t3"]);
+        assert_eq!(args("rename_tab", json!({"pane":"t3","label":"-build"})), ["rename", "-b", "t3", "--", "-build"]);
+        assert!(tool_args("close", &json!({})).is_err());
         assert!(tool_args("spawn", &json!({"agent":"claude"})).is_err(), "spawn is zurafa-orch's");
         assert!(tool_args("read", &json!({})).is_err());
         assert!(tool_args("rm", &json!({})).is_err());
@@ -2375,7 +2461,7 @@ mod tests {
         assert_eq!(init["id"], 1);
         let list = mcp_reply(&json!({"jsonrpc":"2.0","id":"a","method":"tools/list"}), &None).unwrap();
         let names: Vec<_> = list["result"]["tools"].as_array().unwrap().iter().map(|t| strv(&t["name"])).collect();
-        assert_eq!(names, ["list_panes", "send", "key", "read", "wait", "prompt", "list_actions", "do_action"]);
+        assert_eq!(names, ["list_panes", "send", "key", "read", "wait", "prompt", "list_actions", "new_tab", "split", "focus", "rename_tab", "close", "do_action"]);
         assert!(mcp_reply(&json!({"jsonrpc":"2.0","method":"notifications/initialized"}), &None).is_none());
         assert_eq!(mcp_reply(&json!({"jsonrpc":"2.0","id":2,"method":"nope"}), &None).unwrap()["error"]["code"], -32601);
     }
