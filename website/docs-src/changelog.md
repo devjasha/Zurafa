@@ -2,6 +2,14 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.43
+
+**November 19, 2026**
+
+- **Your personal agent, grown up (experimental).** The Hermes chat now keeps every conversation as a tab, takes images (paste, drop or attach), and lets you give your agent its own name and a pixel-art avatar in one of eight colors (Settings → Hermes).
+- **Agent activity at a glance.** Your agent's avatar sits at the top right of the window and bobs while it works; click it to open the chat. When it finishes a task in a chat you aren't looking at, you get a notification, and a push on your iPhone when you're away.
+- **Let your agent see and control Zurafa.** Turn it on in Settings → Hermes and paste the shown snippet into Hermes' config: it can then list and read panes, type into them, and open, split, focus, rename and close tabs over your Tailscale network. Off by default; the token gives full control of your terminals, so keep it private.
+
 ## 0.1.42
 
 **November 16, 2026**
