@@ -41,6 +41,8 @@ struct Msg: Codable {
     var color: String?
     var chat: String? // ui.chat for block "hermes", ui.hermes.send, ui.hermes.new: which Hermes chat
     var chats: [HermesChatTab]? // ui.chat for block "hermes": every chat, newest first
+    var working: [String]? // ui.hermes.state and the `hermes` event: the chats Hermes is answering in
+    var done: HermesDone? // the `hermes` event when a run ended
     // ui.hermes.config
     var url: String?
     var hasKey: Bool?
@@ -62,6 +64,14 @@ struct HermesChatTab: Codable, Equatable, Identifiable {
     var id: String
     var title: String
     var busy: Bool
+}
+
+/// A Hermes run that ended, from the `hermes` event: what a notification says.
+struct HermesDone: Codable, Equatable {
+    var chat: String
+    var title: String
+    var text: String // the answer's start
+    var failed: Bool
 }
 
 /// Zurafa's own Tailscale device (`zurafa-tailscale`), as `server.status` reports it.

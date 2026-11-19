@@ -75,6 +75,8 @@ struct State {
     live: HashMap<String, Live>,
     next_base: usize,
     next_id: u64,
+    /// Every client's event stream (pty.rs), for `status` events; none in tests that don't listen.
+    events: Option<tokio::sync::broadcast::Sender<String>>,
 }
 
 impl State {
@@ -129,6 +131,26 @@ impl State {
         self.cfg.chats.iter_mut().find(|c| c.id == chat)
     }
 
+    /// Tells every client which chats are busy and who the agent is, and with `done` that a run ended,
+    /// so they can show it working and notify without reading the chat.
+    fn emit(&self, done: Option<Value>) {
+        let Some(events) = &self.events else { return };
+        let mut v = self.status();
+        v["type"] = json!("hermes");
+        if let Some(done) = done {
+            v["done"] = done;
+        }
+        let _ = events.send(v.to_string());
+    }
+
+    /// `ui.hermes.state` and every `hermes` event: the busy chats (`working`), whether Hermes is set up, its name and avatar.
+    fn status(&self) -> Value {
+        let mut v = identity_of(&self.cfg);
+        v["working"] = self.cfg.chats.iter().filter(|c| self.live.get(&c.id).is_some_and(|l| l.busy)).map(|c| c.id.clone()).collect();
+        v["hasKey"] = (!self.cfg.key.is_empty()).into();
+        v
+    }
+
     /// Every chat for the tabs, newest first.
     fn chats(&self) -> Value {
         let busy = |id: &str| self.live.get(id).is_some_and(|l| l.busy);
@@ -153,7 +175,17 @@ fn open(path: PathBuf) -> Shared {
     if let Some(session) = cfg.session.take() {
         cfg.chats.insert(0, Chat { id: format!("c-{session}"), session: Some(session), title: String::new() });
     }
-    Arc::new(Mutex::new(State { path, cfg, live: HashMap::new(), next_base: 0, next_id: 0 }))
+    Arc::new(Mutex::new(State { path, cfg, live: HashMap::new(), next_base: 0, next_id: 0, events: None }))
+}
+
+/// Hands Hermes the daemon's event stream, once at start.
+pub fn set_events(events: tokio::sync::broadcast::Sender<String>) {
+    state().lock().unwrap().events = Some(events);
+}
+
+/// `ui.hermes.state`: what the `hermes` events say, for a client that just connected.
+pub fn status() -> Value {
+    state().lock().unwrap().status()
 }
 
 /// `ui.hermes.config`: saves `url` and `key` when given (`key: ""` clears it), then checks them.
@@ -221,6 +253,7 @@ fn config_in(s: &Shared, url: Option<String>, key: Option<String>, name: Option<
             }
             st.save()?;
         }
+        st.emit(None);
         st.cfg.clone()
     };
     let check = if cfg.key.is_empty() { Err(None) } else { call(&cfg, "GET", "/v1/models", None).map_err(Some) };
@@ -341,16 +374,23 @@ fn send_in(s: &Shared, chat: Option<&str>, text: String, images: &[String]) -> R
             c.title = short(&shown);
             st.save()?;
         }
+        st.emit(None);
     }
     let (s, id) = (s.clone(), chat.clone());
     std::thread::spawn(move || {
         let result = stream(&s, &id, &input);
         let mut st = s.lock().unwrap();
         let line = result.err().map(|e| json!({"kind":"assistant","id":st.id(),"text":format!("Hermes failed: {e}"),"at":now()}).to_string());
-        if let Some(live) = st.live.get_mut(&id) {
-            live.lines.extend(line);
-            live.busy = false;
-        }
+        let Some(live) = st.live.get_mut(&id) else { return };
+        live.lines.extend(line);
+        live.busy = false;
+        // The answer's start, for a notification; a failure's line says so.
+        let answer = live.lines.iter().rev().map_while(|l| serde_json::from_str::<Value>(l).ok().filter(|v| v["kind"] != "user")).find(|v| v["kind"] == "assistant");
+        let text = answer.as_ref().and_then(|v| v["text"].as_str()).unwrap_or("");
+        let failed = text.strip_prefix("Hermes failed: ");
+        let title = st.chat(&id).map(|c| c.title.clone()).unwrap_or_default();
+        let done = json!({"chat":id,"title":title,"text":failed.unwrap_or(text).chars().take(200).collect::<String>(),"failed":failed.is_some()});
+        st.emit(Some(done));
     });
     Ok(chat)
 }
@@ -375,7 +415,10 @@ pub fn close(chat: String) -> Result<(), String> {
 fn close_in(s: &Shared, chat: &str) -> Result<(), String> {
     let mut st = s.lock().unwrap();
     st.cfg.chats.retain(|c| c.id != chat);
-    st.live.remove(chat);
+    let busy = st.live.remove(chat).is_some_and(|l| l.busy);
+    if busy {
+        st.emit(None);
+    }
     st.save()
 }
 
@@ -853,6 +896,26 @@ s.serve_forever()
         assert!(fs::read_to_string(&path).unwrap().contains("\"c-old\""), "migrated");
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn tells_clients_when_a_run_starts_and_ends() {
+        let f = fake();
+        let s = temp("events");
+        let (tx, mut rx) = tokio::sync::broadcast::channel(16);
+        s.lock().unwrap().events = Some(tx);
+        config_in(&s, Some(f.1.clone()), Some("s3\"cr\\et".into()), Some("Jarvis".into()), Look::default()).unwrap();
+        let ev = |rx: &mut tokio::sync::broadcast::Receiver<String>| serde_json::from_str::<Value>(&rx.try_recv().unwrap()).unwrap();
+        while rx.try_recv().is_ok() {} // the config's
+        let chat = send_in(&s, None, "hello".into(), &[]).unwrap();
+        let started = ev(&mut rx);
+        assert_eq!((&started["type"], &started["working"], &started["name"], &started["hasKey"]), (&json!("hermes"), &json!([chat]), &json!("Jarvis"), &json!(true)));
+        settle(&s, None);
+        let done = ev(&mut rx);
+        assert_eq!(done["working"], json!([]));
+        assert_eq!(done["done"], json!({"chat":chat,"title":"Greetings","text":"You said: hello","failed":false}), "{done}");
+        assert_eq!(s.lock().unwrap().status()["working"], json!([]));
+        let _ = fs::remove_dir_all(s.lock().unwrap().path.parent().unwrap());
     }
 
     #[test]

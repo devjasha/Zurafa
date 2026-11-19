@@ -22,6 +22,7 @@ struct SessionsView: View {
             .navigationTitle(title)
             .navigationDestination(for: String.self) { TerminalScreen(id: $0) }
             .toolbar {
+                HermesIndicator()
                 Menu("New", systemImage: "plus") {
                     Button("New Session", systemImage: "laptopcomputer") { newSession(remote: nil) }
                     Menu("New SSH Session", systemImage: "network") {
@@ -33,6 +34,8 @@ struct SessionsView: View {
                 Button("Settings", systemImage: "gearshape") { settings = true }
             }
             .sheet(isPresented: $settings) { SettingsView() }
+            // Here, at the root, so the busy light and a tapped notification open it over any screen.
+            .sheet(isPresented: $mac.hermesOpen) { HermesScreen() }
             .refreshable { mac.refreshHosts(); mac.resume() }
             .alert("Zurafa", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {} message: { Text(error ?? "") }
         }
@@ -76,7 +79,6 @@ struct SessionsList: View {
     @AppStorage("macAddress") private var address = ""
     @State private var error: String?
     @State private var deleting: SessionSnapshot?
-    @State private var hermes = false
     @Environment(\.colorScheme) private var scheme
 
     private var sessions: [SessionSnapshot] { mac.sessions }
@@ -87,7 +89,7 @@ struct SessionsList: View {
         List {
             if mac.state != .connected { Section { status } }
             // The sessions screen only: a pane has its own Hermes button, so ⌘⇧H is never claimed twice.
-            if current == nil { Section { HermesButton(shown: $hermes).listRowBackground(rowBackground) } }
+            if current == nil { Section { HermesButton().listRowBackground(rowBackground) } }
             ForEach(sessions, id: \.sessionID) { session in
                 Section {
                     // One row per Mac tab; its panes are switched inside the terminal screen. A tab whose agent
@@ -148,7 +150,6 @@ struct SessionsList: View {
             }
         }
         .modifier(MacLook())
-        .sheet(isPresented: $hermes) { HermesScreen() }
         .confirmationDialog("Delete \(deleting?.label ?? "")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                             titleVisibility: .visible, presenting: deleting) { session in
             Button("Delete Workspace", role: .destructive) { run { try await mac.deleteSession(session.sessionID) } }

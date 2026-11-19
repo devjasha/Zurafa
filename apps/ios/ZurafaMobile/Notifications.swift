@@ -33,7 +33,10 @@ final class Notifications: NSObject, UIApplicationDelegate, UNUserNotificationCe
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        // With the app open, Hermes' own banner (MacClient.hermesChanged) already said it, or the chat is on screen.
+        let hermes = (notification.request.content.userInfo["pane"] as? String)?.hasPrefix("hermes:") == true
+        if hermes && notification.request.trigger is UNPushNotificationTrigger { return [] }
+        return [.banner, .list, .sound]
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
@@ -41,6 +44,8 @@ final class Notifications: NSObject, UIApplicationDelegate, UNUserNotificationCe
         switch response.actionIdentifier {
         case "approve", "deny":
             await Self.answer(pane, approve: response.actionIdentifier == "approve")
+        case _ where pane.hasPrefix("hermes:"):
+            await MainActor.run { MacClient.shared.openHermes(chat: String(pane.dropFirst(7))) }
         default:
             await MainActor.run { MacClient.shared.openPane = pane }
         }

@@ -393,6 +393,7 @@ struct TopBar: View {
             BarStatus()
             AgentSummary()
             UpdateButton()
+            HermesIndicator()
             PaletteButton()
             BarButton(symbol: "sidebar.left", help: "Toggle File Tree (⌥⌘B)") { ws.fileTreeOpen.toggle() }
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
@@ -514,6 +515,7 @@ struct VerticalTabSidebar: View {
                 Color.clear.frame(width: ws.style.sidebarOnRight ? 0 : ws.windowControls.width) // traffic lights
                 Spacer(minLength: 0)
                 UpdateButton()
+                HermesIndicator()
                 PaletteButton()
                 BarButton(symbol: "sidebar.left", help: "Toggle File Tree (⌥⌘B)") { ws.fileTreeOpen.toggle() }
                 BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }

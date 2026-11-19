@@ -207,6 +207,22 @@ struct PixelAvatarView: View {
     }
 }
 
+/// The avatar as a busy light: it bobs gently while the agent works, and sits still when idle.
+struct WorkingAvatar: View {
+    let avatar: String?
+    let color: String?
+    let working: Bool
+    var body: some View {
+        if working {
+            PhaseAnimator([0.0, -2.0]) { y in
+                PixelAvatarView(avatar: avatar, color: color).offset(y: y)
+            } animation: { _ in .easeInOut(duration: 0.5) }
+        } else {
+            PixelAvatarView(avatar: avatar, color: color)
+        }
+    }
+}
+
 /// The avatars in a grid and the colors as swatches; picks set the two ids.
 struct PixelAvatarPicker: View {
     @Binding var avatar: String

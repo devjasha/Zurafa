@@ -74,9 +74,12 @@ struct HermesChat: View {
             return !dropped.isEmpty
         }
         .onAppear {
-            feed.start(remotePane: "hermes")
+            if let chat = ws.hermesChat { feed.show(chat: chat, pane: "hermes") } else { feed.start(remotePane: "hermes") }
             composing = true
         }
+        // The busy light and notifications open a chat through `ws.hermesChat`, and read it to know which one shows.
+        .onChange(of: feed.chat) { _, chat in ws.hermesChat = chat }
+        .onChange(of: ws.hermesChat) { _, chat in if let chat, chat != feed.chat { feed.show(chat: chat, pane: "hermes") } }
         .onDisappear { feed.stop() }
     }
 
@@ -137,6 +140,26 @@ struct HermesChat: View {
             } catch {
                 problem = error.localizedDescription
             }
+        }
+    }
+}
+
+/// The top bar's light for Hermes: its avatar, bobbing while it answers; opens the chat it answers in.
+/// Hidden until Hermes is set up.
+struct HermesIndicator: View {
+    @EnvironmentObject var ws: Workspace
+    var body: some View {
+        if let hermes = ws.hermes, hermes.hasKey == true {
+            let name = hermes.name ?? "Hermes", busy = hermes.working?.first
+            Button {
+                if let busy { ws.openHermes(chat: busy) } else { ws.hermesOpen.toggle() }
+            } label: {
+                WorkingAvatar(avatar: hermes.avatar, color: hermes.color, working: busy != nil)
+                    .frame(width: 18, height: 18).frame(width: 28, height: 28).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(busy == nil ? "\(name) (⇧⌘H)" : "\(name) is working")
+            .accessibilityLabel(busy == nil ? name : "\(name) is working")
         }
     }
 }

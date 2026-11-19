@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Network
+import UserNotifications
 
 /// The phone's one connection to the Mac's zurafa-daemon, over HTTPS to Zurafa's own Tailscale
 /// device (port 443). The Mac admits only devices signed in to its own Tailscale account.
@@ -25,6 +26,11 @@ import Network
     var onSize: (String, Int, Int, Bool) -> Void = { _, _, _, _ in }
     /// A pane a tapped notification asked to show.
     @Published var openPane: String?
+    /// Hermes' state from the Mac (`working`, `name`, `avatar`, `color`, `hasKey`); nil until known.
+    @Published private(set) var hermes: Msg?
+    /// The Hermes sheet, shown from the sessions screen for every screen, and the chat it shows.
+    @Published var hermesOpen = false
+    @Published var hermesChat: String?
     /// This phone's APNs token, handed to the Mac so its notifications reach the phone.
     var pushToken: String? {
         didSet { registerPush() }
@@ -148,6 +154,8 @@ import Network
                 registerPush()
                 // An older Mac app never sends one; keep what we have.
                 if let look = try? await request(["type": .string("ui.appearance")]).appearance { appearance = look }
+                // An older Mac answers an error; the Hermes light stays hidden.
+                if let state = try? await request(["type": .string("ui.hermes.state")]) { hermesChanged(state) }
             } catch {
                 drop(c, reason: error.localizedDescription)
             }
@@ -211,6 +219,8 @@ import Network
             onSize(t, cols, rows, m.mine ?? true)
         } else if m.type == "appearance" {
             if let look = m.appearance { appearance = look }
+        } else if m.type == "hermes" {
+            hermesChanged(m)
         } else if m.type == "events.event" {
             refresh()
         } else if m.type == "events.gap" {
@@ -256,6 +266,29 @@ extension MacClient {
         if let startToken { device["start_token"] = .string(startToken) }
         if let activityToken { device["activity_token"] = .string(activityToken) }
         Task { _ = try? await request(["type": .string("push.register"), "device": .object(device)]) }
+    }
+
+    /// Opens the Hermes sheet, on `chat` when given.
+    func openHermes(chat: String?) {
+        if let chat { hermesChat = chat }
+        hermesOpen = true
+    }
+
+    /// Takes Hermes' state; a run that ended in a chat not on screen shows a banner while the app is open.
+    /// In the background the Mac's push says it instead.
+    private func hermesChanged(_ m: Msg) {
+        hermes = m
+        // Kept for the Hermes buttons, as HermesFeed does.
+        for (key, value) in [(HermesButton.nameKey, m.name), (HermesButton.avatarKey, m.avatar), (HermesButton.colorKey, m.color)] {
+            if let value, value != UserDefaults.standard.string(forKey: key) { UserDefaults.standard.set(value, forKey: key) }
+        }
+        guard let done = m.done, UIApplication.shared.applicationState == .active, !(hermesOpen && hermesChat == done.chat) else { return }
+        let content = UNMutableNotificationContent()
+        content.title = m.name ?? "Hermes"
+        content.subtitle = done.failed ? "Failed · \(done.title)" : done.title
+        content.body = done.text
+        content.userInfo = ["pane": "hermes:\(done.chat)"]
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "hermes:\(done.chat)", content: content, trigger: nil))
     }
 
     /// Answers a permission prompt from its notification, if the pane is still asking; as the Mac's banner does.

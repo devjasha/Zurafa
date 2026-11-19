@@ -244,6 +244,9 @@ enum Request {
     /// Starts a new Hermes chat; the reply names it.
     #[serde(rename = "ui.hermes.new")]
     UiHermesNew { id: u64 },
+    /// Which Hermes chats are busy, and its name and avatar: what `hermes` events say, asked once on connect.
+    #[serde(rename = "ui.hermes.state")]
+    UiHermesState { id: u64 },
     /// Forgets a Hermes chat (its session stays in Hermes).
     #[serde(rename = "ui.hermes.close")]
     UiHermesClose { id: u64, chat: String },
@@ -607,6 +610,12 @@ async fn request(
             Ok(chat) => json!({"id":id,"type":"ui.hermes.new","chat":chat}),
             Err(e) => error(id, e),
         },
+        Request::UiHermesState { id } => {
+            let mut v = crate::hermes::status();
+            v["id"] = json!(id);
+            v["type"] = json!("ui.hermes.state");
+            v
+        }
         Request::UiHermesClose { id, chat } => match crate::hermes::close(chat) {
             Ok(()) => json!({"id":id,"type":"ui.hermes.close"}),
             Err(e) => error(id, e),
@@ -963,7 +972,8 @@ where
                 Ok(frame)=>{
                     let mut v = serde_json::from_str::<Value>(&frame).unwrap_or_default();
                     let mine = own.is_empty() || v["terminal"].as_str().is_some_and(|t|own.contains(t));
-                    let look = version==2 && v["type"]=="appearance";
+                    // The Mac's look and Hermes' state go to every app, like the layout events.
+                    let look = version==2 && (v["type"]=="appearance" || v["type"]=="hermes");
                     if v["type"]=="size" {
                         // Each viewer learns whether it is the one sizing the terminal.
                         v["mine"] = json!(v["owner"]==connected.id.as_str());

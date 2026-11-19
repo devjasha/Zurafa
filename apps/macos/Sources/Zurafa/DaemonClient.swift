@@ -25,6 +25,8 @@ import Network
     var onSize: (String, Int, Int, Bool) -> Void = { _, _, _, _ in }
     /// A `ui.action` an agent asked for; answer it with `ui.action.result`.
     var onAction: (Msg) -> Void = { _ in }
+    /// Hermes' state: which chats it is answering in, and a run that ended.
+    var onHermes: (Msg) -> Void = { _ in }
 
     private var conn: NWConnection?
     private var live = false // hello_ok received on `conn`
@@ -158,6 +160,8 @@ import Network
             onEvent(event)
         } else if m.type == "ui.action" {
             onAction(m)
+        } else if m.type == "hermes" {
+            onHermes(m)
         } else if m.type == "events.gap" || m.type == "output.gap" {
             resync()
         }

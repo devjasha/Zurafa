@@ -88,6 +88,7 @@ import SwiftUI
 /// A plain chat with Hermes, presented as a sheet from the sessions list and from a pane.
 struct HermesScreen: View {
     @StateObject private var feed = HermesFeed()
+    @ObservedObject private var mac = MacClient.shared
     @AppStorage(HermesButton.nameKey) private var name = "Hermes"
     @AppStorage(HermesButton.avatarKey) private var avatar = ""
     @AppStorage(HermesButton.colorKey) private var color = ""
@@ -160,8 +161,14 @@ struct HermesScreen: View {
                 }
             }
         }
-        .task { feed.start() }
+        .task {
+            if let chat = mac.hermesChat { feed.show(chat) }
+            feed.start()
+        }
         .onDisappear { feed.stop() }
+        // The busy light and notifications open a chat through `mac.hermesChat`, and read it to know which one shows.
+        .onChange(of: feed.chat) { _, chat in mac.hermesChat = chat }
+        .onChange(of: mac.hermesChat) { _, chat in if let chat, chat != feed.chat { feed.show(chat) } }
     }
 
     private func send() {
@@ -182,14 +189,31 @@ struct HermesButton: View {
     static let nameKey = "hermesName"
     static let avatarKey = "hermesAvatar"
     static let colorKey = "hermesColor"
-    @Binding var shown: Bool
     @AppStorage(nameKey) private var name = "Hermes"
     @AppStorage(avatarKey) private var avatar = ""
     @AppStorage(colorKey) private var color = ""
     var body: some View {
-        Button { shown = true } label: {
+        Button { MacClient.shared.openHermes(chat: nil) } label: {
             Label { Text(name) } icon: { PixelAvatarView(avatar: avatar, color: color).frame(width: 20, height: 20) }
         }
             .keyboardShortcut("h", modifiers: [.command, .shift])
+    }
+}
+
+/// The toolbar's light for Hermes: its avatar, bobbing while it answers; opens the chat it answers in.
+/// Hidden until the Mac says Hermes is set up.
+struct HermesIndicator: View {
+    @ObservedObject private var mac = MacClient.shared
+    @AppStorage(HermesButton.nameKey) private var name = "Hermes"
+    @AppStorage(HermesButton.avatarKey) private var avatar = ""
+    @AppStorage(HermesButton.colorKey) private var color = ""
+    var body: some View {
+        if mac.hermes?.hasKey == true {
+            let busy = mac.hermes?.working?.first
+            Button { mac.openHermes(chat: busy) } label: {
+                WorkingAvatar(avatar: avatar, color: color, working: busy != nil).frame(width: 22, height: 22)
+            }
+            .accessibilityLabel(busy == nil ? name : "\(name) is working")
+        }
     }
 }

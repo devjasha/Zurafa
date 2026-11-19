@@ -77,6 +77,10 @@ enum EditorKind: String, Identifiable {
     @Published var sidebarHidden = false
     @Published var fileTreeOpen = false
     @Published var hermesOpen = false
+    /// The Hermes chat the panel shows; set it to show another.
+    @Published var hermesChat: String?
+    /// Hermes' state from the daemon (`working`, `name`, `avatar`, `color`, `hasKey`); nil until known.
+    @Published private(set) var hermes: Msg?
     @Published var sessionPickerOpen = false
     @Published var editor: EditorKind?
     @Published private(set) var editingHost: RemoteHost?
@@ -148,7 +152,9 @@ enum EditorKind: String, Identifiable {
             if id == peek { peekFocused = true } else { focus(id) }
         }
         TerminalStore.shared.onOpenLink = { [weak self] id, link in self?.openPreview(link, from: id) ?? false }
-        Attention.shared.start(onOpen: { [weak self] pane in self?.jump(to: pane) },
+        Attention.shared.start(onOpen: { [weak self] pane in
+                                   if pane.hasPrefix("hermes:") { self?.openHermes(chat: String(pane.dropFirst(7))) } else { self?.jump(to: pane) }
+                               },
                                onAnswer: { [weak self] pane, approve in self?.answerPermission(pane, approve: approve) })
         loadZurafaConfig()
         syncTerminalAppearance()
@@ -160,6 +166,7 @@ enum EditorKind: String, Identifiable {
             self?.apply(snapshot)
             self?.publishAppearance() // a restarted daemon has forgotten it
             self?.registerActions() // and every connection's actions
+            Task { [weak self] in if let m = try? await DaemonClient.shared.request(["type": .string("ui.hermes.state")]) { self?.hermes = m } }
             // A restarted daemon starts with its tailnet listener off; turn it back on if Settings has it on.
             if UserDefaults.standard.bool(forKey: ServerPane.listenKey) {
                 Task { _ = try? await DaemonClient.shared.request(ServerPane.listenRequest(true)) }
@@ -167,6 +174,7 @@ enum EditorKind: String, Identifiable {
         }
         daemon.onEvent = { [weak self] event in self?.apply(event) }
         daemon.onAction = { [weak self] m in self?.answer(m) }
+        daemon.onHermes = { [weak self] m in self?.hermesChanged(m) }
         daemon.onDisconnect = { [weak self] in self?.commandError = "Reconnecting to daemon…" }
         daemon.start()
         refreshHosts()
@@ -466,6 +474,24 @@ enum EditorKind: String, Identifiable {
         let panes = panesNeedingYou
         guard !panes.isEmpty else { return }
         jump(to: panes.firstIndex(of: tab.focus).map { panes[($0 + 1) % panes.count] } ?? panes[0])
+    }
+
+    /// Opens the Hermes panel, on `chat` when given.
+    func openHermes(chat: String?) {
+        if let chat { hermesChat = chat }
+        hermesOpen = true
+    }
+
+    /// Takes Hermes' state, and tells you when a run ended in a chat you aren't looking at, as for panes.
+    private func hermesChanged(_ m: Msg) {
+        hermes = m
+        guard let done = m.done, !(NSApp.isActive && hermesOpen && hermesChat == done.chat) else { return }
+        let (pane, name) = ("hermes:\(done.chat)", m.name ?? "Hermes")
+        let subtitle = done.failed ? "Failed · \(done.title)" : done.title
+        if !PhonePush.userAtMac {
+            PhonePush.send(pane: pane, thread: "hermes", title: name, subtitle: subtitle, body: done.text, answerable: false)
+        }
+        Attention.shared.notify(pane: pane, title: name, subtitle: subtitle, body: done.text)
     }
 
     /// Notifies you of a pane that came to need you or finished, unless it is in front of you.
