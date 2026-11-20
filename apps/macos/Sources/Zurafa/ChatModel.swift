@@ -147,6 +147,8 @@ struct ChatLog {
     private(set) var statusOnly = false
     /// The model, effort and permission mode the agent last showed running with.
     private(set) var settings = AgentSettings()
+    /// How full the context is and how much of the plan limit is spent, as the agent last reported.
+    private(set) var usage = AgentUsage()
 
     /// A message typed in the chat, for an agent whose transcript can't show it.
     mutating func sent(_ text: String) {
@@ -170,6 +172,12 @@ struct ChatLog {
         if kind == "mode" { statusOnly = s("mode") == "status"; return }
         if kind == "settings" {
             settings.merge(AgentSettings(model: v["model"]?.string, effort: v["effort"]?.string, mode: v["mode"]?.string))
+            return
+        }
+        if kind == "usage" {
+            if let n = v["context"]?.number, let w = v["window"]?.number, w > 0 { usage.context = n / w }
+            if let n = v["limit"]?.number { usage.limit = n / 100 }
+            if let n = v["limitMinutes"]?.number { usage.limitHours = Int(n / 60) }
             return
         }
         if kind == "result" {
@@ -209,6 +217,13 @@ struct ChatLog {
         }
         return out
     }
+}
+
+/// Fractions from 0 to 1; nil when the agent doesn't say.
+struct AgentUsage: Equatable {
+    var context: Double?
+    var limit: Double?
+    var limitHours: Int?
 }
 
 func duration(_ seconds: TimeInterval) -> String {

@@ -240,7 +240,7 @@ struct ChatView: View {
                     .id(asked.id)
                 } else if m.record?.state == "blocked" { blocked(m) }
                 composer(m)
-                ComposerFooter(dir: m.pwd ?? NSHomeDirectory(), working: live) {
+                ComposerFooter(dir: m.pwd ?? NSHomeDirectory(), working: live, usage: feed.log.usage) {
                     Label(m.pwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? m.cwd, systemImage: "folder").help(m.pwd ?? m.cwd)
                     if let problem { Text(problem).foregroundStyle(.red).lineLimit(1).help(problem) }
                 }

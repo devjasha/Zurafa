@@ -276,10 +276,11 @@ struct PopRow: View {
     }
 }
 
-/// Under the composer: the folder the agent works in, its git branch, and a spinner while it runs.
+/// Under the composer: the folder the agent works in, its git branch, its plan usage and context, and a spinner while it runs.
 struct ComposerFooter<Folder: View>: View {
     let dir: String
     let working: Bool
+    var usage = AgentUsage()
     @ViewBuilder let folder: Folder
 
     var body: some View {
@@ -287,12 +288,30 @@ struct ComposerFooter<Folder: View>: View {
             folder
             if let branch = gitBranch(dir) { Label(branch, systemImage: "arrow.triangle.branch") }
             Spacer(minLength: 0)
+            if let limit = usage.limit { meter("\(usage.limitHours.map { "\($0)h" } ?? "Plan") usage", limit) }
+            if let context = usage.context { meter("Context", context) }
             if working { ProgressView().controlSize(.small) }
         }
         .font(.system(size: 13))
         .foregroundStyle(Theme.ink.opacity(0.5))
         .padding(.horizontal, 14).padding(.top, 8)
     }
+
+    private func meter(_ name: String, _ used: Double) -> some View {
+        let used = min(max(used, 0), 1)
+        return HStack(spacing: 6) {
+            Text(name)
+            ProgressView(value: used).progressViewStyle(.linear).tint(.zurafaYellow).frame(width: 56)
+            Text(used.formatted(.percent.precision(.fractionLength(0)))).monospacedDigit()
+        }
+        .help("\(name): \(used.formatted(.percent.precision(.fractionLength(0)))) used")
+        .accessibilityElement(children: .combine)
+    }
+}
+
+extension Color {
+    /// The giraffe yellow of Zurafa's icon.
+    static let zurafaYellow = Color(red: 0.98, green: 0.79, blue: 0.27)
 }
 
 /// The branch checked out at `dir` (a short commit when detached), read from .git without running git.

@@ -29,6 +29,7 @@ indirect enum JSONValue: Codable, Equatable {
     var object: [String: JSONValue]? { if case .object(let v) = self { v } else { nil } }
     var array: [JSONValue]? { if case .array(let v) = self { v } else { nil } }
     var string: String? { if case .string(let v) = self { v } else { nil } }
+    var number: Double? { if case .number(let v) = self { v } else { nil } }
     var int: Int? { if case .number(let v) = self, v.isFinite, v.rounded() == v { Int(exactly: v) } else { nil } }
 }
 

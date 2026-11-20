@@ -19,6 +19,14 @@ final class ChatLogTests: XCTestCase {
         XCTAssertEqual(log.items[2].text, "**Fixed.**")
     }
 
+    func testUsageKeepsTheLatestOfEach() {
+        var log = ChatLog()
+        log.add(Data(#"{"kind":"usage","context":50000,"window":200000,"limit":40,"limitMinutes":300}"#.utf8))
+        log.add(Data(#"{"kind":"usage","context":100000,"window":200000}"#.utf8))
+        XCTAssertEqual(log.usage, AgentUsage(context: 0.5, limit: 0.4, limitHours: 5))
+        XCTAssertTrue(log.items.isEmpty)
+    }
+
     func testAnAgentWithoutTranscriptKeepsWhatTheChatSent() {
         var log = ChatLog()
         log.sent("ignored: a transcript will show it")
