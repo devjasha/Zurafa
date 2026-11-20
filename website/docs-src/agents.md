@@ -135,6 +135,10 @@ Other agents that support MCP servers over stdio take the same command, `zurafa 
 
 An agent's own subagents show in its card by their task, as **Working** and then **Done**. Hover one for its last answer, or click it to go to the agent that runs it. `zurafa setup claude` and `zurafa setup codex` add the hooks for this.
 
+## Your personal agent
+
+To chat with your own Hermes Agent from the Mac and iPhone, and let it drive Zurafa over your tailnet, see [Your personal agent](/docs/personal-agent/).
+
 ## When an agent needs you
 
 A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. When Claude Code asks for permission, hover the notification and choose **Approve** or **Deny** to answer without leaving what you're doing. If the prompt was already answered or changed, Zurafa takes you to the pane instead of pressing anything. The Dock icon counts the panes waiting on you, and `⌘J` jumps to the next one.
