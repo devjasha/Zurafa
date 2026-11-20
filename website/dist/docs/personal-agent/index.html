@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your personal agent · Zurafa Docs</title><meta name="description" content="Zurafa can chat with your own Hermes Agent, the agent you keep running on a machine of yours, from a panel beside your panes on the Mac and from the iPhone app. You give it a name and a pixel-art avatar, it shows when it is working, and it notifies you when it answers. If you allow it, it can also see and control your Zurafa terminals. This is experimental.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7ead7"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/personal-agent/">
+  <link rel="icon" href="/assets/zurafa-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
+  <link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/docs.css">
+</head>
+<body class="docs-page" data-page="personal-agent">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav id="site-nav" aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.43-macos-universal.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation</a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Start here</div><h1>Your personal agent</h1><div class="prose"><p>Zurafa can chat with your own Hermes Agent, the agent you keep running on a machine of yours, from a panel beside your panes on the Mac and from the iPhone app. You give it a name and a pixel-art avatar, it shows when it is working, and it notifies you when it answers. If you allow it, it can also see and control your Zurafa terminals. This is experimental.</p>
+<p>The chat goes through the Zurafa daemon on your Mac. The daemon talks to Hermes&#x27; API server, keeps the key, and remembers the chats you start in Zurafa, so the phone sees the same chats as the Mac.</p>
+<h2 id="turn-on-hermes-api-server">Turn on Hermes&#x27; API server</h2>
+<p>Zurafa talks to the API server that <code>hermes gateway</code> runs. Turn it on in <code>~/.hermes/.env</code> on the machine that runs Hermes:</p>
+<pre><code>API_SERVER_ENABLED=true
+API_SERVER_KEY=&lt;a long random secret&gt;</code></pre>
+<p>Then start the gateway:</p>
+<pre><code>hermes gateway</code></pre>
+<p>The API server listens on <code>http://127.0.0.1:8642</code>, which is also the URL Zurafa starts with. If Hermes runs on the same Mac as Zurafa, that is all you need.</p>
+<h2 id="hermes-on-another-machine">Hermes on another machine</h2>
+<p><code>127.0.0.1</code> only reaches the machine itself. To use Hermes running on another computer, put its API server on your tailnet with Tailscale Serve. On the machine that runs Hermes:</p>
+<pre><code>tailscale serve --bg --https=8443 http://127.0.0.1:8642</code></pre>
+<p>Any free port works in place of <code>8443</code>. The Hermes URL is then <code>https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net:&lt;port&gt;</code>, for example <code>https://hermes-box.example-tailnet.ts.net:8443</code>. Tailscale gives it a real HTTPS certificate, and only devices on your tailnet can reach it. The API key still guards it.</p>
+<aside class="note">Point Serve at the API server on port 8642, not at Hermes&#x27; web dashboard. The dashboard redirects to <code>/login</code>, and Zurafa then reports &quot;Hermes answered with something other than JSON&quot;.</aside>
+<h2 id="connect-zurafa">Connect Zurafa</h2>
+<p>Open <strong>Settings → Hermes</strong> on the Mac:</p>
+<ol>
+<li><strong>Server URL</strong>: Hermes&#x27; API server, <code>http://127.0.0.1:8642</code> or your <code>https://….ts.net:&lt;port&gt;</code> address. It must start with <code>http://</code> or <code>https://</code>.</li>
+<li><strong>API Key</strong>: the <code>API_SERVER_KEY</code> from <code>~/.hermes/.env</code>.</li>
+<li>Click <strong>Connect</strong>. Zurafa checks the key against Hermes and shows <strong>Connected</strong>, or what went wrong.</li>
+</ol>
+<p>The key is saved in <code>~/Library/Application Support/Zurafa/hermes.json</code>, which only your user can read, and Zurafa never shows it again: the field then says <strong>Saved</strong>. Type a new one and click <strong>Connect</strong> to replace it. Zurafa passes the key to <code>curl</code> on its standard input, never on a command line.</p>
+<h3 id="name-and-avatar">Name and avatar</h3>
+<ul>
+<li><strong>Name</strong>: what Zurafa calls your agent, up to 40 characters. Empty means &quot;Hermes&quot;. It is saved when you click <strong>Connect</strong>.</li>
+<li><strong>Avatar</strong>: pick one of ten 12×12 pixel-art avatars (Robot, Cat, Fox, Ghost, Owl, Frog, Alien, Slime, Knight, Wizard) and one of eight colors (Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink). A pick is saved at once, without <strong>Connect</strong>.</li>
+</ul>
+<p>The name and avatar show in the chat&#x27;s header, beside each answer, on the activity indicator and in notifications, on the Mac and on your iPhone.</p>
+<h2 id="chat-on-the-mac">Chat on the Mac</h2>
+<p>Press <code>⇧⌘H</code> (<strong>Hermes Chat</strong>) to open the chat beside your panes, and again to close it. Each chat is a tab in the strip at the top:</p>
+<ul>
+<li><strong>+</strong> starts a new chat.</li>
+<li>A chat&#x27;s title comes from Hermes, or from your first message until Hermes names it. A spinner shows on a chat while Hermes answers in it.</li>
+<li>Hover a tab and click its <strong>×</strong> to close the chat. Zurafa forgets it, but the session stays in Hermes.</li>
+</ul>
+<p>Hermes&#x27; answers stream in as it writes them, with the tools it runs and their results, like the <a href="/docs/chat/">agent chats</a>. You can&#x27;t send another message in a chat until Hermes finishes answering there, but other chats stay free.</p>
+<h3 id="images">Images</h3>
+<p>Attach images to a message in any of three ways: paste them into the message field, drop them on the panel, or click the <strong>Attach Images</strong> button. Thumbnails show above the message field until you send. Hermes takes PNG, JPEG, GIF and WebP images, up to 7 MB in all per message. Other files are refused. If a send fails, your text and images are put back.</p>
+<h2 id="chat-on-iphone">Chat on iPhone</h2>
+<p>The <a href="/docs/iphone/">iPhone app</a> uses the same chats through your Mac:</p>
+<ul>
+<li>On the sessions screen, the row with your agent&#x27;s name and avatar at the top opens the chat.</li>
+<li>In a terminal, the agent&#x27;s button sits in the pane bar under <strong>New Pane</strong>. On a hardware keyboard, <code>⌘⇧H</code> opens the chat too.</li>
+<li>Tap the chat&#x27;s title to switch between chats or choose <strong>Close This Chat</strong>. The <strong>New Chat</strong> button at the top right starts one.</li>
+<li>The paperclip attaches images from <strong>Photo Library</strong> or <strong>Files</strong>. The same image types and size limit apply.</li>
+</ul>
+<h2 id="activity-and-notifications">Activity and notifications</h2>
+<p>Once an API key is saved, your agent&#x27;s avatar sits in the Mac&#x27;s top bar and in the iPhone&#x27;s sessions and terminal toolbars. It bobs while Hermes is answering in any chat. Click it to open the chat Hermes is busy in, or the chat panel when it is idle.</p>
+<p>When Hermes finishes in a chat you aren&#x27;t looking at, Zurafa notifies you under your agent&#x27;s name, with the chat&#x27;s title and the start of the answer, or &quot;Failed&quot; if the run failed:</p>
+<ul>
+<li><strong>On the Mac</strong>, the notification works like a pane&#x27;s. Click it to open the panel on that chat.</li>
+<li><strong>On iPhone</strong>, you see a banner while the app is open. When you haven&#x27;t used your Mac for two minutes, a push notification reaches the phone too. Tap either to open that chat.</li>
+</ul>
+<h2 id="let-your-agent-see-and-control-zurafa">Let your agent see and control Zurafa</h2>
+<p>Hermes can also use Zurafa&#x27;s agent tools, the same ones <a href="/docs/agents/#let-agents-drive-zurafa"><code>zurafa mcp</code></a> gives agents in your panes. Zurafa serves them as an MCP endpoint that Hermes reaches over your tailnet, so this needs <strong>Settings → Server → Serve over Tailscale</strong> on.</p>
+<ol>
+<li>In <strong>Settings → Hermes</strong>, turn on <strong>Let Hermes see and control Zurafa</strong> (it uses your agent&#x27;s name).</li>
+<li><strong>Endpoint</strong> shows the address, <code>https://&lt;your Zurafa address&gt;/mcp</code>. Until Serve over Tailscale is on it says &quot;Turn on Serve over Tailscale to get an address.&quot;</li>
+<li><strong>Token</strong> shows the bearer token. <strong>New Token</strong> makes a new one, and the old one stops working at once.</li>
+<li>Copy the block under <strong>Add to ~/.hermes/config.yaml</strong> into Hermes&#x27; config:</li>
+</ol>
+<pre><code>mcp_servers:
+  zurafa:
+    url: &quot;https://&lt;your Zurafa address&gt;/mcp&quot;
+    headers:
+      Authorization: &quot;Bearer &lt;token&gt;&quot;</code></pre>
+<p>Hermes then has these tools:</p>
+<div class="table-scroll"><table>
+<tr><th>Tool</th><th>What it does</th></tr>
+<tr><td><code>list_panes</code></td><td>Lists every pane in every session with its program, title, status and directory</td></tr>
+<tr><td><code>read</code></td><td>Reads a pane&#x27;s screen, or its last lines including scrollback</td></tr>
+<tr><td><code>send</code></td><td>Types text into a pane, then presses Enter</td></tr>
+<tr><td><code>key</code></td><td>Presses keys in a pane, such as Enter, Escape, arrows or Ctrl+C</td></tr>
+<tr><td><code>wait</code></td><td>Waits until a pane stops working and returns its status and message</td></tr>
+<tr><td><code>prompt</code></td><td>Sends a message to a pane&#x27;s agent, waits for it to finish and returns the screen</td></tr>
+<tr><td><code>new_tab</code></td><td>Opens a tab with a shell, optionally running a command</td></tr>
+<tr><td><code>split</code></td><td>Splits a pane right or down, optionally running a command</td></tr>
+<tr><td><code>focus</code></td><td>Selects a pane and switches to its tab, so you see it</td></tr>
+<tr><td><code>rename_tab</code></td><td>Renames the tab that holds a pane</td></tr>
+<tr><td><code>close</code></td><td>Closes a pane and ends its program. This can&#x27;t be undone</td></tr>
+<tr><td><code>list_actions</code>, <code>do_action</code></td><td>Use the app&#x27;s own actions, only while <strong>Settings → Integrations → Allow agents to control Zurafa</strong> is on</td></tr>
+</table></div>
+<p>Hermes uses these tools without asking you each time.</p>
+<aside class="note"><strong>The token is full control of your terminals.</strong> Anyone on your tailnet who has it can read every pane, type any command into your shells, and open and close terminals, as your user on this Mac. The endpoint checks only the token, so <strong>Limit access to your Tailscale account</strong> does not stop someone who has it. Keep it out of shared files and chats, and click <strong>New Token</strong> if it leaks. Turn the switch off when you don&#x27;t need it: while it is off, Zurafa refuses every request, token or not.</aside>
+<p>The switch and token are kept in <code>~/Library/Application Support/Zurafa/hermes-mcp.json</code>, readable only by your user. The switch is off until you turn it on.</p>
+<h2 id="limits">Limits</h2>
+<ul>
+<li>The integration is experimental, and Hermes&#x27; API may change under it.</li>
+<li>Zurafa lists only the chats started in Zurafa, not every Hermes session.</li>
+<li>One message at a time per chat. Hermes must finish, or fail, before the next.</li>
+<li>Images only, PNG, JPEG, GIF or WebP, up to 7 MB in all per message.</li>
+<li>The MCP endpoint is reachable only over your tailnet and only while Serve over Tailscale is on.</li>
+</ul>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="cannot-reach-hermes-at">Cannot reach Hermes at …</h3>
+<p>Hermes&#x27; API server isn&#x27;t answering at that URL. Check that <code>hermes gateway</code> is running and that <code>~/.hermes/.env</code> has <code>API_SERVER_ENABLED=true</code>. For Hermes on another machine, check that its Tailscale Serve entry still points at <code>http://127.0.0.1:8642</code> and that the URL includes the port.</p>
+<h3 id="hermes-refused-the-api-key">Hermes refused the API key</h3>
+<p>The key in Zurafa doesn&#x27;t match <code>API_SERVER_KEY</code>. Type it again and click <strong>Connect</strong>.</p>
+<h3 id="hermes-answered-with-something-other-than-json">Hermes answered with something other than JSON</h3>
+<p>The URL reaches something other than the API server, most often Hermes&#x27; web dashboard. Point it at port 8642.</p>
+<h3 id="hermes-is-not-connected-set-it-up-in-settings-hermes">Hermes is not connected. Set it up in Settings → Hermes.</h3>
+<p>No API key is saved yet. The avatar in the top bar also stays hidden until one is.</p>
+<h3 id="hermes-did-not-answer-in-time">Hermes did not answer in time</h3>
+<p>Hermes took longer than 20 seconds to answer, or 5 seconds to accept the connection. Try <strong>Connect</strong> again once it has started.</p>
+<h3 id="hermes-can-t-use-zurafa-s-tools">Hermes can&#x27;t use Zurafa&#x27;s tools</h3>
+<p>The endpoint answers &quot;Zurafa control is off&quot; while the switch is off, and &quot;Wrong or missing bearer token&quot; when the token in <code>config.yaml</code> is old or mistyped. After <strong>New Token</strong>, copy the config again.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/agents/"><small>← Previous</small><strong>Connect your agents</strong></a><a href="/docs/sessions/"><small>Next →</small><strong>Sessions, tabs &amp; panes</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#turn-on-hermes-api-server">Turn on Hermes&#x27; API server</a><a href="#hermes-on-another-machine">Hermes on another machine</a><a href="#connect-zurafa">Connect Zurafa</a><a href="#name-and-avatar">Name and avatar</a><a href="#chat-on-the-mac">Chat on the Mac</a><a href="#images">Images</a><a href="#chat-on-iphone">Chat on iPhone</a><a href="#activity-and-notifications">Activity and notifications</a><a href="#let-your-agent-see-and-control-zurafa">Let your agent see and control Zurafa</a><a href="#limits">Limits</a><a href="#troubleshooting">Troubleshooting</a><a href="#cannot-reach-hermes-at">Cannot reach Hermes at …</a><a href="#hermes-refused-the-api-key">Hermes refused the API key</a><a href="#hermes-answered-with-something-other-than-json">Hermes answered with something other than JSON</a><a href="#hermes-is-not-connected-set-it-up-in-settings-hermes">Hermes is not connected. Set it up in Settings → Hermes.</a><a href="#hermes-did-not-answer-in-time">Hermes did not answer in time</a><a href="#hermes-can-t-use-zurafa-s-tools">Hermes can&#x27;t use Zurafa&#x27;s tools</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

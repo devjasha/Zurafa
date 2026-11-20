@@ -25,9 +25,12 @@
 <a href="/docs/install/" data-page="install">Install on macOS</a>
 <a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
 <a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
 </div>
 <div class="nav-group"><p>Workspace</p>
 <a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
 <a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
@@ -51,9 +54,12 @@
 <a href="/docs/install/" data-page="install">Install on macOS</a>
 <a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
 <a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
 </div>
 <div class="nav-group"><p>Workspace</p>
 <a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
 <a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
@@ -173,11 +179,13 @@
 <p>Other agents that support MCP servers over stdio take the same command, <code>zurafa mcp</code>. The tools are <code>list_panes</code>, <code>send</code>, <code>key</code>, <code>read</code>, <code>wait</code>, and <code>prompt</code>; each does what the <a href="/docs/cli/">CLI command</a> of the same name does. <code>wait</code> and <code>prompt</code> give up after 10 minutes unless the agent asks for longer.</p>
 <h3 id="subagents">Subagents</h3>
 <p>An agent&#x27;s own subagents show in its card by their task, as <strong>Working</strong> and then <strong>Done</strong>. Hover one for its last answer, or click it to go to the agent that runs it. <code>zurafa setup claude</code> and <code>zurafa setup codex</code> add the hooks for this.</p>
+<h2 id="your-personal-agent">Your personal agent</h2>
+<p>To chat with your own Hermes Agent from the Mac and iPhone, and let it drive Zurafa over your tailnet, see <a href="/docs/personal-agent/">Your personal agent</a>.</p>
 <h2 id="when-an-agent-needs-you">When an agent needs you</h2>
 <p>A blocked or finished pane sends a macOS notification while you are looking elsewhere. Click it to go straight to that pane. When Claude Code asks for permission, hover the notification and choose <strong>Approve</strong> or <strong>Deny</strong> to answer without leaving what you&#x27;re doing. If the prompt was already answered or changed, Zurafa takes you to the pane instead of pressing anything. The Dock icon counts the panes waiting on you, and <code>⌘J</code> jumps to the next one.</p>
 <h2 id="how-it-works">How it works</h2>
-<p><code>zurafa report</code> writes an OSC 7501 sequence straight to the pane&#x27;s terminal, so it works from hooks whose output the agent captures. Outside Zurafa the sequence is ignored. The <a href="/docs/status/">Program status</a> page covers the protocol, nested tasks, and when reports clear themselves.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/quickstart/"><small>← Previous</small><strong>Quick start</strong></a><a href="/docs/sessions/"><small>Next →</small><strong>Sessions, tabs &amp; panes</strong></a></nav></main>
-    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#codex">Codex</a><a href="#pi">Pi</a><a href="#other-agents">Other agents</a><a href="#let-agents-drive-zurafa">Let agents drive Zurafa</a><a href="#subagents">Subagents</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+<p><code>zurafa report</code> writes an OSC 7501 sequence straight to the pane&#x27;s terminal, so it works from hooks whose output the agent captures. Outside Zurafa the sequence is ignored. The <a href="/docs/status/">Program status</a> page covers the protocol, nested tasks, and when reports clear themselves.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/quickstart/"><small>← Previous</small><strong>Quick start</strong></a><a href="/docs/personal-agent/"><small>Next →</small><strong>Your personal agent</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#claude-code">Claude Code</a><a href="#codex">Codex</a><a href="#pi">Pi</a><a href="#other-agents">Other agents</a><a href="#let-agents-drive-zurafa">Let agents drive Zurafa</a><a href="#subagents">Subagents</a><a href="#your-personal-agent">Your personal agent</a><a href="#when-an-agent-needs-you">When an agent needs you</a><a href="#how-it-works">How it works</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
   <script src="/assets/site.js" defer></script>

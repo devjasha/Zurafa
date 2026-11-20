@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iPhone app · Zurafa Docs</title><meta name="description" content="The Zurafa iPhone app, on TestFlight, steers the Zurafa on your Mac: its workspaces, tabs and panes, your agents as chats, and their notifications. Everything runs on the Mac; the phone shows it and types into it. The app takes the Mac&#x27;s theme and appearance.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7ead7"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/iphone/">
+  <link rel="icon" href="/assets/zurafa-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
+  <link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/docs.css">
+</head>
+<body class="docs-page" data-page="iphone">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav id="site-nav" aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.43-macos-universal.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation</a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Workspace</div><h1>iPhone app</h1><div class="prose"><p>The Zurafa iPhone app, on TestFlight, steers the Zurafa on your Mac: its workspaces, tabs and panes, your agents as chats, and their notifications. Everything runs on the Mac; the phone shows it and types into it. The app takes the Mac&#x27;s theme and appearance.</p>
+<h2 id="connect-to-your-mac">Connect to your Mac</h2>
+<p>The phone reaches the Mac over Tailscale. Zurafa joins your tailnet as its own device, so the Mac&#x27;s own Tailscale settings are not involved.</p>
+<ol>
+<li>On the Mac, open Zurafa → Settings → Server and click <strong>Sign In…</strong> under Tailscale. Zurafa joins as its own device, named from <strong>Preferred Hostname</strong> (for example <code>my-mac-zurafa</code>).</li>
+<li>Turn on <strong>Serve over Tailscale</strong>. Once Tailscale issues an HTTPS certificate, <strong>Remote Address</strong> shows an address such as <code>https://my-mac-zurafa.tail1234.ts.net</code>.</li>
+<li>Sign the iPhone in to the same Tailscale account.</li>
+<li>On the Mac, click <strong>Pair</strong> to show a QR code. In the app, tap <strong>Scan QR Code</strong> and point the camera at it. You can also scan it with the iPhone&#x27;s Camera, or type the Remote Address under <strong>Your Mac&#x27;s Tailscale name</strong> and tap <strong>Connect</strong>.</li>
+</ol>
+<p>The app connects over HTTPS on port 443. With <strong>Limit access to your Tailscale account</strong> on, the Mac admits only devices signed in to your own account. A pair code only accepts <code>*.ts.net</code> names. Scanning another Mac&#x27;s code asks before switching to it.</p>
+<p>Turn on <strong>Stay reachable with the lid closed</strong> to keep the Mac running with its lid closed while on power. On battery it sleeps as usual.</p>
+<p>The app keeps retrying while it is open, since the Mac may be asleep or off the tailnet for a while. Pull down on the sessions list to reconnect at once.</p>
+<h2 id="sessions">Sessions</h2>
+<p>The first screen lists every workspace on the Mac with its tabs, as the Mac&#x27;s sidebar does. It is titled with the Mac&#x27;s name.</p>
+<ul>
+<li>Each tab is one row: its program and folder, its other panes peeking out behind its icon, and its state: working, waiting on you, failed, done or exited. A tab with several agents counts how many need attention, are working and are done.</li>
+<li>A tab whose agent spawned others is an <strong>agent card</strong>: the agent, its task, when it started and how many of its agents are done (&quot;3 agents · 1/3 done&quot;). Its agents are nested under it with their state (<strong>Working</strong>, <strong>Needs you</strong>, <strong>Done</strong>, <strong>Failed</strong>, <strong>Idle</strong>, <strong>Exited</strong>). Tap one to open it.</li>
+<li>Hidden panes are rows under their workspace. Swipe one and tap <strong>Show</strong> to bring it back floating.</li>
+<li>Swipe a tab and tap <strong>Close</strong> to close it. <strong>New Tab</strong> adds one to that workspace.</li>
+<li>Touch and hold a workspace&#x27;s header for <strong>Delete Workspace</strong>, which closes every terminal in it.</li>
+<li><strong>+</strong> opens <strong>New Session</strong> and <strong>New SSH Session</strong>, which lists the hosts saved in Zurafa on your Mac. SSH sessions run on the Mac; the phone only steers them.</li>
+</ul>
+<h2 id="the-pane-screen">The pane screen</h2>
+<p>Tap a tab to open its pane full screen. The header shows the program and folder (<code>fish ~/src/app</code>) and, under it, the workspace. Tap the workspace to jump to any pane on the Mac, hidden ones included.</p>
+<ul>
+<li><strong>Pane bar.</strong> A column of the tab&#x27;s panes, shown by the programs running in them. Tap one to switch, or touch and hold, then slide to the pane you want. A small map of the tab&#x27;s splits shows briefly as you switch. <strong>+</strong> under the panes adds a pane by splitting the tab&#x27;s last one. The bar sits on the right; Settings → Terminal → <strong>Pane Bar</strong> moves it to the left.</li>
+<li><strong>Workspaces.</strong> The sidebar button at the top left opens every workspace with its tabs. Pick a tab to switch to it. Swipe from the left edge to go back to Sessions.</li>
+<li><strong>•••</strong> holds <strong>New Chat</strong>, <strong>Show Terminal</strong> or <strong>Show Chat</strong> for agent panes, <strong>New Tab</strong>, <strong>Paste</strong> and <strong>Close Pane</strong>. Closing a tab&#x27;s last pane goes back to Sessions.</li>
+</ul>
+<p>The terminal scrolls smoothly, point by point, and coasts after a flick.</p>
+<h2 id="key-bar">Key bar</h2>
+<p>Above the keyboard, a key bar adds what the iOS keyboard lacks:</p>
+<ul>
+<li>Show or hide the keyboard.</li>
+<li><strong>Escape</strong>, <strong>Control</strong>, <strong>Option</strong>, <strong>Shift</strong> and <strong>Tab</strong>. Control and Option stay on until the next key; Shift with Tab sends Shift-Tab.</li>
+<li><strong>⌘</strong> at the right end. Tap it for <strong>Paste</strong>, <strong>Photo Library</strong>, <strong>Files</strong>, the control keys (<strong>Interrupt ⌃C</strong>, <strong>End of Input ⌃D</strong>, <strong>Suspend ⌃Z</strong>, <strong>Clear ⌃L</strong>, <strong>Search History ⌃R</strong>) and the arrow keys. Touch and hold it for your quick actions.</li>
+</ul>
+<p><strong>Quick actions</strong> are commands you send often. Set them up in Settings → Key Bar → <strong>Quick Actions</strong>: each has a title, a command and <strong>Press Return</strong>, which runs it instead of leaving it on the prompt. The list starts with <code>git status</code> and <code>clear</code>.</p>
+<h2 id="attachments">Attachments</h2>
+<p><strong>Photo Library</strong> and <strong>Files</strong> send your picks to the Mac, which saves them there. In a terminal, their Mac paths are typed into the pane. HEIC photos arrive as PNG or JPEG, which every agent reads.</p>
+<h2 id="agent-chats">Agent chats</h2>
+<p>Claude Code, Codex and Pi panes open as a chat, as on the Mac: your messages, the agent&#x27;s work folded into one line, tool calls, diffs, question cards with options to pick, and the composer&#x27;s model, effort and access menus. See <a href="/docs/chat/#on-the-iphone">Agent chats</a> for the details.</p>
+<ul>
+<li><strong>⌘</strong> next to Send works as on the key bar: tap for Escape and control keys, hold for quick actions.</li>
+<li>The paperclip attaches photos and files. They show as thumbnails above the text and go with the message as <code>@</code> mentions.</li>
+<li>Unsent drafts are kept per pane, through leaving the pane, flipping to the terminal and relaunching the app.</li>
+<li><strong>•••</strong> → <strong>New Chat</strong> asks <strong>What should we work on?</strong> Pick the agent, its model, effort and access, and a recent folder, then send to start it on the Mac in a new tab.</li>
+</ul>
+<p>Turn off <strong>Open Agents as Chat</strong> in Settings to open agent panes as their terminal.</p>
+<h2 id="notifications">Notifications</h2>
+<p>The app asks for notifications after it first connects to a Mac.</p>
+<ul>
+<li>When an agent finishes, fails or needs you and you are away from the Mac (no keyboard or mouse for two minutes, or its lid is closed), the phone gets a push. Tap it to open that pane.</li>
+<li>A Claude Code permission prompt has <strong>Approve</strong> and <strong>Deny</strong> on the notification. Both ask you to unlock the phone first, since approving runs a command on the Mac.</li>
+<li>With the app open, notifications show as banners.</li>
+</ul>
+<h2 id="live-activity">Live Activity</h2>
+<p>While agents work or wait on you, the Mac starts a <strong>Zurafa agents</strong> Live Activity on the Lock Screen and in the Dynamic Island. It shows a summary (&quot;3 working · 1 needs you&quot;) and up to three agents with their place and message. An agent waiting on a permission prompt gets <strong>Deny</strong> and <strong>Approve</strong> buttons. When no agent is working or waiting, the activity ends.</p>
+<h2 id="your-personal-agent">Your personal agent</h2>
+<p>If you set up a <a href="/docs/personal-agent/">personal agent</a>, the app shows it too: a row at the top of Sessions and a button in the pane bar open its chat. Its avatar sits in the toolbar and bobs while it works; tap it to open the busy chat. Switch between its chats from the title menu, and attach photos and files with the paperclip.</p>
+<h2 id="settings">Settings</h2>
+<p>The gear on the Sessions screen opens Settings. The look comes from the Mac; these are what the phone decides itself:</p>
+<div class="table-scroll"><table>
+<tr><th>Setting</th><th>What it does</th></tr>
+<tr><td><strong>Mac</strong></td><td>The address, connection status, and <strong>Disconnect</strong>, which forgets the Mac</td></tr>
+<tr><td><strong>Font Size</strong></td><td>9 to 24 pt; it also grows with the iPhone&#x27;s Text Size</td></tr>
+<tr><td><strong>Keep Screen On</strong></td><td>Stops the iPhone locking while a terminal is open</td></tr>
+<tr><td><strong>Pane Bar</strong></td><td><strong>Left</strong> or <strong>Right</strong></td></tr>
+<tr><td><strong>Open Agents as Chat</strong></td><td>Agent panes open as a chat; off, as their terminal</td></tr>
+<tr><td><strong>Quick Actions</strong></td><td>The commands ⌘ sends when held</td></tr>
+<tr><td><strong>Notification Settings</strong></td><td>Opens the iPhone&#x27;s notification settings for Zurafa</td></tr>
+</table></div></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/chat/"><small>← Previous</small><strong>Agent chats</strong></a><a href="/docs/shortcuts/"><small>Next →</small><strong>Commands &amp; shortcuts</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#connect-to-your-mac">Connect to your Mac</a><a href="#sessions">Sessions</a><a href="#the-pane-screen">The pane screen</a><a href="#key-bar">Key bar</a><a href="#attachments">Attachments</a><a href="#agent-chats">Agent chats</a><a href="#notifications">Notifications</a><a href="#live-activity">Live Activity</a><a href="#your-personal-agent">Your personal agent</a><a href="#settings">Settings</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

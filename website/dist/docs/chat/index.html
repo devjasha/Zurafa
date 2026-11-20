@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent chats · Zurafa Docs</title><meta name="description" content="A pane running Claude Code, Codex or Pi can show its conversation as a chat instead of its terminal. The agent keeps running in the terminal underneath; the chat reads its transcript and types into it for you.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7ead7"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131209"><link rel="canonical" href="https://zurafa-website.vercel.app/docs/chat/">
+  <link rel="icon" href="/assets/zurafa-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
+  <link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/docs.css">
+</head>
+<body class="docs-page" data-page="chat">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell nav-wrap">
+    <a class="brand" href="/" aria-label="Zurafa home"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a>
+    <nav id="site-nav" aria-label="Main navigation"><a href="/#features">Product</a><a href="/docs/" aria-current="page">Docs</a><a href="https://github.com/devjasha/Zurafa" target="_blank" rel="noopener">GitHub</a></nav>
+    <a class="nav-download" href="/releases/Zurafa-0.1.43-macos-universal.dmg" download>Download <span class="btn-arrow"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></svg></span></a>
+    <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
+  </div></header>
+  <div class="docs-layout shell">
+    <aside class="docs-sidebar" aria-label="Documentation navigation"><div class="sidebar-inner">
+      <a class="docs-home" href="/docs/">Documentation</a>
+      <div class="docs-search-wrap"><label class="sr-only" for="docs-search">Search documentation</label><input id="docs-search" type="search" placeholder="Search docs…" autocomplete="off" aria-controls="search-results"><kbd>/</kbd><div id="search-results" class="search-results" hidden></div></div>
+      <details class="mobile-docs-menu"><summary>Browse all guides</summary><div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div></details>
+      <div class="nav-group"><p>Start here</p>
+<a href="/docs/" data-page="overview">Overview</a>
+<a href="/docs/install/" data-page="install">Install on macOS</a>
+<a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
+<a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
+</div>
+<div class="nav-group"><p>Workspace</p>
+<a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
+<a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
+<a href="/docs/previews/" data-page="previews">Files &amp; images</a>
+<a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
+<a href="/docs/remote-access/" data-page="remote-access">Direct over Tailscale</a>
+</div>
+<div class="nav-group"><p>Personalization</p>
+<a href="/docs/appearance/" data-page="appearance">Appearance, config &amp; Ghostty</a>
+<a href="/docs/backgrounds/" data-page="backgrounds">Dithered backgrounds</a>
+</div>
+<div class="nav-group"><p>Reference</p>
+<a href="/docs/status/" data-page="status">Program status</a>
+<a href="/docs/architecture/" data-page="architecture">Architecture &amp; events</a>
+<a href="/docs/ipc-reference/" data-page="ipc-reference">IPC protocol</a>
+<a href="/docs/cli/" data-page="cli">CLI</a>
+<a href="/docs/build/" data-page="build">Build from source</a>
+<a href="/docs/troubleshooting/" data-page="troubleshooting">Troubleshooting &amp; limits</a>
+<a href="/docs/changelog/" data-page="changelog">Changelog</a>
+</div>
+    </div></aside>
+    <main id="main" class="docs-article"><div class="doc-breadcrumb"><a href="/docs/">Docs</a><span>/</span>Workspace</div><h1>Agent chats</h1><div class="prose"><p>A pane running Claude Code, Codex or Pi can show its conversation as a chat instead of its terminal. The agent keeps running in the terminal underneath; the chat reads its transcript and types into it for you.</p>
+<h2 id="open-a-chat">Open a chat</h2>
+<p>Agent panes open as a chat by default. To change that for every pane, turn off <strong>Show agents as chat</strong> in Settings → Integrations → Chat, or set <code>agent-chat = false</code> in the config file.</p>
+<ul>
+<li><code>⌥⌘C</code> (<strong>Chat or Terminal</strong> in <code>⌘K</code>) flips the focused agent pane between its chat and its terminal.</li>
+<li><code>⇧⌘O</code> (<strong>New Chat</strong>) starts Claude Code, Codex or Pi in a new tab, which opens as a chat.</li>
+</ul>
+<p>A chat opens on its newest turns. Click <strong>Show earlier messages</strong> at the top for older ones. Switching tabs and back shows the chat at once, without loading it again.</p>
+<h2 id="what-a-chat-shows">What a chat shows</h2>
+<p>Each turn is one exchange:</p>
+<ul>
+<li><strong>Your message</strong> in a bubble on the right.</li>
+<li><strong>The work</strong>, folded into one line such as &quot;Claude worked for 1m 56s&quot;. While the agent runs, Zurafa&#x27;s star turns in place of its icon and the clock shimmers. The work shows while the agent is on it and folds away once it answers.</li>
+<li><strong>Tool calls</strong> as quiet rows, such as &quot;Read main.rs&quot;, with commands and queries as written. Click a row to see its output.</li>
+<li><strong>Edits</strong> show their line counts (<code>+12 −3</code>). Opening one shows its diff in the file&#x27;s syntax colors: removed lines on red, added lines on green.</li>
+<li><strong>Changed files</strong> are listed under the turn with their line counts. Click one to open it in the <a href="/docs/previews/">preview</a>.</li>
+<li><strong>The answer</strong> as Markdown: headings, lists, quotes, tables and code blocks with a copy button. A copy button copies the whole answer.</li>
+</ul>
+<p>Chats are laid out in a reading column, so a wide pane centers the chat instead of stretching its lines.</p>
+<h2 id="when-the-agent-needs-you">When the agent needs you</h2>
+<ul>
+<li><strong>Questions.</strong> When the agent asks a question with options, a card shows it with its options to pick, one question at a time. Pick one or more, or choose <strong>Other</strong> and type your own answer, then <strong>Continue</strong> or <strong>Submit</strong>. Zurafa answers in the terminal for you. <strong>Skip</strong> dismisses the question, as Esc does in the terminal.</li>
+<li><strong>Permission prompts.</strong> Claude Code&#x27;s permission prompt shows <strong>Deny</strong> and <strong>Allow</strong> above the composer. Return allows.</li>
+<li><strong>Anything else</strong> that waits on you shows its message and <strong>Answer in Terminal</strong>, which flips the pane to its terminal.</li>
+</ul>
+<h2 id="the-composer">The composer</h2>
+<p>The composer sits at the bottom of the chat. Return sends; <code>⌥↩</code> adds a new line. Messages arrive as a paste followed by Enter, as <code>zurafa send</code> types them, so a multi-line message arrives whole.</p>
+<ul>
+<li>Type <code>/</code> for the agent&#x27;s commands and skills, and <code>@</code> for files in the folder the agent works in. The suggestions open above the composer; pick one with the arrow keys and Return, or close them with Esc.</li>
+<li><strong>Images</strong>: paste one with <code>⌘V</code> or drop image files on the composer. They show as thumbnails above the text and are sent ahead of it as <code>@</code> mentions.</li>
+<li><strong>+</strong> opens <strong>Add to message</strong>: <strong>Upload file</strong> attaches files or images, and <strong>Plan mode</strong> asks for a plan to review before building (Claude Code).</li>
+<li>The <strong>model</strong> chip shows the model with its reasoning effort. Hover <strong>Reasoning</strong> or <strong>Model</strong> to pick one; the model list has a search field.</li>
+<li>The <strong>access</strong> chip sets the permission mode: <strong>Supervised</strong>, <strong>Auto-accept edits</strong>, <strong>Auto</strong> or <strong>Full access</strong>. Pi has no access chip.</li>
+</ul>
+<p>Under the composer are the folder the agent works in, its git branch, and a spinner while it runs.</p>
+<p>Only a running Claude Code takes model, effort and access changes, and it keeps a change as your default for new sessions. Codex and Pi take them only when they start, so their chips show what they started with: pick them in a new chat instead.</p>
+<h2 id="new-chat">New Chat</h2>
+<p><code>⇧⌘O</code> opens <strong>What should we work on?</strong> Pick the agent from the model panel&#x27;s rail, its model, effort and access, and the folder, and choose the Zurafa session to work in. Type what to do and send: the agent starts in a new tab of that session and the pane shows it as a chat.</p>
+<h2 id="remote-panes">Remote panes</h2>
+<p>A chat works in a pane on an <a href="/docs/ssh/">SSH</a> or <a href="/docs/remote-access/">direct</a> host too. The agent writes its transcript on that host; the daemon follows it there and the chat reads its lines, so you see the whole chat, not just the answers.</p>
+<h2 id="on-the-iphone">On the iPhone</h2>
+<p>The <a href="/docs/iphone/">iPhone app</a> shows agent panes as a chat too, with the same turns, folded work, diffs, question cards and composer menus. The phone&#x27;s composer adds a few things:</p>
+<ul>
+<li><strong>⌘</strong> next to Send: tap for Escape and control keys, hold for your quick actions.</li>
+<li>The paperclip attaches photos from the <strong>Photo Library</strong> or <strong>Files</strong>. They show as thumbnails above the text and go with the message as <code>@</code> mentions.</li>
+<li>Unsent drafts are kept per pane, through leaving the pane, flipping to the terminal and relaunching the app.</li>
+</ul>
+<p>To open agents as their terminal instead, turn off <strong>Open Agents as Chat</strong> in the app&#x27;s Settings. <strong>•••</strong> → <strong>Show Terminal</strong> or <strong>Show Chat</strong> flips one pane, and <strong>New Chat</strong> in the same menu starts an agent on the Mac.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/sessions/"><small>← Previous</small><strong>Sessions, tabs &amp; panes</strong></a><a href="/docs/iphone/"><small>Next →</small><strong>iPhone app</strong></a></nav></main>
+    <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#open-a-chat">Open a chat</a><a href="#what-a-chat-shows">What a chat shows</a><a href="#when-the-agent-needs-you">When the agent needs you</a><a href="#the-composer">The composer</a><a href="#new-chat">New Chat</a><a href="#remote-panes">Remote panes</a><a href="#on-the-iphone">On the iPhone</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
+  </div>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
+  <script src="/assets/site.js" defer></script>
+</body>
+</html>

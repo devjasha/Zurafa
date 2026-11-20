@@ -11,8 +11,8 @@ ROOT = Path(__file__).parent
 DIST = ROOT / "dist"
 ORIGIN = "https://zurafa-website.vercel.app"
 GROUPS = [
-    ("Start here", [("overview", "Overview"), ("install", "Install on macOS"), ("quickstart", "Quick start"), ("agents", "Connect your agents")]),
-    ("Workspace", [("sessions", "Sessions, tabs & panes"), ("shortcuts", "Commands & shortcuts"), ("previews", "Files & images"), ("ssh", "Remote SSH"), ("remote-access", "Direct over Tailscale")]),
+    ("Start here", [("overview", "Overview"), ("install", "Install on macOS"), ("quickstart", "Quick start"), ("agents", "Connect your agents"), ("personal-agent", "Your personal agent")]),
+    ("Workspace", [("sessions", "Sessions, tabs & panes"), ("chat", "Agent chats"), ("iphone", "iPhone app"), ("shortcuts", "Commands & shortcuts"), ("previews", "Files & images"), ("ssh", "Remote SSH"), ("remote-access", "Direct over Tailscale")]),
     ("Personalization", [("appearance", "Appearance, config & Ghostty"), ("backgrounds", "Dithered backgrounds")]),
     ("Reference", [("status", "Program status"), ("architecture", "Architecture & events"), ("ipc-reference", "IPC protocol"), ("cli", "CLI"), ("build", "Build from source"), ("troubleshooting", "Troubleshooting & limits"), ("changelog", "Changelog")]),
 ]

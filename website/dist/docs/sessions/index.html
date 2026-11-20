@@ -25,9 +25,12 @@
 <a href="/docs/install/" data-page="install">Install on macOS</a>
 <a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
 <a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
 </div>
 <div class="nav-group"><p>Workspace</p>
 <a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
 <a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
@@ -51,9 +54,12 @@
 <a href="/docs/install/" data-page="install">Install on macOS</a>
 <a href="/docs/quickstart/" data-page="quickstart">Quick start</a>
 <a href="/docs/agents/" data-page="agents">Connect your agents</a>
+<a href="/docs/personal-agent/" data-page="personal-agent">Your personal agent</a>
 </div>
 <div class="nav-group"><p>Workspace</p>
 <a href="/docs/sessions/" data-page="sessions">Sessions, tabs &amp; panes</a>
+<a href="/docs/chat/" data-page="chat">Agent chats</a>
+<a href="/docs/iphone/" data-page="iphone">iPhone app</a>
 <a href="/docs/shortcuts/" data-page="shortcuts">Commands &amp; shortcuts</a>
 <a href="/docs/previews/" data-page="previews">Files &amp; images</a>
 <a href="/docs/ssh/" data-page="ssh">Remote SSH</a>
@@ -95,7 +101,7 @@ zurafa hide t7                        # take t7 out of every tab
 zurafa show t7                        # bring it back floating
 zurafa show t7 --split right -b t2    # or docked beside t2 (right or down)</code></pre>
 <h2 id="how-layout-updates-reach-the-app">How layout updates reach the app</h2>
-<p>The Rust daemon validates and commits each layout command, increments that session&#x27;s layout revision, and emits a <code>session_view_changed</code> event. The app then reads a fresh authoritative snapshot. Structural events can accompany the revision signal, but the frontend does not reconstruct a full layout by guessing from individual events. <a href="/docs/architecture/">Read the architecture guide</a>.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/agents/"><small>← Previous</small><strong>Connect your agents</strong></a><a href="/docs/shortcuts/"><small>Next →</small><strong>Commands &amp; shortcuts</strong></a></nav></main>
+<p>The Rust daemon validates and commits each layout command, increments that session&#x27;s layout revision, and emits a <code>session_view_changed</code> event. The app then reads a fresh authoritative snapshot. Structural events can accompany the revision signal, but the frontend does not reconstruct a full layout by guessing from individual events. <a href="/docs/architecture/">Read the architecture guide</a>.</p></div><nav class="page-adjacent" aria-label="More documentation"><a href="/docs/personal-agent/"><small>← Previous</small><strong>Your personal agent</strong></a><a href="/docs/chat/"><small>Next →</small><strong>Agent chats</strong></a></nav></main>
     <aside class="docs-toc" aria-label="On this page"><p>On this page</p><a href="#sessions">Sessions</a><a href="#tabs">Tabs</a><a href="#panes">Panes</a><a href="#floating-and-hidden-panes">Floating and hidden panes</a><a href="#how-layout-updates-reach-the-app">How layout updates reach the app</a><a class="edit-link" href="https://github.com/devjasha/Zurafa/issues/new">Suggest an improvement</a></aside>
   </div>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="brand" href="/"><img src="/assets/zurafa-icon.png" alt=""><span>zurafa</span></a><p>A calm terminal workspace for coding agents on macOS.</p></div><div class="footer-links"><a href="/docs/">Documentation</a><a href="/docs/changelog/">Changelog</a><a href="https://github.com/devjasha/Zurafa">GitHub</a></div></div></footer>
