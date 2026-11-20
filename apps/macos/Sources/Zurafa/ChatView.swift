@@ -451,9 +451,14 @@ struct TurnView: View, Equatable {
                 }
             }
             if let answer = turn.answer {
+                // The answer sits in a bubble on the left, the user's on the right; the work between stays bare on its rail.
                 ChatMarkdown(text: answer.text, ink: Theme.ink, size: 13.5).equatable()
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(Theme.ink.opacity(0.045), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.ink.opacity(0.08)))
+                    .transition(.rise)
                 HStack(spacing: 8) {
                     Button {
                         NSPasteboard.general.clearContents()

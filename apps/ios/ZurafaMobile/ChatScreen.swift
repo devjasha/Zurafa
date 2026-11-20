@@ -609,7 +609,13 @@ struct PhoneTurn: View {
                 }
             }
             if let answer = turn.answer {
+                // The answer sits in a bubble on the left, as on the Mac; the work stays bare on its rail.
                 PhoneMarkdown(text: answer.text).equatable()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+                    .transition(.rise)
                 HStack(spacing: 10) {
                     Button { UIPasteboard.general.string = answer.text } label: { Image(systemName: "doc.on.doc") }
                         .buttonStyle(.plain).accessibilityLabel("Copy the answer")

@@ -77,10 +77,11 @@ struct ChatList: NSViewRepresentable {
                 guard !changed.isEmpty else { return }
                 table.reloadData(forRowIndexes: changed, columnIndexes: [0])
                 table.noteHeightOfRows(withIndexesChanged: changed)
-                follow(animated: false)
+                // The live turn grew a line: glide up to it rather than snap.
+                follow(animated: Self.motion)
             } else if !old.isEmpty, newIDs.starts(with: oldIDs) {
                 let added = IndexSet(old.count..<next.count)
-                let motion = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                let motion = Self.motion
                 table.insertRows(at: added, withAnimation: motion ? .effectFade : [])
                 if !changed.isEmpty {
                     table.reloadData(forRowIndexes: changed, columnIndexes: [0])
@@ -100,7 +101,9 @@ struct ChatList: NSViewRepresentable {
             }
         }
 
-        /// Scrolls to the newest row while pinned.
+        private static var motion: Bool { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
+        /// Scrolls to the newest row while pinned. An animated follow retargets one already gliding, so a burst of lines reads as one motion.
         private func follow(animated: Bool) {
             guard list?.pinned == true, let table, let scroll else { return }
             table.layoutSubtreeIfNeeded()
@@ -185,7 +188,7 @@ struct ChatList: NSViewRepresentable {
             DispatchQueue.main.async { [weak self] in
                 guard index < table.numberOfRows else { return }
                 NSAnimationContext.runAnimationGroup { $0.duration = 0; table.noteHeightOfRows(withIndexesChanged: [index]) }
-                self?.follow(animated: false)
+                self?.follow(animated: Self.motion)
             }
         }
     }
