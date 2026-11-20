@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
   <link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/home.css">
   <script>document.documentElement.classList.add('js')</script>
-  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Which coding agents does Zurafa work with?", "acceptedAnswer": {"@type": "Answer", "text": "Any agent that runs in a terminal. Claude Code, Codex, and Gemini get their own icons, and any program can report its status with zurafa report."}}, {"@type": "Question", "name": "Is Zurafa free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Zurafa is free, and its source is public on GitHub."}}, {"@type": "Question", "name": "Does it run on Intel Macs?", "acceptedAnswer": {"@type": "Answer", "text": "Not yet. It needs an Apple Silicon Mac running macOS 14 or newer."}}, {"@type": "Question", "name": "How does Zurafa know an agent is blocked?", "acceptedAnswer": {"@type": "Answer", "text": "The agent tells it with one zurafa report line in a hook. Zurafa never guesses from terminal text."}}, {"@type": "Question", "name": "What happens to my panes when the app restarts?", "acceptedAnswer": {"@type": "Answer", "text": "The daemon keeps your processes running and the app restores pane content after a restart or update."}}, {"@type": "Question", "name": "Is there an iPhone app?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, in early beta. It connects over Tailscale and you build it from source in Xcode for now."}}]}</script>
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Which coding agents does Zurafa work with?", "acceptedAnswer": {"@type": "Answer", "text": "Any agent that runs in a terminal. Claude Code, Codex, and Gemini get their own icons, and any program can report its status with zurafa report."}}, {"@type": "Question", "name": "Is Zurafa free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Zurafa is free, and its source is public on GitHub."}}, {"@type": "Question", "name": "Does it run on Intel Macs?", "acceptedAnswer": {"@type": "Answer", "text": "Not yet. It needs an Apple Silicon Mac running macOS 14 or newer."}}, {"@type": "Question", "name": "How does Zurafa know an agent is blocked?", "acceptedAnswer": {"@type": "Answer", "text": "The agent tells it with one zurafa report line in a hook. Zurafa never guesses from terminal text."}}, {"@type": "Question", "name": "What happens to my panes when the app restarts?", "acceptedAnswer": {"@type": "Answer", "text": "The daemon keeps your processes running and the app restores pane content after a restart or update."}}, {"@type": "Question", "name": "What is the personal agent?", "acceptedAnswer": {"@type": "Answer", "text": "An experimental chat with your own Hermes agent, opened with Shift Command H on the Mac and from the phone. You choose its name and avatar. Letting it control Zurafa is off until you turn it on."}}, {"@type": "Question", "name": "Is there an iPhone app?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, in early beta. It connects over Tailscale and you build it from source in Xcode for now."}}]}</script>
 </head>
 <body class="home">
   <svg class="paint-defs" width="0" height="0" aria-hidden="true" focusable="false">
@@ -153,6 +153,13 @@
         </li>
         <li class="card reveal" data-tilt>
           <span class="glow-follow" aria-hidden="true"></span>
+          <div class="card-art art-chat" aria-hidden="true"><p class="you">Add CSV export</p><p class="them"><b>●</b> Edit export.ts <span class="c-ok">+84</span> <span class="c-red">−2</span></p></div>
+          <h3>Read agents as a chat</h3>
+          <p>Claude Code and Codex panes show their conversation as a chat, with diffs and images. <kbd>⌥⌘C</kbd> flips back to the terminal.</p>
+          <a class="text-link" href="/docs/chat/">Agent chats <span aria-hidden="true">→</span></a>
+        </li>
+        <li class="card reveal" data-tilt>
+          <span class="glow-follow" aria-hidden="true"></span>
           <div class="card-art art-restore" aria-hidden="true"><p>$ cargo watch</p><p class="c-ok">ok · 14 passed</p><p class="c-dim">restored after update</p></div>
           <h3>Quit the app, keep the work</h3>
           <p>A Rust daemon owns every process, so panes come back after a restart or an update.</p>
@@ -161,9 +168,23 @@
         <li class="card reveal" data-tilt id="iphone">
           <span class="glow-follow" aria-hidden="true"></span>
           <div class="card-art art-phone" aria-hidden="true"><div><i class="brand claude"><svg viewBox="0 0 24 24"><use href="#g-claude"/></svg></i><p><strong>Fix pane restore</strong><span>Blocked · Allow?</span></p><b>Approve</b></div></div>
-          <h3>Answer from anywhere</h3>
-          <p>SSH hosts, local VMs, Tailscale machines, and an iPhone app that approves agents from a notification.</p>
+          <h3>Your agents on your iPhone</h3>
+          <p>Open any pane as a chat or a terminal, switch tabs, and approve an agent right from its notification.</p>
+          <a class="text-link" href="/docs/iphone/">iPhone app <span aria-hidden="true">→</span></a>
+        </li>
+        <li class="card reveal" data-tilt>
+          <span class="glow-follow" aria-hidden="true"></span>
+          <div class="card-art art-hosts" aria-hidden="true"><p><s data-state="working"></s>mac-mini<span>tailscale</span></p><p><s data-state="done"></s>ubuntu-vm<span>local vm</span></p><p><s></s>build-box<span>ssh</span></p></div>
+          <h3>Agents on other machines</h3>
+          <p>SSH hosts, local VMs, and machines on your Tailscale network open as panes next to your own.</p>
           <a class="text-link" href="/docs/remote-access/">Remote access <span aria-hidden="true">→</span></a>
+        </li>
+        <li class="card reveal" data-tilt id="personal-agent">
+          <span class="glow-follow" aria-hidden="true"></span>
+          <div class="card-art art-agent" aria-hidden="true"><div><svg class="pixel" viewBox="0 0 12 12" shape-rendering="crispEdges"><rect x="5" y="0" width="2" height="1" fill="#f8bc93"/><rect x="5" y="1" width="2" height="1" fill="#552f14"/><rect x="2" y="2" width="8" height="1" fill="#552f14"/><rect x="1" y="3" width="1" height="1" fill="#552f14"/><rect x="2" y="3" width="2" height="1" fill="#f8bc93"/><rect x="4" y="3" width="6" height="1" fill="#f2853a"/><rect x="10" y="3" width="1" height="1" fill="#552f14"/><rect x="0" y="4" width="1" height="3" fill="#a95d29"/><rect x="1" y="4" width="1" height="3" fill="#552f14"/><rect x="2" y="4" width="8" height="3" fill="#f2853a"/><rect x="3" y="4" width="2" height="1" fill="#f5f5f5"/><rect x="7" y="4" width="2" height="1" fill="#f5f5f5"/><rect x="3" y="5" width="1" height="1" fill="#f5f5f5"/><rect x="4" y="5" width="1" height="1" fill="#1f1f29"/><rect x="7" y="5" width="1" height="1" fill="#f5f5f5"/><rect x="8" y="5" width="1" height="1" fill="#1f1f29"/><rect x="10" y="4" width="1" height="3" fill="#552f14"/><rect x="11" y="4" width="1" height="3" fill="#a95d29"/><rect x="1" y="7" width="1" height="2" fill="#552f14"/><rect x="2" y="7" width="8" height="2" fill="#f2853a"/><rect x="4" y="7" width="4" height="1" fill="#1f1f29"/><rect x="2" y="8" width="1" height="1" fill="#f8bc93"/><rect x="9" y="8" width="1" height="1" fill="#a95d29"/><rect x="10" y="7" width="1" height="2" fill="#552f14"/><rect x="2" y="9" width="8" height="1" fill="#552f14"/><rect x="3" y="10" width="1" height="1" fill="#552f14"/><rect x="4" y="10" width="1" height="1" fill="#a95d29"/><rect x="5" y="10" width="2" height="1" fill="#f2853a"/><rect x="7" y="10" width="1" height="1" fill="#a95d29"/><rect x="8" y="10" width="1" height="1" fill="#552f14"/><rect x="2" y="11" width="8" height="1" fill="#552f14"/></svg><p><strong>Pip</strong><span>Opened a split for the tests</span></p></div></div>
+          <h3>Your own agent, at hand <span class="badge">Experimental</span></h3>
+          <p>Bring your Hermes agent with its own name and pixel avatar. Chat in tabs, send images, get a notification when it finishes. It can see and control Zurafa.</p>
+          <a class="text-link" href="/docs/personal-agent/">Personal agent <span aria-hidden="true">→</span></a>
         </li>
       </ul>
     </section>
@@ -179,6 +200,7 @@
       <details><summary>Does it run on Intel Macs?</summary><p>Not yet. It needs an Apple Silicon Mac running macOS 14 or newer.</p></details>
       <details><summary>How does Zurafa know an agent is blocked?</summary><p>The agent tells it with one <code>zurafa report</code> line in a hook. Zurafa never guesses from terminal text. <a href="/docs/status/">Read the status guide</a>.</p></details>
       <details><summary>What happens to my panes when the app restarts?</summary><p>The daemon keeps your processes running and the app restores pane content after a restart or update.</p></details>
+      <details><summary>What is the personal agent?</summary><p>An experimental chat with your own <a href="/docs/personal-agent/">Hermes agent</a>, opened with <code>⇧⌘H</code> on the Mac and from the phone. You choose its name and avatar. Letting it control Zurafa is off until you turn it on.</p></details>
       <details><summary>Is there an iPhone app?</summary><p>Yes, in early beta. It connects over Tailscale and you build it from <a href="https://github.com/devjasha/Zurafa/tree/main/apps/ios">source in Xcode</a> for now.</p></details>
     </section>
 
