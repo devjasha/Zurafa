@@ -2,6 +2,13 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.44
+
+**November 20, 2026**
+
+- **Smoother agent chats.** While an agent works, each new tool call or command glides into view instead of making the chat jump, and the agent's answer now sits in its own bubble, apart from the steps it took to get there. Same on the iPhone app.
+- **Context and plan usage at a glance.** Under the chat's composer, two small bars show how full the agent's context is and how much of your plan's usage limit is spent.
+
 ## 0.1.43
 
 **November 19, 2026**
