@@ -172,6 +172,12 @@ private struct AppearancePane: View {
                 }
                 ConfigSlider(title: "Sidebar width", key: "sidebar-width", value: ws.style.sidebarWidth, range: 140...480, step: 2)
             }
+            Section("Animations") {
+                ConfigColorPicker(title: "Working animation color", hex: ws.style.animationColor ?? 0xBDA3FF, key: "animation-color")
+                if ws.style.animationColor != nil {
+                    Button("Use Zurafa's Colors") { ws.writeConfig("animation-color", "") }
+                }
+            }
             Section("Background Image") {
                 Toggle("Show background image", isOn: Binding(get: { ws.backgroundImageEnabled && ws.backgroundImage != nil },
                                                               set: { _ in ws.toggleBackgroundImage() }))

@@ -12,16 +12,16 @@ accent-color = #3a69cc
 window-opacity = 0.9
 pane-gap = 8
 pane-padding = 12
-pane-corner-radius = 14
+pane-corner-radius = 10
 unfocused-pane-opacity = 0.7
-focused-pane-background = solid
+focused-pane-background = transparent
 sidebar-width = 194
 sidebar-position = left
 tab-icon-stack = right
 agent-chat = true
 ```
 
-`theme` accepts any Ghostty theme name from `~/.config/ghostty/themes` or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (`foreground`, `background`, `cursor-color`, `palette`, `font-family`, `font-size`) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. `focused-pane-background` is `solid` (the default: the pane you work in covers the backdrop) or `transparent` (it follows `window-opacity` like the rest of the window); **Settings → Appearance → Focused pane background** sets it too. `sidebar-position` is `left` or `right`; **Move Sidebar to Right** in `⇧⌘P` sets it for you. `tab-icon-stack` is `right`, `left`, `down` or `up`: where a tab's other pane icons peek out from behind its icon. `agent-chat` is `true` (agent panes show their conversation as a chat) or `false` (their terminal); **Settings → Integrations → Show agents as chat** sets it, and `⌥⌘C` switches one pane to the other view.
+`theme` accepts any Ghostty theme name from `~/.config/ghostty/themes` or Ghostty.app, and the whole app follows its colors, including the command picker. Terminal colors and fonts (`foreground`, `background`, `cursor-color`, `palette`, `font-family`, `font-size`) override the theme. Values in this file also override imported Ghostty settings. Out-of-range values are ignored. `focused-pane-background` is `transparent` (the default: every pane is a light wash of the theme over the window glass) or `solid` (the pane you work in covers the backdrop); **Settings → Appearance → Focused pane background** sets it too. `sidebar-position` is `left` or `right`; **Move Sidebar to Right** in `⇧⌘P` sets it for you. `tab-icon-stack` is `right`, `left`, `down` or `up`: where a tab's other pane icons peek out from behind its icon. `animation-color` is a `#RRGGBB` color for the chat's working text, running dots and finish sparkle; leave it unset for Zurafa's star colors, or set it under **Settings → Interface → Animations**. `agent-chat` is `true` (agent panes show their conversation as a chat) or `false` (their terminal); **Settings → Integrations → Show agents as chat** sets it, and `⌥⌘C` switches one pane to the other view.
 
 ## Import Ghostty settings
 

@@ -19,7 +19,10 @@ import UserNotifications
     /// The Mac's look; kept across launches so the app opens in it before connecting. Nil until a Mac has sent one.
     @Published private(set) var appearance: MacAppearance? = UserDefaults.standard.data(forKey: "macAppearance")
         .flatMap { try? JSONDecoder().decode(MacAppearance.self, from: $0) } {
-        didSet { UserDefaults.standard.set(appearance.flatMap { try? JSONEncoder().encode($0) }, forKey: "macAppearance") }
+        didSet {
+            UserDefaults.standard.set(appearance.flatMap { try? JSONEncoder().encode($0) }, forKey: "macAppearance")
+            UserDefaults.standard.set(appearance?.animation.map(Int.init) ?? -1, forKey: Iris.key)
+        }
     }
     var onOutput: (String, Data, UInt64?) -> Void = { _, _, _ in }
     /// A terminal's real grid, and whether this phone is the one sizing it.

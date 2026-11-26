@@ -42,6 +42,7 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
         super.init(frame: frame)
         clipsToBounds = true // the renderer is a row taller, for the line that slides in while scrolling
         renderer.isUserInteractionEnabled = false
+        renderer.activePane = true // one pane on screen at a time, so its cursor always blinks
         addSubview(renderer)
         engine.onReply = { [weak self] in self?.onInput?($0) }
         addInteraction(editMenu)

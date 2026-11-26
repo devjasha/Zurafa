@@ -44,11 +44,10 @@ indirect enum Layout: Equatable, Codable {
     }
 }
 
-/// Where a pane sits in its tab, and the side it slides in from when new (a split's second half).
+/// Where a pane sits in its tab.
 struct PaneFrame: Equatable {
     let id: String
     let rect: CGRect
-    let from: Axis?
 }
 
 /// A split's divider: its path in the tree, for resizing, and the box the split divides.
@@ -62,11 +61,11 @@ struct SplitHandle: Equatable {
 extension Layout {
     /// Every pane's frame in `rect`, divided by the split ratios: one flat list, so a pane keeps its
     /// identity (and animates) when splits form or close around it.
-    func frames(in rect: CGRect, from: Axis? = nil) -> [PaneFrame] {
+    func frames(in rect: CGRect) -> [PaneFrame] {
         switch self {
-        case .pane(let id): [PaneFrame(id: id, rect: rect, from: from)]
+        case .pane(let id): [PaneFrame(id: id, rect: rect)]
         case .split(let axis, let ratio, let first, let second):
-            first.frames(in: rect.halves(axis, ratio).0) + second.frames(in: rect.halves(axis, ratio).1, from: second.isPane ? axis : nil)
+            first.frames(in: rect.halves(axis, ratio).0) + second.frames(in: rect.halves(axis, ratio).1)
         }
     }
 
@@ -84,8 +83,6 @@ extension Layout {
         return step == 0 ? .split(axis: axis, ratio: ratio, first: first.setting(ratio: new, at: rest), second: second)
                          : .split(axis: axis, ratio: ratio, first: first, second: second.setting(ratio: new, at: rest))
     }
-
-    private var isPane: Bool { if case .pane = self { true } else { false } }
 }
 
 private extension CGRect {

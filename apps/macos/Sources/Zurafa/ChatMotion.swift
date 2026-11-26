@@ -8,6 +8,12 @@ enum Iris {
     static let sky = Color(red: 0.55, green: 0.80, blue: 1.0)
     static let peach = Color(red: 1.0, green: 0.80, blue: 0.62)
     static let colors = [pink, lavender, sky, peach]
+    /// UserDefaults key of the chosen animation color as 0xRRGGBB; -1 keeps the star's colors. Read with @AppStorage so turns that skip redraws still follow it.
+    static let key = "animationColor"
+    static func colors(_ tint: Int) -> [Color] {
+        guard tint >= 0 else { return colors }
+        return [Color(red: Double(tint >> 16 & 0xFF) / 255, green: Double(tint >> 8 & 0xFF) / 255, blue: Double(tint & 0xFF) / 255)]
+    }
 }
 
 #if os(macOS)
@@ -70,6 +76,7 @@ struct WorkingStar: View {
 /// A band of the star's colors sweeping across text, for what the agent is doing right now.
 struct Shimmer: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var still
+    @AppStorage(Iris.key) private var tint = -1
     @State private var phase: CGFloat = 0
 
     func body(content: Content) -> some View {
@@ -78,7 +85,7 @@ struct Shimmer: ViewModifier {
                 .overlay {
                     GeometryReader { g in
                         let band = max(g.size.width * 0.45, 40)
-                        LinearGradient(colors: [.clear] + Iris.colors + [.clear], startPoint: .leading, endPoint: .trailing)
+                        LinearGradient(colors: [.clear] + Iris.colors(tint) + [.clear], startPoint: .leading, endPoint: .trailing)
                             .frame(width: band)
                             .offset(x: -band + phase * (g.size.width + band))
                     }
@@ -100,17 +107,19 @@ extension View {
 struct SparkleBurst: View {
     let trigger: Int
     @Environment(\.accessibilityReduceMotion) private var still
+    @AppStorage(Iris.key) private var tint = -1
     @State private var out = false
     @State private var shown = false
 
     var body: some View {
+        let colors = Iris.colors(tint)
         ZStack {
             if shown {
                 ForEach(0..<6, id: \.self) { i in
                     let angle = Double(i) / 6 * 2 * .pi - .pi / 2
                     Image(systemName: "sparkle")
                         .font(.system(size: i.isMultiple(of: 2) ? 7 : 5, weight: .bold))
-                        .foregroundStyle(Iris.colors[i % Iris.colors.count])
+                        .foregroundStyle(colors[i % colors.count])
                         .offset(x: out ? cos(angle) * 15 : 0, y: out ? sin(angle) * 15 : 0)
                         .scaleEffect(out ? 0.4 : 1.1)
                         .opacity(out ? 0 : 1)
@@ -130,11 +139,13 @@ struct SparkleBurst: View {
 /// Three dots hopping in turn in the star's colors: a tool call still running.
 struct HopDots: View {
     @Environment(\.accessibilityReduceMotion) private var still
+    @AppStorage(Iris.key) private var tint = -1
 
     var body: some View {
+        let colors = Iris.colors(tint)
         HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { i in
-                Circle().fill(Iris.colors[i]).frame(width: 4.5, height: 4.5)
+                Circle().fill(colors[i % colors.count]).frame(width: 4.5, height: 4.5)
                     .phaseAnimator(still ? [0.0] : [0.0, -3.5, 0.0]) { dot, y in dot.offset(y: y) } animation: { y in
                         y == 0 ? .easeIn(duration: 0.22).delay(Double(i) * 0.12) : .easeOut(duration: 0.22)
                     }

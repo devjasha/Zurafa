@@ -642,7 +642,8 @@ enum EditorKind: String, Identifiable {
         let store = TerminalStore.shared
         let look = MacAppearance(mode: appearance.rawValue,
                                  light: store.resolvedColors(dark: false, accent: Theme.customAccent),
-                                 dark: store.resolvedColors(dark: true, accent: Theme.customAccent))
+                                 dark: store.resolvedColors(dark: true, accent: Theme.customAccent),
+                                 animation: style.animationColor)
         Task { _ = try? await daemon.request(Msg(type: "ui.appearance", appearance: look)) }
     }
 
@@ -703,6 +704,7 @@ enum EditorKind: String, Identifiable {
             applyTerminalConfig()
             style = config.style
             Theme.customAccent = config.style.accent
+            UserDefaults.standard.set(config.style.animationColor.map(Int.init) ?? -1, forKey: Iris.key)
             // Only re-render when the image or filter changes; every settings slider step reloads the config.
             let filter = config.backgroundImageFilter ?? .none
             if config.backgroundImage != backgroundPath || filter != backgroundFilter {

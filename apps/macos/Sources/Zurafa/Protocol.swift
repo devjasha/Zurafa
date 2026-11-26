@@ -108,6 +108,7 @@ struct MacAppearance: Codable, Equatable {
     var mode: String // system, light or dark
     var light: Colors
     var dark: Colors
+    var animation: UInt32? // the chat's animation color; nil keeps the star's colors
 }
 
 struct DaemonError: LocalizedError {

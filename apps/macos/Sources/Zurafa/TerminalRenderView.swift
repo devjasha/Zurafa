@@ -158,6 +158,8 @@ final class TerminalRenderView: PlatformView {
     private var needsRender = false
     private var blinkTimer: Timer?
     private var cursorBlinkOn = true
+    /// Only the pane you type into blinks its cursor; the others hold it steady.
+    var activePane = false { didSet { if activePane != oldValue { cursorBlinkOn = true; updateBlinkTimer(); requestRender() } } }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -623,7 +625,7 @@ final class TerminalRenderView: PlatformView {
     // MARK: Cursor blink
 
     private func updateBlinkTimer() {
-        let wants = window != nil && current.map { $0.cursor.visible && $0.cursor.blinking } == true
+        let wants = activePane && window != nil && current.map { $0.cursor.visible && $0.cursor.blinking } == true
         if wants, blinkTimer == nil {
             let timer = Timer(timeInterval: 0.6, repeats: true) { [weak self] _ in
                 guard let self else { return }

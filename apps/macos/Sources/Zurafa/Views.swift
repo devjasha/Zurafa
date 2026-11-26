@@ -49,7 +49,7 @@ struct WindowMaterial: NSViewRepresentable {
     var behindWindow = false
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        view.material = .underWindowBackground
+        view.material = .hudWindow // Rex's window glass
         view.state = .active
         return view
     }
@@ -73,7 +73,7 @@ struct Backdrop: View {
     var opacity = 1.0
     var body: some View {
         WindowMaterial(behindWindow: opacity < 1)
-            .overlay(Theme.background.opacity(0.40))
+            .overlay(Theme.background.opacity(0.5))
             .overlay(importedBackground?.opacity(0.88))
             .opacity(opacity)
     }
@@ -281,19 +281,18 @@ struct RootView: View {
             let edge = ws.style.paneGap / 2
             if ws.tabStripLayout == .vertical {
                 // The sidebar holds the top-bar controls, so panes reach the top edge.
+                let left = !ws.sidebarHidden && !ws.style.sidebarOnRight
+                // One structure either way, so showing or hiding the sidebar slides it with Rex's spring.
                 HStack(spacing: 0) {
-                    if ws.sidebarHidden || ws.style.sidebarOnRight {
-                        // The traffic lights stay top-left, so the panes start below them.
-                        VStack(spacing: 0) {
-                            WindowDragView().frame(height: ws.windowControls.height)
-                            terminalContent.padding([.horizontal, .bottom], edge)
-                        }
-                        if !ws.sidebarHidden { VerticalTabSidebar() }
-                    } else {
-                        VerticalTabSidebar()
-                        terminalContent.padding(edge)
+                    if left { VerticalTabSidebar().transition(.move(edge: .leading)) }
+                    VStack(spacing: 0) {
+                        // Without the sidebar on the left, the traffic lights stay top-left, so the panes start below them.
+                        if !left { WindowDragView().frame(height: ws.windowControls.height) }
+                        terminalContent.padding([.horizontal, .bottom], edge).padding(.top, left ? edge : 0)
                     }
+                    if !ws.sidebarHidden && ws.style.sidebarOnRight { VerticalTabSidebar().transition(.move(edge: .trailing)) }
                 }
+                .animation(.pane, value: ws.sidebarHidden)
             } else {
                 VStack(spacing: 0) {
                     TopBar()
@@ -330,11 +329,9 @@ struct RootView: View {
             Group {
                 if ws.tabs.isEmpty {
                     Text("Starting terminal…").foregroundStyle(Theme.inkSoft).frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if ws.tab.zoomed {
-                    PaneView(id: ws.tab.focus)
                 } else {
-                    LayoutView(layout: ws.tab.layout, window: ws.tab.id)
-                        .overlay { FloatingPanes(tab: ws.tab) }
+                    LayoutView(layout: ws.tab.layout, window: ws.tab.id, zoomed: ws.tab.zoomed ? ws.tab.focus : nil)
+                        .overlay { if !ws.tab.zoomed { FloatingPanes(tab: ws.tab) } }
                 }
             }
             if ws.hermesOpen {
@@ -351,7 +348,7 @@ struct RootView: View {
     }
 }
 
-/// Tabs fade in and out; the others move into their new places, and the selection slides between them.
+/// Tabs fade in and out and the others spring into their new places; selecting one is instant, as in Rex.
 let tabTransition = AnyTransition.opacity
 
 struct TopBar: View {
@@ -382,10 +379,9 @@ struct TopBar: View {
                     .transition(tabTransition)
                 }
             }
-            .animation(shownSession == ws.sessionID ? .snappy(duration: 0.15) : nil, value: ws.tabs.map(\.id))
-            .animation(shownSession == ws.sessionID ? .snappy(duration: 0.15) : nil, value: ws.selected)
+            .animation(shownSession == ws.sessionID ? .pane : nil, value: ws.tabs.map(\.id))
             .onChange(of: ws.sessionID, initial: true) { _, id in shownSession = id }
-            .padding(1)
+            .padding(3) // a visible rim of track around the active tab's pill
             .zurafaGlass(in: Capsule())
             .background(Color.black.opacity(0.035), in: Capsule())
             .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
@@ -395,7 +391,6 @@ struct TopBar: View {
             UpdateButton()
             HermesIndicator()
             PaletteButton()
-            BarButton(symbol: "sidebar.left", help: "Toggle File Tree (⌥⌘B)") { ws.fileTreeOpen.toggle() }
             BarButton(symbol: "plus", help: "New Tab (⌘T)") { ws.newTab() }
         }
         .padding(.trailing, 6)
@@ -557,8 +552,7 @@ struct VerticalTabSidebar: View {
                 }
                 .padding(.horizontal, 8)
                 // Every workspace's tabs are listed, so switching workspaces changes none of these ids.
-                .animation(.snappy(duration: 0.15), value: ws.orderedSessions.flatMap { ws.tabs(in: $0).map(\.id) })
-                .animation(.snappy(duration: 0.15), value: ws.tab.id)
+                .animation(.pane, value: ws.orderedSessions.flatMap { ws.tabs(in: $0).map(\.id) })
             }
             HStack(spacing: 6) {
                 BarStatus()
@@ -586,7 +580,7 @@ struct SidebarTabRow: View {
         Button(action: select) {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 9) {
-                    TileStack(tab: tab, size: 20)
+                    TileStack(tab: tab, size: 18)
                         .overlay(alignment: .topTrailing) {
                             if state.done && !on { TaskDoneDot().offset(x: 3, y: -3) }
                         }
@@ -739,7 +733,7 @@ struct TabItem: View {
         let state = ws.taskState(for: tab)
         let title = m.label ?? m.title
         HStack(spacing: 8) {
-            TileStack(tab: tab, size: 24)
+            TileStack(tab: tab, size: 20)
                 .overlay(alignment: .topTrailing) {
                     if state.done && !on { TaskDoneDot().offset(x: 3, y: -3) }
                 }
@@ -862,7 +856,7 @@ struct AgentPeek: View {
     @EnvironmentObject var ws: Workspace
 
     var body: some View {
-        PaneView(id: pane, entrance: .trailing, peek: true)
+        PaneView(id: pane, peek: true)
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 4) {
                     IconButton(symbol: "arrow.up.forward.square", help: "Open in Its Tab") { ws.closePeek(); ws.jump(to: pane) }
@@ -891,19 +885,24 @@ struct IconButton: View {
 struct LayoutView: View {
     let layout: Layout
     let window: String
+    /// The pane filling the tab, if zoomed.
+    var zoomed: String?
     @EnvironmentObject var ws: Workspace
 
     var body: some View {
         GeometryReader { g in
             let box = CGRect(origin: .zero, size: g.size)
             ZStack(alignment: .topLeading) {
-                ForEach(layout.frames(in: box), id: \.id) { f in
-                    PaneView(id: f.id, entrance: f.from.map { $0 == .horizontal ? .trailing : .bottom })
+                // Zoomed, the focused pane springs out to fill the tab and the others shrink away, like Rex.
+                let frames = zoomed.map { [PaneFrame(id: $0, rect: box)] } ?? layout.frames(in: box)
+                ForEach(frames, id: \.id) { f in
+                    PaneView(id: f.id)
                         .frame(width: f.rect.width, height: f.rect.height)
                         .offset(x: f.rect.minX, y: f.rect.minY)
-                        .transition(.asymmetric(insertion: .identity, removal: .opacity.combined(with: .scale(scale: 0.96))))
+                        .zIndex(f.id == ws.tab.focus ? 1 : 0) // the zoomed pane stays on top as it grows and shrinks
+                        .transition(.asymmetric(insertion: .identity, removal: .paneOut))
                 }
-                ForEach(layout.splits(in: box), id: \.path) { split in
+                ForEach(zoomed == nil ? layout.splits(in: box) : [], id: \.path) { split in
                     let h = split.axis == .horizontal
                     let at = h ? split.rect.minX + split.rect.width * split.ratio : split.rect.minY + split.rect.height * split.ratio
                     Color.clear // wide invisible hit area over the gap between panes
@@ -920,7 +919,7 @@ struct LayoutView: View {
             }
             .coordinateSpace(name: window)
             // Panes coming and going animate; dragging a divider follows the pointer.
-            .animation(.pane, value: layout.panes)
+            .animation(.pane, value: layout.panes + [zoomed ?? ""])
         }
         // Another tab is another set of panes: it replaces this one instead of morphing into it.
         .id(window)
@@ -928,8 +927,14 @@ struct LayoutView: View {
 }
 
 extension Animation {
-    /// How panes open, close and make room: quick enough to feel direct, slow enough to follow.
-    static let pane = Animation.smooth(duration: 0.18)
+    /// How panes open, close, zoom and make room, and the sidebar slides: Rex's "Natural" spring,
+    /// measured from screen recordings of Rex (a 0.34 s settle with a slight overshoot).
+    static let pane = Animation.spring(duration: 0.34, bounce: 0.15)
+}
+
+extension AnyTransition {
+    /// A closed pane shrinks and fades out quickly while the others spring into its space, as in Rex.
+    static let paneOut = AnyTransition.opacity.combined(with: .scale(scale: 0.9)).animation(.easeOut(duration: 0.12))
 }
 
 /// A pane's header being dragged; its own type so terminal text drops never read as one.
@@ -946,7 +951,6 @@ extension UTType {
 
 struct PaneView: View {
     let id: String
-    var entrance: Edge?
     /// Shown as the agent pane beside the tab, which keeps its own focus and header buttons.
     var peek = false
     /// Set for a floating pane: its header moves it, with the drag's translation and whether it ended.
@@ -955,12 +959,12 @@ struct PaneView: View {
     @State private var shown: Bool
     @State private var dropTarget = false
     @Environment(\.paneBackgroundImage) private var backgroundImage
+    @Environment(\.colorScheme) private var scheme
     /// Pane ids already on screen, so tab switches and re-splits don't replay the entrance animation.
     private static var seen = Set<String>()
 
-    init(id: String, entrance: Edge? = nil, peek: Bool = false, move: ((CGSize, Bool) -> Void)? = nil) {
+    init(id: String, peek: Bool = false, move: ((CGSize, Bool) -> Void)? = nil) {
         self.id = id
-        self.entrance = entrance
         self.peek = peek
         self.move = move
         _shown = State(initialValue: Self.seen.contains(id))
@@ -971,6 +975,7 @@ struct PaneView: View {
         let chat = m.hasChat && style.agentChat != ws.switchedPanes.contains(id)
         let focused = peek ? ws.peekFocused : ws.tab.focus == id && !(ws.peekFocused && ws.peek != nil)
         let shape = RoundedRectangle(cornerRadius: style.paneCornerRadius, style: .continuous)
+        let dark = scheme == .dark
         VStack(spacing: 0) {
             HStack(spacing: 7) {
                 ProgramGlyph(program: m.program).frame(width: 13, height: 13)
@@ -1018,8 +1023,8 @@ struct PaneView: View {
                 if chat {
                     ChatView(pane: id, focused: focused && !ws.paletteOpen && !ws.sessionPickerOpen && ws.editor == nil,
                              feed: ChatFeed.of(ChatFeed.key(id, m)))
-                        // Clear over a background image, so the chat shows the pane's part of it like the terminal does.
-                        .background(backgroundImage == nil ? Theme.paneTint : .clear)
+                        // Clear unless the pane is solid, so the chat shows the pane's wash and image like the terminal does.
+                        .background(style.focusedPaneSolid && backgroundImage == nil ? Theme.paneTint : .clear)
                         // A tab switch reuses this view for another pane; a new identity starts its feed for that pane.
                         .id(ChatFeed.key(id, m))
                         .transition(.opacity)
@@ -1036,9 +1041,19 @@ struct PaneView: View {
         // Inactive panes recede into the backdrop: faint fill, faint stroke, no lift.
         // The fill follows window-opacity so a translucent window stays see-through.
         // Above the pane's fill, so a solid focused pane still shows its part of the image.
+        // In dark mode the focused pane lifts like Rex's: a 5% white wash over its fill and a 10% white edge.
+        .background(.white.opacity(dark && focused && !style.focusedPaneSolid ? 0.05 : 0), in: shape)
         .background { if let backgroundImage { PaneBackgroundSlice(background: backgroundImage).clipShape(shape) } }
         .background(Theme.paneTint.opacity(style.paneFill(focused: focused, moving: move != nil)), in: shape)
-        .overlay(shape.strokeBorder(Theme.paneStroke.opacity(focused ? 1 : 0.5), lineWidth: 1))
+        .overlay {
+            if dark {
+                // Rex's edges: focused a 10% white line; the others a fainter light line inside a dark rim.
+                shape.strokeBorder(.white.opacity(0.1), lineWidth: focused ? 1 : 0.7)
+                if !focused { shape.stroke(.black.opacity(0.5), lineWidth: 1).padding(-0.5) }
+            } else {
+                shape.strokeBorder(Theme.paneStroke.opacity(focused ? 1 : 0.5), lineWidth: 1)
+            }
+        }
         .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 2).opacity(dropTarget ? 1 : 0))
         .dropDestination(for: PaneDrag.self) { items, _ in
             guard !peek, move == nil, let from = items.first?.id, from != id, ws.tab.layout.panes.contains(from) else { return false }
@@ -1046,12 +1061,10 @@ struct PaneView: View {
             return true
         } isTargeted: { dropTarget = $0 && !peek }
         .shadow(color: .black.opacity(move != nil ? 0.25 : focused ? 0.10 : 0), radius: 12, y: 3)
-        .animation(.easeInOut(duration: 0.1), value: focused)
         .padding(style.paneGap / 2)
         .opacity(shown ? 1 : 0)
-        // A split's new pane slides in from its side; a pane with no split (a new tab) just settles in.
-        .offset(x: shown || entrance != .trailing ? 0 : 36, y: shown || entrance != .bottom ? 0 : 36)
-        .scaleEffect(shown || entrance != nil ? 1 : 0.97)
+        // A new pane grows in place from 90% as it fades in, like Rex's.
+        .scaleEffect(shown ? 1 : 0.9)
         .onAppear {
             guard Self.seen.insert(id).inserted else { return }
             withAnimation(.pane) { shown = true }

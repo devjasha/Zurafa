@@ -17,21 +17,21 @@ struct ZurafaConfig: Equatable {
 
 /// Window and pane look. Defaults match the built-in design.
 struct ZurafaStyle: Equatable {
-    /// How much a pane's fill covers the backdrop. Inactive panes recede into it; the focused one
-    /// is solid unless the user chose transparent, then it follows window-opacity; a moving one is solid.
+    /// How much a pane's fill covers the backdrop: Rex's glassless panes, a light wash of the theme over
+    /// the window material (0.3 focused, 0.2 not). Solid when the user asks for it, or while moving.
     func paneFill(focused: Bool, moving: Bool) -> Double {
         if moving || (focused && focusedPaneSolid) { return 1 }
-        return (focused ? 1 : 0.35) * windowOpacity
+        return (focused ? 0.3 : 0.2) * windowOpacity
     }
 
     var windowOpacity = 1.0
     var paneGap: CGFloat = 8
     /// nil keeps the built-in uneven inset around the terminal text.
     var panePadding: CGFloat?
-    var paneCornerRadius: CGFloat = 14
+    var paneCornerRadius: CGFloat = 10
     var unfocusedPaneOpacity = 0.7
-    /// The focused pane covers the backdrop; false lets it follow window-opacity like the rest.
-    var focusedPaneSolid = true
+    /// The focused pane covers the backdrop; false (the default) lets it wash over it like the rest.
+    var focusedPaneSolid = false
     var sidebarWidth: CGFloat = 194
     var sidebarOnRight = false
     /// Where the other panes' icons peek out from behind a tab's icon: right, left, down or up.
@@ -39,6 +39,8 @@ struct ZurafaStyle: Equatable {
     /// Agent panes show their conversation as a chat; false shows their terminal. ⌥⌘C flips one pane.
     var agentChat = true
     var accent: UInt32?
+    /// The chat's working animations; nil keeps the star's colors.
+    var animationColor: UInt32?
     var backgroundImageOpacity = 0.24
 }
 
@@ -104,6 +106,7 @@ struct ZurafaConfigLoader {
         case "background-image-filter": config.backgroundImageFilter = BackgroundFilter(rawValue: value.lowercased()) ?? BackgroundFilter.none
         case "theme": config.theme = value.isEmpty ? nil : value
         case "accent-color": config.style.accent = GhosttyConfigLoader.hex(value)
+        case "animation-color": config.style.animationColor = GhosttyConfigLoader.hex(value)
         case "background-image-opacity": Double(value).map { config.style.backgroundImageOpacity = min(0.65, max(0.05, $0)) }
         case "window-opacity": number(value, in: 0...1).map { config.style.windowOpacity = $0 }
         case "unfocused-pane-opacity": number(value, in: 0...1).map { config.style.unfocusedPaneOpacity = $0 }
@@ -202,11 +205,11 @@ struct ZurafaConfigLoader {
     # Panes: gap between panes and space around the terminal text, in points.
     # pane-gap = 8
     # pane-padding = 12
-    # pane-corner-radius = 14
+    # pane-corner-radius = 10
     # Opacity of panes without focus, 0.0 to 1.0.
     # unfocused-pane-opacity = 0.7
     # Background of the focused pane: solid, or transparent to follow window-opacity.
-    # focused-pane-background = solid
+    # focused-pane-background = transparent
 
     # Width of the vertical tab sidebar, 140 to 480.
     # sidebar-width = 194
@@ -216,6 +219,8 @@ struct ZurafaConfigLoader {
     # tab-icon-stack = right
     # Agent panes show their conversation as a chat (true) or their terminal (false).
     # agent-chat = true
+    # Color of the chat's working animations, as #RRGGBB. Unset uses Zurafa's star colors.
+    # animation-color = #BDA3FF
 
     # Background image
     # background-image = ~/Pictures/wallpaper.png

@@ -304,7 +304,8 @@ struct TerminalHost: NSViewRepresentable {
         let gained = focused && (!box.focused || box.terminalID != id)
         box.terminalID = id
         box.focused = focused
-        TerminalStore.shared.attach(id, program: program, to: box)
+        // Only the focused pane's cursor blinks.
+        TerminalStore.shared.attach(id, program: program, to: box).renderer.activePane = focused
         box.claimFocus()
         if gained { TerminalStore.shared.claim(id) }
     }
