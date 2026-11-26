@@ -2,6 +2,16 @@
 
 What changed in each Zurafa release. Zurafa installs updates itself through Sparkle, so you get these without downloading again. Downloads for every version are on [GitHub releases](https://github.com/devjasha/Zurafa/releases).
 
+## 0.1.45
+
+**November 26, 2026**
+
+- **A new look: Merino Dark and Merino Light.** Two new built-in themes (Settings → Themes). Panes now wash lightly over the window glass with softer corners, and in dark mode the pane you're working in lifts slightly above the rest.
+- **Motion that feels right.** Opening, closing and zooming panes and showing or hiding the sidebar now use a quick spring with a slight overshoot. New panes grow in place, closed ones shrink away, and switching tabs or panes is instant.
+- **Only the active pane blinks.** The cursor blinks only in the pane you're typing in; the others hold steady.
+- **Choose the chat's animation color.** Set the color of an agent's working text, running dots and finish sparkle under Settings → Interface → Animations, or with `animation-color` in your config.
+- **Tidier top bar.** Tab icons are a little smaller, and the file tree button is gone from the top bar (⌥⌘B still toggles it).
+
 ## 0.1.44
 
 **November 20, 2026**
