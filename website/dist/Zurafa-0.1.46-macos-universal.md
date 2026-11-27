@@ -1,0 +1,5 @@
+- **See every agent at a glance.** Hover the agent counters in the top bar to open the agent list right in the window; hover an agent to see its card beside the list.
+- **Settings, reorganized.** The Settings sidebar is grouped like System Settings, with colored icons and a search field. General now shows the app version up top with a Check Now button.
+- **Done dots clear once you've looked.** The blue dot on a tab's icon goes away after you visit the tab, and comes back only when an agent there finishes again.
+- **Tighter text.** Chat, agent cards, the file tree and side panels use slightly smaller type.
+- **Cleaner pane edges.** Panes draw a soft white rim, which also looks right on light themes.
