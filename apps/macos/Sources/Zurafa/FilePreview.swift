@@ -81,8 +81,8 @@ struct FilePreviewPane: View {
             HStack(spacing: 8) {
                 Image(systemName: "doc.text.magnifyingglass")
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(preview.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                    Text(preview.url.path).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Text(preview.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text(preview.url.path).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 0)
                 if let git = preview.git { GitBadge(status: git) }
@@ -195,7 +195,7 @@ private struct GitBadge: View {
             if status.added > 0 { Text("+\(status.added)").foregroundStyle(.green) }
             if status.removed > 0 { Text("−\(status.removed)").foregroundStyle(.red) }
         }
-        .font(.system(size: 11, weight: .medium, design: .rounded))
+        .font(.system(size: 10, weight: .medium, design: .rounded))
         .foregroundStyle(status.label == "Unchanged" ? Theme.inkSoft : Theme.ink)
         .padding(.horizontal, 8).padding(.vertical, 3)
         .background(Theme.paneStroke.opacity(0.5), in: Capsule())

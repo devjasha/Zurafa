@@ -222,7 +222,7 @@ struct StatusRecordRow: View {
                 .foregroundStyle(Theme.inkSoft)
                 .lineLimit(1)
         }
-        .font(.system(size: 10, weight: .medium))
+        .font(.system(size: 9, weight: .medium))
         .help(item.record.msg ?? item.stateLabel)
     }
 }
@@ -299,6 +299,7 @@ struct RootView: View {
                     terminalContent.padding(.horizontal, edge).padding(.bottom, edge)
                 }
             }
+            if ws.activityOpen && ws.tabStripLayout != .vertical { AgentActivityOverlay().transition(.opacity) }
             if ws.paletteOpen { CommandPicker() }
             if let kind = ws.editor { EditorSheet(kind: kind) }
         }
@@ -384,10 +385,9 @@ struct TopBar: View {
             .padding(3) // a visible rim of track around the active tab's pill
             .zurafaGlass(in: Capsule())
             .background(Color.black.opacity(0.035), in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
             Spacer(minLength: 8)
             BarStatus()
-            AgentSummary()
+            AgentSummary(hover: true)
             UpdateButton()
             HermesIndicator()
             PaletteButton()
@@ -406,11 +406,11 @@ struct BarStatus: View {
 
     var body: some View {
         if let error = ws.commandError, !daemon.down {
-            Text(error).font(.system(size: 11)).foregroundStyle(Theme.inkSoft)
+            Text(error).font(.system(size: 10)).foregroundStyle(Theme.inkSoft)
                 .lineLimit(1).frame(maxWidth: 260).help(error)
         }
         if let notice = ws.notice {
-            Text(notice).font(.system(size: 11)).foregroundStyle(Theme.inkSoft)
+            Text(notice).font(.system(size: 10)).foregroundStyle(Theme.inkSoft)
                 .lineLimit(1).frame(maxWidth: 320).help(notice)
         }
         if daemon.down {
@@ -419,7 +419,7 @@ struct BarStatus: View {
                 Text("Daemon disconnected").foregroundStyle(.secondary)
                 Button("Reconnect") { daemon.start() }.buttonStyle(.link)
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(.system(size: 10, weight: .medium))
             .padding(.horizontal, 12).frame(height: 28)
             .zurafaGlass(in: Capsule())
             .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
@@ -439,9 +439,9 @@ struct ToastStack: View {
                     ProgramGlyph(program: toast.program).frame(width: 18, height: 18)
                         .foregroundStyle(StatusDot.colors[toast.blocked ? "blocked" : "done"]!)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(toast.title).font(.system(size: 12, weight: .semibold))
-                        if !toast.subtitle.isEmpty { Text(toast.subtitle).font(.system(size: 11)).foregroundStyle(.secondary) }
-                        Text(toast.body).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                        Text(toast.title).font(.system(size: 11, weight: .semibold))
+                        if !toast.subtitle.isEmpty { Text(toast.subtitle).font(.system(size: 10)).foregroundStyle(.secondary) }
+                        Text(toast.body).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(2)
                         if toast.permission {
                             HStack {
                                 Button("Approve") { ws.answerPermission(toast.pane, approve: true) }
@@ -452,7 +452,7 @@ struct ToastStack: View {
                     }
                     Spacer(minLength: 0)
                     Button { ws.dismissToast(toast.pane) } label: { Image(systemName: "xmark") }
-                        .buttonStyle(.borderless).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                        .buttonStyle(.borderless).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                         .help("Dismiss")
                 }
                 .padding(12)
@@ -482,10 +482,10 @@ struct WorkspacePickerButton: View {
                 .frame(width: 14, height: 14)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(ws.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.ink)
                     Text(ws.hostLabel)
-                        .font(.system(size: 10))
+                        .font(.system(size: 9))
                 }
                 .lineLimit(1)
             }
@@ -523,7 +523,7 @@ struct VerticalTabSidebar: View {
                     ForEach(ws.orderedSessions, id: \.sessionID) { session in
                         let current = session.sessionID == ws.sessionID
                         Text(session.remote.map { "\(session.label) · \($0.hostname)" } ?? session.label)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Theme.inkSoft)
                             .lineLimit(1)
                             .padding(.horizontal, 12)
@@ -586,7 +586,7 @@ struct SidebarTabRow: View {
                         }
                     (Text(title).foregroundStyle(Theme.ink)
                         + Text(title.hasSuffix(meta.cwd) ? "" : " " + meta.cwd).foregroundStyle(Theme.inkSoft))
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .lineLimit(1)
                     if state.working { Spinner().frame(width: 12, height: 12) }
                     Spacer(minLength: 0)
@@ -662,7 +662,8 @@ struct TaskDoneDot: View {
 extension Workspace {
     func taskState(for tab: Tab) -> TabTaskState {
         let states = tab.panes.flatMap { meta($0).statuses.values.map(\.state) }
-        return TabTaskState(working: states.contains("working"), done: states.contains("done"))
+        let unseenDone = tab.panes.contains { !seenDone.contains($0) && meta($0).statuses.values.contains { $0.state == "done" } }
+        return TabTaskState(working: states.contains("working"), done: unseenDone)
     }
 
     /// Every agent status record in the current workspace, across all its tabs and panes.
@@ -675,13 +676,21 @@ extension Workspace {
 /// Counts of agents needing attention, working and done in the current workspace.
 struct AgentSummary: View {
     @EnvironmentObject var ws: Workspace
+    /// In the top bar the list opens on hover, drawn in the window (`AgentActivityOverlay`); elsewhere it is a popover on click.
+    var hover = false
+    @State private var open = false
+    @State private var hovered: AgentActivity.Row?
 
     var body: some View {
         let states = ws.sessionAgentStates
         let attention = states.filter { $0 == "blocked" || $0 == "error" }.count
         let working = states.filter { $0 == "working" }.count
         let done = states.filter { $0 == "done" }.count
+        Button { if hover { ws.activityOpen.toggle() } else { open.toggle() } } label: {
         HStack(spacing: 10) {
+            if attention + working + done == 0 {
+                Image(systemName: "eye").font(.system(size: 12)).foregroundStyle(Theme.inkSoft)
+            }
             if attention > 0 {
                 count(attention) {
                     Image(systemName: "smallcircle.filled.circle").foregroundStyle(.yellow)
@@ -692,8 +701,16 @@ struct AgentSummary: View {
                 count(done) { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }.help("\(done) done")
             }
         }
-        .font(.system(size: 12, weight: .medium))
+        .font(.system(size: 11, weight: .medium))
         .padding(.horizontal, 6)
+        .frame(minHeight: 28).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).help(hover ? "" : "Agents (what every agent is doing)")
+        .onHover { if hover { ws.hoverActivity(counters: $0) } }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if hover { ws.activityAnchor = $0 } }
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            AgentActivity(hovered: $hovered, hoveredY: .constant(0)) { open = false }.environmentObject(ws).frame(width: 300)
+        }
     }
 
     private func count(_ n: Int, @ViewBuilder icon: () -> some View) -> some View {
@@ -742,7 +759,7 @@ struct TabItem: View {
                 Color.clear.frame(height: 18).overlay(alignment: .leading) {
                     (Text(title).foregroundStyle(on ? Theme.ink : Theme.ink.opacity(0.8))
                         + Text(title.hasSuffix(m.cwd) ? "" : " " + m.cwd).foregroundStyle(Theme.inkSoft))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .lineLimit(1).fixedSize()
                 }
                 .clipped()
@@ -756,7 +773,7 @@ struct TabItem: View {
                 HStack(spacing: 3) {
                     OrchestratorMark(size: 11)
                     Text("\(count)")
-                        .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                        .font(.system(size: 10, weight: .semibold)).monospacedDigit()
                         .foregroundStyle(Theme.inkSoft)
                 }
                 .padding(.horizontal, 6).frame(height: 18)
@@ -770,7 +787,7 @@ struct TabItem: View {
             .buttonStyle(.plain).foregroundStyle(Theme.inkSoft).help("Close Tab")
             .opacity(on || hovering ? 1 : 0)
         }
-        .padding(.leading, 6).padding(.trailing, 8).frame(height: 30)
+        .padding(.leading, 10).padding(.trailing, 8).frame(height: 30)
         .background {
             if on {
                 Capsule().fill(Theme.activeTab.opacity(0.12))
@@ -788,7 +805,7 @@ struct TabItem: View {
             VStack(alignment: .leading, spacing: 4) {
                 let count = agents.count + natives.count
                 Text(count == 1 ? "1 agent" : "\(count) agents")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.inkSoft)
                 AgentList(agents: agents, natives: natives, family: family, focusedPane: ws.peek,
                           head: local ? GitHead.describe(m.pwd) : nil, local: local) { pane in
@@ -979,14 +996,14 @@ struct PaneView: View {
         VStack(spacing: 0) {
             HStack(spacing: 7) {
                 ProgramGlyph(program: m.program).frame(width: 13, height: 13)
-                Text(m.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                Text(m.label ?? (m.title.hasSuffix(m.cwd) ? "" : m.cwd)).font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(m.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                Text(m.label ?? (m.title.hasSuffix(m.cwd) ? "" : m.cwd)).font(.system(size: 12)).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.head)
                 ForEach(m.statusItems) { item in
                     StatusIcon(item: item, fallback: m.program.title, size: 15)
                 }
                 if let e = m.ended {
-                    Text(e).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                    Text(e).font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary)
                         .padding(.horizontal, 6).padding(.vertical, 1).background(Color.black.opacity(0.05), in: Capsule())
                 }
                 Spacer(minLength: 0)
@@ -1051,7 +1068,8 @@ struct PaneView: View {
                 shape.strokeBorder(.white.opacity(0.1), lineWidth: focused ? 1 : 0.7)
                 if !focused { shape.stroke(.black.opacity(0.5), lineWidth: 1).padding(-0.5) }
             } else {
-                shape.strokeBorder(Theme.paneStroke.opacity(focused ? 1 : 0.5), lineWidth: 1)
+                // A white rim like Rex's light panes; the theme's ink would draw a dark line on a light theme.
+                shape.strokeBorder(.white.opacity(focused ? 0.75 : 0.4), lineWidth: 1)
             }
         }
         .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 2).opacity(dropTarget ? 1 : 0))

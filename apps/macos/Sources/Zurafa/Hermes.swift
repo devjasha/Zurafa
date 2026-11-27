@@ -23,7 +23,7 @@ struct HermesChat: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 PixelAvatarView(avatar: feed.avatar, color: feed.color).frame(width: 18, height: 18)
-                Text(name).font(.system(size: 13, weight: .semibold))
+                Text(name).font(.system(size: 12, weight: .semibold))
                 Spacer(minLength: 0)
                 IconButton(symbol: "xmark", help: "Close \(name) (⇧⌘H)") { ws.hermesOpen = false }
             }
@@ -189,7 +189,7 @@ private struct HermesTab: View {
             .buttonStyle(.plain).foregroundStyle(Theme.inkSoft).help("Close Chat")
             .opacity(on || hovering ? 1 : 0)
         }
-        .font(.system(size: 12, weight: on ? .medium : .regular))
+        .font(.system(size: 11, weight: on ? .medium : .regular))
         .padding(.trailing, 4).frame(maxWidth: 170)
         .background(on ? Theme.activeTab.opacity(0.12) : .clear, in: Capsule())
         .onHover { hovering = $0 }

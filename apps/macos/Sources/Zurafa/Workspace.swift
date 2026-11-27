@@ -60,12 +60,21 @@ enum EditorKind: String, Identifiable {
 /// UI projection of Rust's authoritative snapshot and event stream.
 @MainActor final class Workspace: ObservableObject {
     @Published private(set) var tabs: [Tab] = []
-    @Published private(set) var selected = 0
+    @Published private(set) var selected = 0 { didSet { markDoneSeen() } }
     @Published private(set) var metas: [String: PaneMeta] = [:] {
         didSet {
             Attention.shared.setBadge(metas.values.filter { $0.status == "blocked" }.count)
             publishActivity()
+            markDoneSeen()
         }
+    }
+    /// Panes whose "done" was on screen; their tab drops the done dot until they finish again.
+    private(set) var seenDone = Set<String>()
+
+    private func markDoneSeen() {
+        let done = Set(metas.filter { $0.value.statuses.values.contains { $0.state == "done" } }.keys)
+        seenDone.formIntersection(done)
+        if tabs.indices.contains(selected) { seenDone.formUnion(done.intersection(tabs[selected].panes)) }
     }
     @Published private(set) var sessionID = "default"
     @Published private(set) var hosts: [RemoteHost] = []
@@ -77,6 +86,11 @@ enum EditorKind: String, Identifiable {
     @Published var sidebarHidden = false
     @Published var fileTreeOpen = false
     @Published var hermesOpen = false
+    /// The agent list under the top bar's counters, open while the pointer is on the counters or the list.
+    @Published var activityOpen = false
+    /// Where the counters sit in the window, so the list opens right under them.
+    @Published var activityAnchor = CGRect.zero
+    var activityHover = (counters: false, list: false)
     /// The Hermes chat the panel shows; set it to show another.
     @Published var hermesChat: String?
     /// Hermes' state from the daemon (`working`, `name`, `avatar`, `color`, `hasKey`); nil until known.

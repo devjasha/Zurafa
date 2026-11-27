@@ -181,7 +181,7 @@ struct FileTreePane: View {
             HStack(spacing: 6) {
                 Image(systemName: "folder")
                 Text(model.root?.lastPathComponent ?? "Files")
-                    .font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                    .font(.system(size: 12, weight: .semibold)).lineLimit(1)
                     .help(model.root?.path ?? "")
                 Spacer(minLength: 0)
                 IconButton(symbol: "arrow.clockwise", help: "Refresh Files") { model.refresh() }
@@ -258,7 +258,7 @@ private struct FileTreeRow: View {
                 .foregroundStyle(selected ? Theme.onAccent : change?.color ?? Theme.ink)
             Spacer(minLength: 0)
             if let change {
-                Text(change.rawValue).font(.system(size: 10, weight: .semibold, design: .monospaced))
+                Text(change.rawValue).font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .foregroundStyle(selected ? Theme.onAccent : change.color)
                     .padding(.trailing, 4)
             } else if holdsChanges {
@@ -266,7 +266,7 @@ private struct FileTreeRow: View {
                     .padding(.trailing, 6)
             }
         }
-        .font(.system(size: 12))
+        .font(.system(size: 11))
         .foregroundStyle(selected ? Theme.onAccent : Theme.ink)
         .opacity(entry.ignored ? 0.5 : 1)
         .padding(.leading, CGFloat(depth) * 14)

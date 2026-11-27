@@ -126,7 +126,7 @@ struct AgentControls: View {
     private func chip<Label: View>(_ pop: Pop, square: Bool = false, @ViewBuilder label: () -> Label) -> some View {
         Button { open = open == pop ? nil : pop; panel = nil } label: {
             HStack(spacing: 6) { label() }
-                .font(.system(size: 13))
+                .font(.system(size: 12))
                 .frame(minWidth: square ? 30 : nil, minHeight: 30)
                 .padding(.horizontal, square ? 0 : 10)
                 .background(Theme.ink.opacity(open == pop ? 0.12 : 0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -137,7 +137,7 @@ struct AgentControls: View {
 
     private var addMenu: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("ADD TO MESSAGE").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 4)
+            Text("ADD TO MESSAGE").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 4)
             PopRow(icon: "doc.badge.plus", title: "Upload file", detail: "Attach files or images") {
                 open = nil
                 let panel = NSOpenPanel()
@@ -259,11 +259,11 @@ struct PopRow: View {
             HStack(alignment: detail == nil ? .center : .top, spacing: 10) {
                 if let icon { Image(systemName: icon).frame(width: 18).foregroundStyle(icon == "exclamationmark.shield" ? Color.yellow : Theme.ink.opacity(0.8)) }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 13))
-                    if let detail { Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                    Text(title).font(.system(size: 12))
+                    if let detail { Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 8)
-                if let trailing { Text(trailing).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1) }
+                if let trailing { Text(trailing).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1) }
                 if chevron { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
                 if check && selected { Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold)) }
             }
@@ -292,7 +292,7 @@ struct ComposerFooter<Folder: View>: View {
             if let context = usage.context { meter("Context", context) }
             if working { ProgressView().controlSize(.small) }
         }
-        .font(.system(size: 13))
+        .font(.system(size: 12))
         .foregroundStyle(Theme.ink.opacity(0.5))
         .padding(.horizontal, 14).padding(.top, 8)
     }

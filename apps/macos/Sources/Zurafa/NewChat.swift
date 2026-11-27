@@ -40,7 +40,7 @@ struct NewChat: View {
     var body: some View {
         let dir = folder ?? sessionDirectory(selectedSession)
         VStack(alignment: .leading, spacing: 0) {
-            Text("What should we work on?").font(.system(size: 20, weight: .semibold)).padding(.bottom, 14)
+            Text("What should we work on?").font(.system(size: 19, weight: .semibold)).padding(.bottom, 14)
             Composer(draft: $draft, focus: $composing, agent: agent, dir: dir, send: { start(in: dir) }) {
                 AgentControls(agent: agent, settings: settings, change: { settings.merge($0) },
                               pickAgent: { agent = $0; settings = AgentSettings() },

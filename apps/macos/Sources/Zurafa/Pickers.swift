@@ -66,7 +66,7 @@ struct SessionPicker: View {
                         .onChange(of: selectableCount) { selection = min(selection, max(0, selectableCount - 1)) }
                 }
             }
-            .font(.system(size: 13))
+            .font(.system(size: 12))
             .foregroundStyle(PickerStyle.secondary)
             .padding(.horizontal, 10).frame(height: 32)
             .background(Theme.ink.opacity(0.06), in: Capsule())
@@ -181,7 +181,7 @@ struct SessionPicker: View {
             .frame(width: 18)
             Text(title).lineLimit(1)
         }
-        .font(.system(size: 12, weight: .semibold))
+        .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(PickerStyle.secondary)
         .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 2)
     }
@@ -217,7 +217,7 @@ struct SessionPicker: View {
     private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }
@@ -243,7 +243,7 @@ struct SessionPicker: View {
                         .padding(.trailing, trailingInset)
                 }
             }
-            .font(.system(size: 13, weight: .medium))
+            .font(.system(size: 12, weight: .medium))
             .padding(.horizontal, 8).frame(height: 30)
             .foregroundStyle(selected ? Theme.onAccent : Theme.ink)
             .background(selected ? PickerStyle.accent : highlighted ? Theme.ink.opacity(0.08) : .clear,
@@ -329,7 +329,7 @@ struct EditorSheet: View {
                         Text(hostError ?? (hostSelection != nil ? "Press Return to save and connect to this machine"
                             : address.isEmpty ? (matchingHosts.isEmpty ? "Type the address of an SSH host" : "Type the address of an SSH host, or pick a machine")
                             : "Press Return to save and connect with SSH"))
-                            .font(.system(size: 12))
+                            .font(.system(size: 11))
                             .foregroundStyle(hostError == nil ? PickerStyle.secondary : Color.red)
                             .frame(maxWidth: .infinity)
                     }
@@ -337,7 +337,7 @@ struct EditorSheet: View {
                     .disabled(address.isEmpty && hostSelection == nil)
                 } else if kind == .editHost {
                     HStack {
-                        Text(heading).font(.system(size: 15, weight: .semibold))
+                        Text(heading).font(.system(size: 14, weight: .semibold))
                         Spacer()
                         Button(action: close) {
                             Image(systemName: "xmark.circle.fill").font(.system(size: 17))
@@ -349,10 +349,10 @@ struct EditorSheet: View {
                     field("SSH user (optional)", text: $username, focus: .username).onSubmit(save)
                     field("SSH port", text: $port, focus: .port).onSubmit(save)
                     if let hostError {
-                        Text(hostError).font(.system(size: 11)).foregroundStyle(.red)
+                        Text(hostError).font(.system(size: 10)).foregroundStyle(.red)
                     } else {
                         Text("New tabs use the updated connection. Existing terminals stay connected as they are.")
-                            .font(.system(size: 11)).foregroundStyle(PickerStyle.secondary)
+                            .font(.system(size: 10)).foregroundStyle(PickerStyle.secondary)
                     }
                     HStack(spacing: 8) {
                         Spacer()
@@ -365,7 +365,7 @@ struct EditorSheet: View {
                     }
                 } else {
                     HStack {
-                        Text(heading).font(.system(size: 15, weight: .semibold))
+                        Text(heading).font(.system(size: 14, weight: .semibold))
                         Spacer()
                         Button(action: close) {
                             Image(systemName: "xmark.circle.fill").font(.system(size: 17))
@@ -417,7 +417,7 @@ struct EditorSheet: View {
     private var hostAddressField: some View {
         HStack(spacing: 8) {
             Text("Add Host")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .padding(.horizontal, 8).frame(height: 25)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
             TextField("ssh://user@machine.tailnet.ts.net", text: $address)
@@ -458,7 +458,7 @@ struct EditorSheet: View {
                 let selected = index == hostSelection
                 let isVM = ws.vmHosts.contains(machine)
                 if index == 0 || isVM != ws.vmHosts.contains(matchingHosts[index - 1]) {
-                    Text(isVM ? "LOCAL VMS" : "TAILNET").font(.system(size: 10, weight: .semibold)).foregroundStyle(PickerStyle.secondary)
+                    Text(isVM ? "LOCAL VMS" : "TAILNET").font(.system(size: 9, weight: .semibold)).foregroundStyle(PickerStyle.secondary)
                         .padding(.horizontal, 8).padding(.top, index == 0 ? 0 : 4).padding(.bottom, 2)
                 }
                 Button { addFoundHost(machine) } label: {
@@ -470,11 +470,11 @@ struct EditorSheet: View {
                         Text(machine.label).lineLimit(1)
                         Spacer(minLength: 6)
                         Text(machine.hostname)
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                             .lineLimit(1)
                             .foregroundStyle(selected ? Theme.onAccent.opacity(0.65) : PickerStyle.secondary)
                     }
-                    .font(.system(size: 12))
+                    .font(.system(size: 11))
                     .foregroundStyle(selected ? Theme.onAccent : Theme.ink)
                     .padding(.horizontal, 8).frame(height: 26)
                     .background(selected ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 7))
@@ -501,7 +501,7 @@ struct EditorSheet: View {
             let anchor = terminal.flatMap(Self.cursorAnchor) ?? CGPoint(x: (geo.size.width - 360) / 2, y: 50)
             ZStack(alignment: .topLeading) {
                 Color.clear.contentShape(Rectangle()).onTapGesture { close() }
-                directoryField(font: terminal.map { Font($0.font) } ?? .system(size: 13, design: .monospaced))
+                directoryField(font: terminal.map { Font($0.font) } ?? .system(size: 12, design: .monospaced))
                     .padding(6)
                     .frame(width: 360)
                     .pickerGlass(in: RoundedRectangle(cornerRadius: 10))
@@ -571,7 +571,7 @@ struct EditorSheet: View {
                                     .lineLimit(1)
                                 Spacer(minLength: 6)
                             }
-                            .font(.system(size: 12))
+                            .font(.system(size: 11))
                             .foregroundStyle(selected ? Theme.onAccent : candidate.isDirectory ? Theme.ink : PickerStyle.secondary)
                             .padding(.horizontal, 6).frame(height: 22)
                             .background(selected ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 6))
@@ -582,7 +582,7 @@ struct EditorSheet: View {
                     }
                 }
                 Text("↑↓ choose · Tab completes · Return cds here")
-                    .font(.system(size: 10))
+                    .font(.system(size: 9))
                     .foregroundStyle(PickerStyle.secondary)
                     .padding(.horizontal, 6)
             }
@@ -885,7 +885,7 @@ struct CommandPicker: View {
             VStack(spacing: 6) {
                 HStack(spacing: 8) {
                     if themeMode {
-                        Text("Theme").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.ink)
+                        Text("Theme").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.ink)
                             .padding(.horizontal, 7).frame(height: 22)
                             .background(Theme.ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
                     } else {
@@ -917,7 +917,7 @@ struct CommandPicker: View {
                             ForEach(Array(rows.enumerated()), id: \.element.id) { index, entry in
                                 if query.isEmpty, let section = sectionTitle(entry, index: index, previous: index > 0 ? rows[index - 1] : nil) {
                                     Text(section)
-                                        .font(.system(size: 11, weight: .semibold))
+                                        .font(.system(size: 10, weight: .semibold))
                                         .foregroundStyle(PickerStyle.secondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.leading, 10).padding(.top, 6)
@@ -930,10 +930,10 @@ struct CommandPicker: View {
                                             if let detail = entry.detail { Text(detail).lineLimit(1).frame(maxWidth: 110, alignment: .trailing) }
                                             if let shortcut = entry.shortcut { Text(shortcut) }
                                         }
-                                        .font(.system(size: 11))
+                                        .font(.system(size: 10))
                                         .foregroundStyle(index == selection ? Theme.onAccent.opacity(0.65) : PickerStyle.secondary)
                                     }
-                                    .font(.system(size: 13))
+                                    .font(.system(size: 12))
                                     .foregroundStyle(index == selection ? Theme.onAccent : Theme.ink)
                                     .padding(.horizontal, 10).frame(height: 30)
                                     .background(index == selection ? PickerStyle.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
@@ -952,10 +952,10 @@ struct CommandPicker: View {
                 if let version = app.availableUpdate {
                     HStack(spacing: 7) {
                         if let star = zurafaStar { Image(nsImage: star).resizable().scaledToFit().frame(width: 14, height: 14) }
-                        Text("Zurafa \(version) is available").font(.system(size: 12)).foregroundStyle(PickerStyle.secondary)
+                        Text("Zurafa \(version) is available").font(.system(size: 11)).foregroundStyle(PickerStyle.secondary)
                         Spacer(minLength: 4)
                         Button("Update") { ws.paletteOpen = false; app.checkForUpdates() }
-                            .buttonStyle(.plain).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.onAccent)
+                            .buttonStyle(.plain).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.onAccent)
                             .padding(.horizontal, 9).frame(height: 20).background(PickerStyle.accent, in: Capsule())
                     }
                     .padding(.horizontal, 10).padding(.top, 2).frame(height: 30)

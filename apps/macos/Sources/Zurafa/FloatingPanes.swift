@@ -87,7 +87,7 @@ struct HiddenPanes: View {
         if !hidden.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 Label("Hidden", systemImage: "eye.slash")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.inkSoft)
                 ForEach(hidden, id: \.self) { pane in
                     AgentRow(pane: pane, label: ws.meta(pane).label ?? ws.meta(pane).title, on: false) { _ in show(pane) }

@@ -94,10 +94,10 @@ struct AgentCard: View {
                         Spacer(minLength: 6)
                         if let started = meta.started { Text(Self.startText(started)) }
                     }
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.inkSoft)
                     Text(meta.label ?? meta.title)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.ink)
                         .lineLimit(1)
                     HStack {
@@ -105,7 +105,7 @@ struct AgentCard: View {
                         Spacer(minLength: 6)
                         Text("\(done)/\(total) done").monospacedDigit()
                     }
-                    .font(.system(size: 12))
+                    .font(.system(size: 11))
                     .foregroundStyle(Theme.inkSoft)
                     .padding(.top, 2)
                 }
@@ -117,7 +117,7 @@ struct AgentCard: View {
             HStack {
                 if let head {
                     Label(head, systemImage: "arrow.triangle.branch")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundStyle(Theme.inkSoft)
                         .lineLimit(1)
                 }
@@ -144,7 +144,7 @@ struct AgentCard: View {
 
 /// Marks a tab whose agent is orchestrating others.
 struct OrchestratorMark: View {
-    var size: CGFloat = 13
+    var size: CGFloat = 12
     var body: some View {
         Image(systemName: "point.3.connected.trianglepath.dotted")
             .font(.system(size: size))
@@ -172,7 +172,7 @@ struct AgentRow: View {
                     Text(label).foregroundStyle(Theme.ink).lineLimit(1)
                     if let branch {
                         Label(branch, systemImage: "arrow.triangle.branch")
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                             .foregroundStyle(Theme.inkSoft)
                             .lineLimit(1)
                     }
@@ -180,7 +180,7 @@ struct AgentRow: View {
                 Spacer(minLength: 6)
                 Text(state).foregroundStyle(color)
             }
-            .font(.system(size: 13))
+            .font(.system(size: 12))
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .background {

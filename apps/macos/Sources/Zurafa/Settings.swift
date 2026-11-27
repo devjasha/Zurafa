@@ -8,15 +8,30 @@ struct SettingsView: View {
     /// Stored, so the menu bar's Zurafa Server item can open Settings on the Server pane.
     @AppStorage(paneKey) private var pane: SettingsPane = .general
     @EnvironmentObject var ws: Workspace
+    @State private var search = ""
 
     var body: some View {
         // workspaceBackground is published, so reading it repaints Settings in a new theme's colors.
         let _ = ws.workspaceBackground
         NavigationSplitView {
-            List(SettingsPane.allCases, selection: Binding(get: { pane }, set: { pane = $0 ?? pane })) { pane in
-                Label(pane.title, systemImage: pane.symbol).tag(pane)
+            List(selection: Binding(get: { pane }, set: { pane = $0 ?? pane })) {
+                ForEach(SettingsPane.groups, id: \.self) { group in
+                    let shown = group.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) }
+                    if !shown.isEmpty {
+                        Section {
+                            ForEach(shown) { pane in
+                                HStack(spacing: 8) {
+                                    SettingsIcon(pane: pane)
+                                    Text(pane.title)
+                                }
+                                .tag(pane)
+                            }
+                        }
+                    }
+                }
             }
-            .navigationSplitViewColumnWidth(200)
+            .searchable(text: $search, placement: .sidebar, prompt: "Search Settings")
+            .navigationSplitViewColumnWidth(220)
             .scrollContentBackground(.hidden)
             .background(Theme.background.opacity(0.85))
         } detail: {
@@ -65,19 +80,48 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .hermes: "Hermes"
         }
     }
+    /// The sidebar's groups, split by a gap as in System Settings.
+    static let groups: [[SettingsPane]] = [[.general, .server, .connections], [.appearance, .themes],
+                                           [.terminal, .shortcuts, .integrations, .notifications], [.hermes]]
+    /// The fill behind the sidebar icon.
+    var color: Color {
+        switch self {
+        case .general: .gray
+        case .server: .indigo
+        case .connections: .purple
+        case .appearance: .cyan
+        case .themes: .pink
+        case .terminal: Color(white: 0.2)
+        case .shortcuts: .gray
+        case .integrations: .orange
+        case .notifications: .red
+        case .hermes: .green
+        }
+    }
     var symbol: String {
         switch self {
-        case .general: "gearshape"
+        case .general: "gearshape.fill"
         case .server: "server.rack"
         case .appearance: "macwindow"
-        case .themes: "paintpalette"
+        case .themes: "paintpalette.fill"
         case .terminal: "terminal"
         case .shortcuts: "command"
-        case .integrations: "puzzlepiece.extension"
-        case .notifications: "bell.badge"
+        case .integrations: "puzzlepiece.extension.fill"
+        case .notifications: "bell.badge.fill"
         case .connections: "globe"
-        case .hermes: "bubble.left.and.text.bubble.right"
+        case .hermes: "bubble.left.and.text.bubble.right.fill"
         }
+    }
+}
+
+/// A pane's symbol in white on a colored rounded square, like System Settings' sidebar.
+private struct SettingsIcon: View {
+    let pane: SettingsPane
+    var body: some View {
+        Image(systemName: pane.symbol)
+            .font(.system(size: 12, weight: .medium)).foregroundStyle(.white)
+            .frame(width: 22, height: 22)
+            .background(pane.color.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
 
@@ -88,36 +132,34 @@ private struct GeneralPane: View {
     @State private var loginError: String?
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Zurafa \(CLIInstaller.appVersion)")
-                Spacer()
-                let os = ProcessInfo.processInfo.operatingSystemVersion
-                Text("macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)")
+        Form {
+            Section {
+                HStack(spacing: 12) {
+                    Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 40, height: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Zurafa \(CLIInstaller.appVersion)").font(.headline)
+                        let os = ProcessInfo.processInfo.operatingSystemVersion
+                        Text(app.availableUpdate.map { "Zurafa \($0) is available" }
+                             ?? "macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)")
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Check Now") { app.checkForUpdates() }
+                }
+                Toggle("Automatic updates", isOn: Binding(get: { app.automaticallyChecksForUpdates },
+                                                          set: { app.automaticallyChecksForUpdates = $0 }))
             }
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 20).padding(.vertical, 8)
-            Divider()
-            Form {
-                Section {
-                    Toggle("Launch at login", isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin))
-                    if let loginError { Text(loginError).font(.caption).foregroundStyle(.red) }
+            Section("Launch") {
+                Toggle("Launch at login", isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin))
+                if let loginError { Text(loginError).font(.caption).foregroundStyle(.red) }
+            }
+            Section("Config File") {
+                LabeledContent((ZurafaConfigLoader().fileURL.path as NSString).abbreviatingWithTildeInPath) {
+                    Button("Open") { ws.openConfig() }
                 }
-                Section {
-                    Toggle("Automatic updates", isOn: Binding(get: { app.automaticallyChecksForUpdates },
-                                                              set: { app.automaticallyChecksForUpdates = $0 }))
-                    LabeledContent(app.availableUpdate.map { "Zurafa \($0) is available" } ?? "Updates") {
-                        Button("Check for Updates…") { app.checkForUpdates() }
-                    }
-                }
-                Section("Config File") {
-                    LabeledContent((ZurafaConfigLoader().fileURL.path as NSString).abbreviatingWithTildeInPath) {
-                        Button("Open") { ws.openConfig() }
-                    }
-                    LabeledContent("Ghostty terminal settings") {
-                        Button("Import") { ws.importGhosttySettings() }
-                        Button("Clear") { ws.clearGhosttySettings() }
-                    }
+                LabeledContent("Ghostty terminal settings") {
+                    Button("Import") { ws.importGhosttySettings() }
+                    Button("Clear") { ws.clearGhosttySettings() }
                 }
             }
         }

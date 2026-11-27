@@ -272,7 +272,7 @@ struct ChatView: View {
                 Button("Answer in Terminal") { ws.toggleChat(pane) }
             }
         }
-        .font(.system(size: 13))
+        .font(.system(size: 12))
         .padding(10)
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .padding(.bottom, 8)
@@ -338,8 +338,8 @@ private struct QuestionCard: View {
                 Spacer(minLength: 0)
                 Button("Skip", action: skip).buttonStyle(.plain).help("Dismiss the question (Esc in the terminal)")
             }
-            .font(.system(size: 12)).foregroundStyle(.secondary)
-            Text(q.question).font(.system(size: 13, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+            .font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(q.question).font(.system(size: 12, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
             ForEach(q.options.indices, id: \.self) { i in
                 option(q.options[i].label, detail: q.options[i].detail, on: picks.contains(i), multiple: q.multiple) {
                     if q.multiple {
@@ -375,11 +375,11 @@ private struct QuestionCard: View {
                     .foregroundStyle(on ? Theme.accent : Theme.inkSoft)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).foregroundStyle(Theme.ink)
-                    if !detail.isEmpty { Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                    if !detail.isEmpty { Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 13))
+            .font(.system(size: 12))
             .padding(.horizontal, 10).padding(.vertical, 7)
             .contentShape(Rectangle())
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(on ? Theme.accent : Theme.paneStroke, lineWidth: 1))
@@ -452,7 +452,7 @@ struct TurnView: View, Equatable {
             }
             if let answer = turn.answer {
                 // The answer sits in a bubble on the left, the user's on the right; the work between stays bare on its rail.
-                ChatMarkdown(text: answer.text, ink: Theme.ink, size: 13.5).equatable()
+                ChatMarkdown(text: answer.text, ink: Theme.ink, size: 12.5).equatable()
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 10)
@@ -467,7 +467,7 @@ struct TurnView: View, Equatable {
                         .buttonStyle(.plain).help("Copy the answer")
                     if let at = answer.at { Text(at, format: .dateTime.hour().minute()) }
                 }
-                .font(.system(size: 11))
+                .font(.system(size: 10))
                 .foregroundStyle(Theme.ink.opacity(0.4))
                 .opacity(hover || last ? 1 : 0)
             }
@@ -533,7 +533,7 @@ private struct FoldLine: View {
                 }
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 13))
+            .font(.system(size: 12))
             .lineLimit(1)
             .contentShape(Rectangle())
         }
@@ -563,7 +563,7 @@ private struct ChangedFiles: View {
                 Text(files.count == 1 ? "1 file changed" : "\(files.count) files changed").foregroundStyle(.secondary)
                 Counts(added: files.map(\.added).reduce(0, +), removed: files.map(\.removed).reduce(0, +))
             }
-            .font(.system(size: 12))
+            .font(.system(size: 11))
             .padding(.horizontal, 10).padding(.vertical, 7)
             ForEach(files, id: \.path) { file in
                 Divider().opacity(0.5)
@@ -599,7 +599,7 @@ private struct ChangedFiles: View {
                     Spacer(minLength: 8)
                     Counts(added: file.added, removed: file.removed)
                 }
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(Theme.ink.opacity(hover ? 0.06 : 0))
                 .contentShape(Rectangle())
@@ -617,7 +617,7 @@ private struct ChangedFiles: View {
                 Text("+\(added)").foregroundStyle(.green)
                 Text("−\(removed)").foregroundStyle(.red)
             }
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
         }
     }
 }
@@ -640,7 +640,7 @@ private struct UserBubble: View {
     var body: some View {
         HStack {
             Spacer(minLength: 56)
-            Text(text).font(.system(size: 13)).textSelection(.enabled)
+            Text(text).font(.system(size: 12)).textSelection(.enabled)
                 .padding(.horizontal, 12).padding(.vertical, 7)
                 // One line reads as a pill, more as a rounded card.
                 .background(Theme.ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -664,7 +664,7 @@ private struct WorkRow: View, Equatable {
             VStack(alignment: .leading, spacing: 4) {
                 Button { open.toggle() } label: {
                     HStack(spacing: 6) {
-                        Text(item.tool).font(.system(size: 13)).foregroundStyle(item.ok ? Theme.ink.opacity(0.5) : .red)
+                        Text(item.tool).font(.system(size: 12)).foregroundStyle(item.ok ? Theme.ink.opacity(0.5) : .red)
                         target
                         if !item.edits.isEmpty { DiffCount(edits: item.edits) }
                         if item.result == nil {
@@ -684,7 +684,7 @@ private struct WorkRow: View, Equatable {
                 // An edit's result only says it worked; its diff is the news, unless it failed.
                 if open, let result = item.result, !result.isEmpty, item.edits.isEmpty || !item.ok {
                     ScrollView {
-                        Text(result).font(.system(size: 11, design: .monospaced))
+                        Text(result).font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(item.ok ? Theme.ink.opacity(0.7) : .red.opacity(0.8))
                             .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -692,7 +692,7 @@ private struct WorkRow: View, Equatable {
                 }
             }
         default:
-            ChatMarkdown(text: item.text, ink: Theme.ink.opacity(0.65), size: 13).equatable()
+            ChatMarkdown(text: item.text, ink: Theme.ink.opacity(0.65), size: 12).equatable()
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -703,12 +703,12 @@ private struct WorkRow: View, Equatable {
         let input = item.input
         if input.hasPrefix("/") && !input.contains(" ") {
             Text(URL(fileURLWithPath: input).lastPathComponent)
-                .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.ink.opacity(0.75))
+                .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ink.opacity(0.75))
                 .padding(.horizontal, 5).padding(.vertical, 1)
                 .background(Theme.ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
                 .help(input)
         } else {
-            Text(input).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.ink.opacity(0.8))
+            Text(input).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ink.opacity(0.8))
                 .truncationMode(.tail).help(input)
         }
     }
@@ -723,7 +723,7 @@ private struct DiffCount: View {
             Text("+\(lines.filter { $0.mark == .added }.count)").foregroundStyle(.green)
             Text("−\(lines.filter { $0.mark == .removed }.count)").foregroundStyle(.red)
         }
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.system(size: 10, weight: .medium, design: .monospaced))
     }
 }
 
@@ -752,7 +752,7 @@ struct EditDiff: View {
                     Text("\(lines.count - Self.limit) more lines").foregroundStyle(Theme.ink.opacity(0.45)).padding(8)
                 }
             }
-            .font(.system(size: 11.5, design: .monospaced))
+            .font(.system(size: 10.5, design: .monospaced))
             .textSelection(.enabled)
             .padding(.vertical, 6)
         }
@@ -844,7 +844,7 @@ private struct CodeCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(language).font(.system(size: 11)).foregroundStyle(Theme.ink.opacity(0.5))
+                Text(language).font(.system(size: 10)).foregroundStyle(Theme.ink.opacity(0.5))
                 Spacer()
                 Button {
                     NSPasteboard.general.clearContents()
@@ -967,7 +967,7 @@ struct Composer<Chips: View>: View {
             if !images.wrappedValue.isEmpty { ImageStrip(images: images) }
             TextField(placeholder, text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
+                .font(.system(size: 13))
                 .lineLimit(1...10)
                 .frame(minHeight: 44, alignment: .topLeading)
                 .focused(focus)
@@ -1135,8 +1135,8 @@ private struct SuggestionList: View {
                     ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
                         HStack(spacing: 8) {
                             Image(systemName: s.icon).frame(width: 16).foregroundStyle(Theme.ink.opacity(0.6))
-                            Text(s.title).font(.system(size: 13, weight: .medium)).lineLimit(1).layoutPriority(1)
-                            Text(s.detail).font(.system(size: 12)).foregroundStyle(Theme.ink.opacity(0.5)).lineLimit(1)
+                            Text(s.title).font(.system(size: 12, weight: .medium)).lineLimit(1).layoutPriority(1)
+                            Text(s.detail).font(.system(size: 11)).foregroundStyle(Theme.ink.opacity(0.5)).lineLimit(1)
                             Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 8).frame(height: 28)
