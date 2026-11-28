@@ -71,8 +71,11 @@ pub async fn write_frame<W: AsyncWrite + Unpin>(w: &mut W, body: &[u8]) -> Resul
     if body.len() > MAX_FRAME {
         return Err(Error::new(ErrorKind::InvalidData, "frame too large"));
     }
-    w.write_all(&(body.len() as u32).to_be_bytes()).await?;
-    w.write_all(body).await
+    // One write: two would cross the phone's proxy as two TLS records and two packets.
+    let mut frame = Vec::with_capacity(4 + body.len());
+    frame.extend_from_slice(&(body.len() as u32).to_be_bytes());
+    frame.extend_from_slice(body);
+    w.write_all(&frame).await
 }
 
 #[cfg(test)]

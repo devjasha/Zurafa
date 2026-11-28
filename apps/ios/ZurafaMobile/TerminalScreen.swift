@@ -110,7 +110,6 @@ struct TerminalScreen: View {
                     Button("Workspaces", systemImage: "sidebar.left") { overview = true }
                 }
                 ToolbarItem(placement: .principal) { header }
-                ToolbarItem(placement: .topBarTrailing) { HermesIndicator() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis") {
                         Button("New Chat", systemImage: "bubble.left.and.text.bubble.right") { newChat = true }
@@ -127,6 +126,7 @@ struct TerminalScreen: View {
             }
             // Without a theme from the Mac the terminal stays dark, so its chrome does too.
             .environment(\.colorScheme, mac.appearance == nil ? .dark : scheme)
+            .environment(\.workspaceCommands, workspaceCommands)
             .sheet(isPresented: $overview, onDismiss: { if leaving { dismiss() } }) {
                 NavigationStack {
                     SessionsList(current: id, pick: { id = $0; overview = false }, open: { id = $0; overview = false }) { gone in
@@ -266,6 +266,40 @@ struct TerminalScreen: View {
         }
     }
 
+    /// The ⌘ palette's workspace half: the pane bar's and More menu's actions, and a few of the Mac palette's.
+    private var workspaceCommands: [PaletteCommand] {
+        let panes = window?.panes ?? [id]
+        let step = { (by: Int) in withAnimation(.snappy) { id = panes[((panes.firstIndex(of: id) ?? 0) + by + panes.count) % panes.count] } }
+        let attention = mac.sessions.flatMap { s in
+            s.windows.flatMap(\.panes).filter { ["blocked", "error"].contains(s.blocks[$0]?.statuses.shownRecord?.state) }
+        }.first { $0 != id }
+        var list = [
+            PaletteCommand(title: "New Pane", symbol: "rectangle.split.2x1", run: newPane),
+            PaletteCommand(title: "New Tab", symbol: "plus", run: newTab),
+            PaletteCommand(title: "New Chat", symbol: "bubble.left.and.text.bubble.right") { newChat = true },
+            PaletteCommand(title: "New Session", symbol: "macwindow.badge.plus") {
+                Task {
+                    do { if let pane = try await mac.newSession(remote: nil) { id = pane } } catch { self.error = error.localizedDescription }
+                }
+            },
+            PaletteCommand(title: "Workspaces", symbol: "sidebar.left") { overview = true },
+        ]
+        if block?.hasChat == true {
+            list.append(PaletteCommand(title: chat ? "Show Terminal" : "Show Chat", symbol: chat ? "terminal" : "text.bubble") {
+                if flipped.remove(id) == nil { flipped.insert(id) }
+            })
+        }
+        if panes.count > 1 {
+            list.append(PaletteCommand(title: "Next Pane", symbol: "chevron.down") { step(1) })
+            list.append(PaletteCommand(title: "Previous Pane", symbol: "chevron.up") { step(-1) })
+        }
+        if let attention {
+            list.append(PaletteCommand(title: "Jump to Pane Needing You", symbol: "hand.raised") { id = attention })
+        }
+        list.append(PaletteCommand(title: "Close Pane", symbol: "xmark") { close(id) })
+        return list
+    }
+
     private func newTab() {
         guard let session else { return }
         Task {
@@ -365,6 +399,54 @@ struct ControlKey {
     ]
 }
 
+struct PaletteCommand: Identifiable {
+    let title: String
+    let symbol: String
+    let run: () -> Void
+    var id: String { title }
+}
+
+extension EnvironmentValues {
+    /// The pane screen's workspace commands, for the ⌘ buttons under it.
+    @Entry var workspaceCommands: [PaletteCommand] = []
+}
+
+/// Both ⌘ buttons' tap, as the Mac's ⌘⇧P palette: type to filter, tap to run and close.
+struct CommandPalette: View {
+    let keys: [PaletteCommand]
+    let workspace: [PaletteCommand]
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    /// Run once the sheet has closed, so a picker it opens can present.
+    @State private var pending: (() -> Void)?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                section("Keys", keys)
+                section("Workspace", workspace)
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Commands")
+            .navigationTitle("Commands")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+        .onDisappear { pending?(); pending = nil }
+    }
+
+    @ViewBuilder private func section(_ title: String, _ commands: [PaletteCommand]) -> some View {
+        let shown = query.isEmpty ? commands : commands.filter { $0.title.localizedStandardContains(query) }
+        if !shown.isEmpty {
+            Section(title) {
+                ForEach(shown) { c in
+                    Button { pending = c.run; dismiss() } label: { Label(c.title, systemImage: c.symbol) }
+                        .foregroundStyle(.primary)
+                }
+            }
+        }
+    }
+}
+
 struct KeyBar: View {
     let view: PhoneTerminal
     @State private var ctrl = false
@@ -374,8 +456,7 @@ struct KeyBar: View {
     @State private var photos = false
     @State private var files = false
     @State private var commands = false
-    /// A command picked in the popover, run once it has closed so a picker can open.
-    @State private var pending: (() -> Void)?
+    @Environment(\.workspaceCommands) private var workspace
     @AppStorage(QuickActions.key) private var quickRaw = ""
 
     var body: some View {
@@ -414,8 +495,17 @@ struct KeyBar: View {
             .glass(in: Capsule())
             .accessibilityLabel("Commands")
             .accessibilityHint("Hold for quick actions")
-            .popover(isPresented: $commands) {
-                commandList.presentationCompactAdaptation(.popover)
+            .sheet(isPresented: $commands) {
+                CommandPalette(keys: [
+                    PaletteCommand(title: "Paste", symbol: "doc.on.clipboard") { view.paste(nil) },
+                    PaletteCommand(title: "Photo Library", symbol: "photo.on.rectangle") { photos = true },
+                    PaletteCommand(title: "Files", symbol: "folder") { files = true },
+                ] + ControlKey.all.map { k in PaletteCommand(title: k.title, symbol: k.symbol) { key([k.byte]) } } + [
+                    PaletteCommand(title: "Up", symbol: "arrow.up") { view.sendKeyUp() },
+                    PaletteCommand(title: "Down", symbol: "arrow.down") { view.sendKeyDown() },
+                    PaletteCommand(title: "Left", symbol: "arrow.left") { view.sendKeyLeft() },
+                    PaletteCommand(title: "Right", symbol: "arrow.right") { view.sendKeyRight() },
+                ], workspace: workspace)
             }
         }
         .font(.title3)
@@ -425,46 +515,6 @@ struct KeyBar: View {
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewMetaModifierReset, object: view)) { _ in alt = false }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
-    }
-
-    private var commandList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                command("Paste", "doc.on.clipboard") { view.paste(nil) }
-                command("Photo Library", "photo.on.rectangle") { photos = true }
-                command("Files", "folder") { files = true }
-                Divider()
-                ForEach(ControlKey.all, id: \.title) { k in command(k.title, k.symbol) { key([k.byte]) } }
-                Divider()
-                HStack(spacing: 0) {
-                    arrow("Up", "arrow.up") { view.sendKeyUp() }
-                    arrow("Down", "arrow.down") { view.sendKeyDown() }
-                    arrow("Left", "arrow.left") { view.sendKeyLeft() }
-                    arrow("Right", "arrow.right") { view.sendKeyRight() }
-                }
-            }
-            .padding(.vertical, 6)
-        }
-        .frame(width: 260, height: 400)
-        .onDisappear { pending?(); pending = nil }
-    }
-
-    private func command(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button { pending = action; commands = false } label: {
-            Label(title, systemImage: symbol).frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16).frame(minHeight: 40).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .font(.body)
-    }
-
-    /// Arrows keep the popover open: they are often pressed a few times in a row.
-    private func arrow(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(title, systemImage: symbol, action: action)
-            .labelStyle(.iconOnly)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .contentShape(Rectangle())
-            .buttonStyle(.plain)
     }
 
     /// A quick action: its text as typed, then Return if it runs.

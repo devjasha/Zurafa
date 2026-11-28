@@ -119,6 +119,8 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
         if window != nil {
             renderer.updateScale()  // its cell size follows the screen; read it after
             let link = CADisplayLink(target: FrameTick(self), selector: #selector(FrameTick.step))
+            // iPhone links default to 60 Hz; ProMotion's 120 halves the wait before an echo shows.
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
             link.isPaused = !frameDue
             link.add(to: .main, forMode: .common)
             self.link = link
@@ -138,6 +140,7 @@ final class PhoneTerminal: UIView, UIKeyInput, UIEditMenuInteractionDelegate {
         laidOut = true
         (scrollFraction, flingVelocity) = (0, 0)
         scheduleFrame()
+        flush() // with the new frame, not a refresh later: the old picture in the new size shows as a jump
         if changed { onResize?(grid.cols, grid.rows) }
     }
 

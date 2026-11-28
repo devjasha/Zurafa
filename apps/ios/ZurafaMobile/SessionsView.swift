@@ -54,13 +54,7 @@ struct SessionsView: View {
 
     private func newSession(remote: RemoteHost?) {
         Task {
-            do {
-                let id = UUID().uuidString.lowercased()
-                var body: [String: JSONValue] = ["op": .string("create_session"), "session": .string(id), "label": .string(remote?.label ?? "iPhone")]
-                if let remote { body["remote"] = remote.wire }
-                _ = try await mac.request(["type": .string("layout.command"), "command": .object(body)])
-                if let pane = try await mac.openTab(in: id, label: remote == nil ? "Shell" : "SSH") { path.append(pane) }
-            } catch { self.error = error.localizedDescription }
+            do { if let pane = try await mac.newSession(remote: remote) { path.append(pane) } } catch { self.error = error.localizedDescription }
         }
     }
 }

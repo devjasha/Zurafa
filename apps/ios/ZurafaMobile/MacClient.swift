@@ -318,6 +318,15 @@ extension MacClient {
         try await openTab(in: session.sessionID, label: session.remote == nil ? "Shell" : "SSH")
     }
 
+    /// A new workspace with one tab, on the Mac or over SSH to `remote`; returns its pane.
+    func newSession(remote: RemoteHost?) async throws -> String? {
+        let id = UUID().uuidString.lowercased()
+        var body: [String: JSONValue] = ["op": .string("create_session"), "session": .string(id), "label": .string(remote?.label ?? "iPhone")]
+        if let remote { body["remote"] = remote.wire }
+        _ = try await request(["type": .string("layout.command"), "command": .object(body)])
+        return try await openTab(in: id, label: remote == nil ? "Shell" : "SSH")
+    }
+
     func openTab(in session: String, label: String) async throws -> String? {
         try await request(["type": .string("layout.tab"), "session": .string(session), "label": .string(label), "cols": .number(80), "rows": .number(24)]).terminal
     }

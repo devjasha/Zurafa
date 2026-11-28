@@ -66,7 +66,7 @@ final class TerminalRenderView: PlatformView {
                       width: cellSize.width, height: cellSize.height)
     }
 
-    /// Takes a new frame. Only dirty rows are rebuilt unless `fullRedraw`; drawing waits for the next display refresh.
+    /// Takes a new frame and draws it at once. Only dirty rows are rebuilt unless `fullRedraw`.
     func show(_ frame: TerminalFrame) {
         if frame.fullRedraw || frame.cols != current?.cols || frame.rows.count != rowDirty.count {
             needsFullRebuild = true
@@ -77,7 +77,9 @@ final class TerminalRenderView: PlatformView {
         if frame.cursor != current?.cursor { cursorBlinkOn = true }
         current = frame
         updateBlinkTimer()
-        requestRender()
+        // Callers hand frames over on their own display-link tick: drawing now saves waiting a second refresh.
+        needsRender = true
+        if window != nil { displayLinkFired() }
     }
 
     /// A frame showing colors, styles, wide characters, emoji and Powerline glyphs, for eyeballing the renderer.

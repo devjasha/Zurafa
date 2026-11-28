@@ -282,6 +282,7 @@ struct PhoneComposer<Menus: View>: View {
     }
     @State private var sent = 0
     @State private var commands = false
+    @Environment(\.workspaceCommands) private var workspace
     @AppStorage(QuickActions.key) private var quickRaw = ""
 
     private var suggestions: [Suggestion] {
@@ -379,7 +380,7 @@ struct PhoneComposer<Menus: View>: View {
 }
 
 extension PhoneComposer {
-    /// As on the key bar: a tap lists the control keys, a hold the quick actions from Settings.
+    /// As on the key bar: a tap opens the command palette, a hold the quick actions from Settings.
     func commandButton(_ keys: @escaping (UInt8) -> Void) -> some View {
         Menu {
             let actions = QuickActions.decode(quickRaw)
@@ -395,19 +396,10 @@ extension PhoneComposer {
         .buttonStyle(.plain)
         .accessibilityLabel("Commands")
         .accessibilityHint("Hold for quick actions")
-        .popover(isPresented: $commands) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach([ControlKey(title: "Escape", symbol: "escape", byte: 0x1b)] + ControlKey.all, id: \.title) { k in
-                    Button { keys(k.byte); commands = false } label: {
-                        Label(k.title, systemImage: k.symbol).frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16).frame(minHeight: 40).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.vertical, 6)
-            .frame(width: 240)
-            .presentationCompactAdaptation(.popover)
+        .sheet(isPresented: $commands) {
+            CommandPalette(keys: ([ControlKey(title: "Escape", symbol: "escape", byte: 0x1b)] + ControlKey.all).map { k in
+                PaletteCommand(title: k.title, symbol: k.symbol) { keys(k.byte) }
+            }, workspace: workspace)
         }
     }
 

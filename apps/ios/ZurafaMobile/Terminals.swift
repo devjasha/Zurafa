@@ -96,6 +96,14 @@ import UIKit
         guard let view = views[id], let box = view.superview else { return }
         var frame = box.bounds
         if let grid = grids[id] { frame.size = view.frameSize(cols: grid.cols, rows: grid.rows) }
+        // Mid-animation (the keyboard coming or going): keep the grid and slide its bottom with the box's,
+        // so the prompt rides the keyboard; the grid resizes once, when the box has settled.
+        let duration = UIView.inheritedAnimationDuration
+        if duration > 0, grids[id] == nil, view.frame.height > 0, view.frame.size != frame.size {
+            view.frame.origin.y = box.bounds.height - view.frame.height
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in self?.place(id) }
+            return
+        }
         if view.frame != frame { view.frame = frame }
     }
 
